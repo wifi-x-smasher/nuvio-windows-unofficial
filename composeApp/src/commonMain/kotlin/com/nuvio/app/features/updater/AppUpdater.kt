@@ -53,10 +53,7 @@ import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
-private const val gitHubOwner = "NuvioMedia"
-private const val gitHubRepo = "NuvioMobile"
 private const val gitHubApiBase = "https://api.github.com"
-private const val releaseChannelBranch = "cmp-rewrite"
 
 data class AppUpdate(
     val tag: String,
@@ -66,6 +63,7 @@ data class AppUpdate(
     val assetName: String,
     val assetUrl: String,
     val assetSizeBytes: Long?,
+    val checksumAssetUrl: String? = null,
 )
 
 data class AppUpdaterUiState(
@@ -150,10 +148,10 @@ private object AppUpdaterRepository {
     suspend fun getLatestChannelUpdate(): Result<AppUpdate> = runCatching {
         val response = httpRequestRaw(
             method = "GET",
-            url = "$gitHubApiBase/repos/$gitHubOwner/$gitHubRepo/releases?per_page=20",
+            url = "$gitHubApiBase/repos/${AppUpdaterPlatform.releaseOwner}/${AppUpdaterPlatform.releaseRepository}/releases?per_page=20",
             headers = mapOf(
                 "Accept" to "application/vnd.github+json",
-                "User-Agent" to "NuvioMobile",
+                "User-Agent" to "Nuvio",
             ),
             body = "",
         )
@@ -169,8 +167,8 @@ private object AppUpdaterRepository {
             ?: release.name?.takeIf { it.isNotBlank() }
             ?: error("Release has no tag or name")
 
-        val asset = chooseBestApkAsset(release.assets)
-            ?: error("No APK asset found in the cmp-rewrite release")
+        val asset = chooseBestUpdateAsset(release.assets)
+            ?: error("No compatible update asset found in the ${AppUpdaterPlatform.releaseChannel} release")
 
         AppUpdate(
             tag = tag,
@@ -180,11 +178,12 @@ private object AppUpdaterRepository {
             assetName = asset.name,
             assetUrl = asset.browserDownloadUrl,
             assetSizeBytes = asset.size,
+            checksumAssetUrl = chooseChecksumAsset(release.assets, asset)?.browserDownloadUrl,
         )
     }
 
     private fun GitHubReleaseDto.matchesRequestedChannel(): Boolean {
-        val channel = releaseChannelBranch
+        val channel = AppUpdaterPlatform.releaseChannel
         if (targetCommitish?.trim()?.equals(channel, ignoreCase = true) == true) {
             return true
         }
@@ -194,27 +193,45 @@ private object AppUpdaterRepository {
             .any { value -> value.contains(channel, ignoreCase = true) }
     }
 
-    private fun chooseBestApkAsset(assets: List<GitHubAssetDto>): GitHubAssetDto? {
-        val apkAssets = assets.filter { asset ->
-            asset.name.endsWith(".apk", ignoreCase = true) ||
-                asset.contentType == "application/vnd.android.package-archive"
+    private fun chooseBestUpdateAsset(assets: List<GitHubAssetDto>): GitHubAssetDto? {
+        val supportedExtensions = AppUpdaterPlatform.getSupportedAssetExtensions()
+            .map { extension -> extension.lowercase().ensureExtensionPrefix() }
+        val supportsApk = supportedExtensions.contains(".apk")
+        val updateAssets = assets.filter { asset ->
+            supportedExtensions.any { extension -> asset.name.endsWith(extension, ignoreCase = true) } ||
+                (supportsApk && asset.contentType == "application/vnd.android.package-archive")
         }
-        if (apkAssets.isEmpty()) return null
-        if (apkAssets.size == 1) return apkAssets.first()
+        if (updateAssets.isEmpty()) return null
+        if (updateAssets.size == 1) return updateAssets.first()
 
         val supportedAbis = AppUpdaterPlatform.getSupportedAbis()
         for (abi in supportedAbis) {
-            val candidate = apkAssets.firstOrNull { asset ->
+            val candidate = updateAssets.firstOrNull { asset ->
                 asset.name.contains(abi, ignoreCase = true)
             }
             if (candidate != null) return candidate
         }
 
-        return apkAssets.firstOrNull { asset ->
+        return updateAssets.firstOrNull { asset ->
             val name = asset.name.lowercase()
-            name.contains("universal") || name.contains("all")
-        } ?: apkAssets.first()
+            name.contains("universal") || name.contains("all") || name.contains("windows")
+        } ?: updateAssets.first()
     }
+
+    private fun chooseChecksumAsset(
+        assets: List<GitHubAssetDto>,
+        updateAsset: GitHubAssetDto,
+    ): GitHubAssetDto? =
+        assets.firstOrNull { asset ->
+            asset.name.equals("${updateAsset.name}.sha256", ignoreCase = true) ||
+                asset.name.equals("${updateAsset.name}.sha256.txt", ignoreCase = true)
+        } ?: assets.firstOrNull { asset ->
+            val name = asset.name.lowercase()
+            name.contains("sha256") || name.contains("checksum")
+        }
+
+    private fun String.ensureExtensionPrefix(): String =
+        if (startsWith(".")) this else ".$this"
 }
 
 class AppUpdaterController internal constructor(
@@ -334,6 +351,7 @@ class AppUpdaterController internal constructor(
             AppUpdaterPlatform.downloadApk(
                 assetUrl = update.assetUrl,
                 assetName = update.assetName,
+                checksumAssetUrl = update.checksumAssetUrl,
             ) { downloadedBytes, totalBytes ->
                 val progress = if (totalBytes != null && totalBytes > 0L) {
                     (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)

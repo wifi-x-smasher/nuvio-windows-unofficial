@@ -40,6 +40,7 @@ private data class PluginPushItem(
     val name: String = "",
     val enabled: Boolean = true,
     @SerialName("sort_order") val sortOrder: Int = 0,
+    @SerialName("repo_type") val repoType: String = "NUVIO_JS",
 )
 
 actual object PluginRepository {

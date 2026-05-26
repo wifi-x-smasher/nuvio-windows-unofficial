@@ -11,7 +11,7 @@
   [![License][license-shield]][license-url]
 
   <p>
-    A modern media hub for Android and iOS built with Kotlin Multiplatform and Compose Multiplatform.
+    A modern media hub for Android, iOS, and Windows built with Kotlin Multiplatform and Compose Multiplatform.
     <br />
     Stremio addon ecosystem • Cross-platform
   </p>
@@ -22,7 +22,7 @@
 
 Nuvio is the current Kotlin Multiplatform rewrite of the original React Native app. It delivers a shared Compose UI for Android and iOS while keeping the playback-focused experience, collection tools, watch progress flows, downloads, and Stremio addon ecosystem integration that shaped the earlier app.
 
-The mobile app is built from a single shared codebase in [composeApp](./composeApp), with native platform entry points for Android and iOS.
+The app is built from a single shared codebase in [composeApp](./composeApp), with native platform entry points for Android, iOS, and Windows desktop.
 
 ## Installation
 
@@ -33,6 +33,12 @@ Download the latest Android build from [GitHub Releases](https://github.com/Nuvi
 ### iOS
 
 - [TestFlight](https://testflight.apple.com/join/u4y7MHK9)
+
+### Windows
+
+Windows desktop builds are packaged as `.msi` and `.exe` installers from this repository's Windows release workflow. Release artifacts include SHA-256 sidecar files for updater verification.
+
+Windows reuses the shared Mobile/KMP sync layer for add-ons, plugins, profiles, collections, library, watched state, and progress. See [docs/windows-sync-parity-audit.md](docs/windows-sync-parity-audit.md) for the current Mobile/TV/Windows sync contract and remaining secret-sync gaps.
 
 ## Development
 
@@ -50,6 +56,7 @@ cd NuvioMobile
 - `composeApp/src/commonMain/` contains shared UI, features, repositories, and platform-agnostic logic.
 - `composeApp/src/androidMain/` contains Android-specific integrations.
 - `composeApp/src/iosMain/` contains iOS-specific integrations.
+- `composeApp/src/desktopMain/` contains Windows desktop integrations, installer update support, VLCJ playback, and JVM storage adapters.
 - `iosApp/` contains the native Xcode project and iOS entry point.
 
 Useful commands:
@@ -57,6 +64,9 @@ Useful commands:
 ```bash
 ./gradlew :composeApp:assembleDebug
 ./gradlew :composeApp:compileKotlinIosSimulatorArm64
+./gradlew :composeApp:desktopTest
+./gradlew :composeApp:run
+./gradlew :composeApp:packageMsi :composeApp:packageExe
 ./scripts/build-distribution.sh
 ```
 
