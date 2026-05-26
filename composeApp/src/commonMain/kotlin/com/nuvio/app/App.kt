@@ -19,12 +19,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -48,12 +50,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -146,6 +153,7 @@ import com.nuvio.app.features.player.ExternalPlayerPlatform
 import com.nuvio.app.features.player.ExternalPlayerPlaybackRequest
 import com.nuvio.app.features.player.sanitizePlaybackHeaders
 import com.nuvio.app.features.player.sanitizePlaybackResponseHeaders
+import com.nuvio.app.features.profiles.ActiveProfileMiniAvatar
 import com.nuvio.app.features.profiles.AvatarRepository
 import com.nuvio.app.features.profiles.NuvioProfile
 import com.nuvio.app.features.profiles.ProfileEditScreen
@@ -1174,6 +1182,7 @@ private fun MainAppContent(
                         val isTabletLayout = maxWidth >= 768.dp
                         val useNativeBottomTabs =
                             liquidGlassNativeTabBarSupported && liquidGlassNativeTabBarEnabled && initialHomeReady
+                        val useDesktopSidebar = isDesktop && maxWidth >= 900.dp && !useNativeBottomTabs
                         val tabsRouteActive = currentBackStackEntry?.destination?.hasRoute<TabsRoute>() == true
                         val onProfileSelected: (NuvioProfile) -> Unit = { profile ->
                             profileSwitchLoading = true
@@ -1189,7 +1198,7 @@ private fun MainAppContent(
                             containerColor = Color.Transparent,
                             contentWindowInsets = WindowInsets(0),
                             bottomBar = {
-                                if (!isTabletLayout && !useNativeBottomTabs) {
+                                if (!isTabletLayout && !useNativeBottomTabs && !useDesktopSidebar) {
                                     NuvioNavigationBar {
                                         NavItem(
                                             selected = selectedTab == AppScreenTab.Home,
@@ -1228,103 +1237,123 @@ private fun MainAppContent(
                                 CompositionLocalProvider(
                                     LocalNuvioBottomNavigationOverlayPadding provides if (useNativeBottomTabs) 49.dp else 0.dp,
                                 ) {
-                                    AppTabHost(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(innerPadding),
-                                        selectedTab = selectedTab,
-                                        searchFocusRequestCount = searchFocusRequestCount,
-                                        rootActionsEnabled = tabsRouteActive,
-                                        homeScrollToTopRequests = homeScrollToTopRequests,
-                                        searchScrollToTopRequests = searchScrollToTopRequests,
-                                        libraryScrollToTopRequests = libraryScrollToTopRequests,
-                                        settingsRootActionRequests = settingsRootActionRequests,
-                                        animateHomeCollectionGifs = tabsRouteActive,
-                                        onCatalogClick = onCatalogClick,
-                                        onPosterClick = { meta ->
-                                            navController.navigate(DetailRoute(type = meta.type, id = meta.id))
-                                        },
-                                        onPosterLongClick = { meta ->
-                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            selectedPosterActionTarget = PosterActionTarget(preview = meta)
-                                        },
-                                        onLibraryPosterClick = { item ->
-                                            navController.navigate(DetailRoute(type = item.type, id = item.id))
-                                        },
-                                        onLibraryPosterLongClick = { item, section ->
-                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            selectedPosterActionTarget = PosterActionTarget(
-                                                preview = item.toMetaPreview(),
-                                                libraryItem = item,
-                                                libraryListKey = section.type,
-                                            )
-                                        },
-                                        onLibrarySectionViewAllClick = onLibrarySectionViewAllClick,
-                                        onCloudFilePlay = { item, file ->
-                                            coroutineScope.launch {
-                                                val resumeItem = WatchProgressRepository
-                                                    .progressForVideo(item.playbackVideoId(file))
-                                                    ?.takeIf { it.isResumable }
-                                                    ?.toContinueWatchingItem()
-                                                if (
-                                                    !launchCloudLibraryFile(
-                                                        item = item,
-                                                        file = file,
-                                                        resumePositionMs = resumeItem?.resumePositionMs,
-                                                        resumeProgressFraction = resumeItem?.resumeProgressFraction,
-                                                    )
-                                                ) {
-                                                    NuvioToastController.show(cloudLibraryPlayFailedText)
-                                                }
-                                            }
-                                        },
-                                        onConnectCloudClick = {
-                                            requestedSettingsPageName = "Debrid"
-                                            selectedTab = AppScreenTab.Settings
-                                        },
-                                        onContinueWatchingClick = onContinueWatchingClick,
-                                        onContinueWatchingLongPress = onContinueWatchingLongPress,
-                                        onSwitchProfile = onSwitchProfile,
-                                        onHomescreenSettingsClick = { navController.navigate(HomescreenSettingsRoute) },
-                                        onMetaScreenSettingsClick = { navController.navigate(MetaScreenSettingsRoute) },
-                                        onContinueWatchingSettingsClick = { navController.navigate(ContinueWatchingSettingsRoute) },
-                                        onDownloadsSettingsClick = { navController.navigate(DownloadsSettingsRoute) },
-                                        onAddonsSettingsClick = { navController.navigate(AddonsSettingsRoute) },
-                                        onPluginsSettingsClick = {
-                                            if (AppFeaturePolicy.pluginsEnabled) {
-                                                navController.navigate(PluginsSettingsRoute)
-                                            }
-                                        },
-                                        onAccountSettingsClick = { navController.navigate(AccountSettingsRoute) },
-                                        onSupportersContributorsSettingsClick = {
-                                            navController.navigate(SupportersContributorsSettingsRoute)
-                                        },
-                                        onLicensesAttributionsSettingsClick = {
-                                            navController.navigate(LicensesAttributionsSettingsRoute)
-                                        },
-                                        onCheckForUpdatesClick = if (AppFeaturePolicy.inAppUpdaterEnabled) {
-                                            {
-                                                appUpdaterController.checkForUpdates(
-                                                    force = true,
-                                                    showNoUpdateFeedback = true,
+                                    val tabHost: @Composable (Modifier) -> Unit = { modifier ->
+                                        AppTabHost(
+                                            modifier = modifier,
+                                            selectedTab = selectedTab,
+                                            searchFocusRequestCount = searchFocusRequestCount,
+                                            rootActionsEnabled = tabsRouteActive,
+                                            homeScrollToTopRequests = homeScrollToTopRequests,
+                                            searchScrollToTopRequests = searchScrollToTopRequests,
+                                            libraryScrollToTopRequests = libraryScrollToTopRequests,
+                                            settingsRootActionRequests = settingsRootActionRequests,
+                                            animateHomeCollectionGifs = tabsRouteActive,
+                                            onCatalogClick = onCatalogClick,
+                                            onPosterClick = { meta ->
+                                                navController.navigate(DetailRoute(type = meta.type, id = meta.id))
+                                            },
+                                            onPosterLongClick = { meta ->
+                                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                selectedPosterActionTarget = PosterActionTarget(preview = meta)
+                                            },
+                                            onLibraryPosterClick = { item ->
+                                                navController.navigate(DetailRoute(type = item.type, id = item.id))
+                                            },
+                                            onLibraryPosterLongClick = { item, section ->
+                                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                selectedPosterActionTarget = PosterActionTarget(
+                                                    preview = item.toMetaPreview(),
+                                                    libraryItem = item,
+                                                    libraryListKey = section.type,
                                                 )
-                                            }
-                                        } else {
-                                            null
-                                        },
-                                        onCollectionsSettingsClick = { navController.navigate(CollectionsRoute) },
-                                        onFolderClick = { collectionId, folderId ->
-                                            navController.navigate(FolderDetailRoute(collectionId = collectionId, folderId = folderId))
-                                        },
-                                        requestedSettingsPageName = requestedSettingsPageName,
-                                        onRequestedSettingsPageConsumed = {
-                                            requestedSettingsPageName = null
-                                        },
-                                        onInitialHomeContentRendered = { initialHomeReady = true },
-                                    )
+                                            },
+                                            onLibrarySectionViewAllClick = onLibrarySectionViewAllClick,
+                                            onCloudFilePlay = { item, file ->
+                                                coroutineScope.launch {
+                                                    val resumeItem = WatchProgressRepository
+                                                        .progressForVideo(item.playbackVideoId(file))
+                                                        ?.takeIf { it.isResumable }
+                                                        ?.toContinueWatchingItem()
+                                                    if (
+                                                        !launchCloudLibraryFile(
+                                                            item = item,
+                                                            file = file,
+                                                            resumePositionMs = resumeItem?.resumePositionMs,
+                                                            resumeProgressFraction = resumeItem?.resumeProgressFraction,
+                                                        )
+                                                    ) {
+                                                        NuvioToastController.show(cloudLibraryPlayFailedText)
+                                                    }
+                                                }
+                                            },
+                                            onConnectCloudClick = {
+                                                requestedSettingsPageName = "Debrid"
+                                                selectedTab = AppScreenTab.Settings
+                                            },
+                                            onContinueWatchingClick = onContinueWatchingClick,
+                                            onContinueWatchingLongPress = onContinueWatchingLongPress,
+                                            onSwitchProfile = onSwitchProfile,
+                                            onHomescreenSettingsClick = { navController.navigate(HomescreenSettingsRoute) },
+                                            onMetaScreenSettingsClick = { navController.navigate(MetaScreenSettingsRoute) },
+                                            onContinueWatchingSettingsClick = { navController.navigate(ContinueWatchingSettingsRoute) },
+                                            onDownloadsSettingsClick = { navController.navigate(DownloadsSettingsRoute) },
+                                            onAddonsSettingsClick = { navController.navigate(AddonsSettingsRoute) },
+                                            onPluginsSettingsClick = {
+                                                if (AppFeaturePolicy.pluginsEnabled) {
+                                                    navController.navigate(PluginsSettingsRoute)
+                                                }
+                                            },
+                                            onAccountSettingsClick = { navController.navigate(AccountSettingsRoute) },
+                                            onSupportersContributorsSettingsClick = {
+                                                navController.navigate(SupportersContributorsSettingsRoute)
+                                            },
+                                            onLicensesAttributionsSettingsClick = {
+                                                navController.navigate(LicensesAttributionsSettingsRoute)
+                                            },
+                                            onCheckForUpdatesClick = if (AppFeaturePolicy.inAppUpdaterEnabled) {
+                                                {
+                                                    appUpdaterController.checkForUpdates(
+                                                        force = true,
+                                                        showNoUpdateFeedback = true,
+                                                    )
+                                                }
+                                            } else {
+                                                null
+                                            },
+                                            onCollectionsSettingsClick = { navController.navigate(CollectionsRoute) },
+                                            onFolderClick = { collectionId, folderId ->
+                                                navController.navigate(FolderDetailRoute(collectionId = collectionId, folderId = folderId))
+                                            },
+                                            requestedSettingsPageName = requestedSettingsPageName,
+                                            onRequestedSettingsPageConsumed = {
+                                                requestedSettingsPageName = null
+                                            },
+                                            onInitialHomeContentRendered = { initialHomeReady = true },
+                                        )
+                                    }
+
+                                    if (useDesktopSidebar) {
+                                        DesktopRootSidebarScaffold(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(innerPadding),
+                                            selectedTab = selectedTab,
+                                            onTabSelected = ::handleRootTabClick,
+                                            onProfileSelected = onProfileSelected,
+                                            onAddProfileRequested = onSwitchProfile,
+                                        ) { contentModifier ->
+                                            tabHost(contentModifier)
+                                        }
+                                    } else {
+                                        tabHost(
+                                            Modifier
+                                                .fillMaxSize()
+                                                .padding(innerPadding),
+                                        )
+                                    }
                                 }
 
-                                if (isTabletLayout && !useNativeBottomTabs) {
+                                if (isTabletLayout && !useNativeBottomTabs && !useDesktopSidebar) {
                                     TabletFloatingTopBar(
                                         selectedTab = selectedTab,
                                         onTabSelected = ::handleRootTabClick,
@@ -2505,6 +2534,236 @@ private fun AppTabHost(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DesktopRootSidebarScaffold(
+    selectedTab: AppScreenTab,
+    onTabSelected: (AppScreenTab) -> Unit,
+    onProfileSelected: (NuvioProfile) -> Unit,
+    onAddProfileRequested: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable (Modifier) -> Unit,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        DesktopRootSidebar(
+            selectedTab = selectedTab,
+            onTabSelected = onTabSelected,
+            onProfileSelected = onProfileSelected,
+            onAddProfileRequested = onAddProfileRequested,
+            modifier = Modifier
+                .width(112.dp)
+                .fillMaxHeight(),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+        ) {
+            content(Modifier.fillMaxSize())
+        }
+    }
+}
+
+@Composable
+private fun DesktopRootSidebar(
+    selectedTab: AppScreenTab,
+    onTabSelected: (AppScreenTab) -> Unit,
+    onProfileSelected: (NuvioProfile) -> Unit,
+    onAddProfileRequested: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+        shape = RoundedCornerShape(8.dp),
+        tonalElevation = 3.dp,
+        shadowElevation = 8.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Image(
+                painter = painterResource(Res.drawable.app_logo_wordmark),
+                contentDescription = stringResource(Res.string.app_brand_name),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(28.dp)
+                    .padding(horizontal = 4.dp),
+                contentScale = ContentScale.Fit,
+            )
+            Spacer(modifier = Modifier.height(28.dp))
+            DesktopSidebarItem(
+                label = stringResource(Res.string.compose_nav_home),
+                selected = selectedTab == AppScreenTab.Home,
+                onClick = { onTabSelected(AppScreenTab.Home) },
+                icon = { tint ->
+                    Icon(
+                        imageVector = Icons.Filled.Home,
+                        contentDescription = stringResource(Res.string.compose_nav_home),
+                        modifier = Modifier.size(22.dp),
+                        tint = tint,
+                    )
+                },
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            DesktopSidebarItem(
+                label = stringResource(Res.string.compose_nav_search),
+                selected = selectedTab == AppScreenTab.Search,
+                onClick = { onTabSelected(AppScreenTab.Search) },
+                icon = { tint ->
+                    Icon(
+                        painter = painterResource(Res.drawable.sidebar_search),
+                        contentDescription = stringResource(Res.string.compose_nav_search),
+                        modifier = Modifier.size(22.dp),
+                        tint = tint,
+                    )
+                },
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            DesktopSidebarItem(
+                label = stringResource(Res.string.compose_nav_library),
+                selected = selectedTab == AppScreenTab.Library,
+                onClick = { onTabSelected(AppScreenTab.Library) },
+                icon = { tint ->
+                    Icon(
+                        painter = painterResource(Res.drawable.sidebar_library),
+                        contentDescription = stringResource(Res.string.compose_nav_library),
+                        modifier = Modifier.size(22.dp),
+                        tint = tint,
+                    )
+                },
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            ProfileSwitcherTab(
+                selected = selectedTab == AppScreenTab.Settings,
+                onClick = { onTabSelected(AppScreenTab.Settings) },
+                onProfileSelected = onProfileSelected,
+                onAddProfileRequested = onAddProfileRequested,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(68.dp),
+                triggerContent = { selected ->
+                    DesktopSidebarProfileTrigger(selected = selected)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DesktopSidebarItem(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: @Composable (Color) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(8.dp)
+    val containerColor = when {
+        selected -> MaterialTheme.colorScheme.primaryContainer
+        focused -> MaterialTheme.colorScheme.surfaceContainerHigh
+        else -> Color.Transparent
+    }
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(68.dp)
+            .clip(shape)
+            .onFocusChanged { focused = it.isFocused || it.hasFocus }
+            .clickable(onClick = onClick),
+        color = containerColor,
+        contentColor = contentColor,
+        shape = shape,
+        tonalElevation = if (selected) 2.dp else 0.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            icon(contentColor)
+            Spacer(modifier = Modifier.height(5.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = contentColor,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DesktopSidebarProfileTrigger(
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val profileState by ProfileRepository.state.collectAsStateWithLifecycle()
+    val avatars by AvatarRepository.avatars.collectAsStateWithLifecycle()
+    val shape = RoundedCornerShape(8.dp)
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(68.dp)
+            .clip(shape),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        contentColor = contentColor,
+        shape = shape,
+        tonalElevation = if (selected) 2.dp else 0.dp,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            ActiveProfileMiniAvatar(
+                profile = profileState.activeProfile,
+                avatars = avatars,
+                selected = selected,
+                size = 28,
+            )
+            Spacer(modifier = Modifier.height(5.dp))
+            Text(
+                text = stringResource(Res.string.compose_nav_profile),
+                style = MaterialTheme.typography.labelMedium,
+                color = contentColor,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
