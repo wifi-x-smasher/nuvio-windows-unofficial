@@ -37,6 +37,7 @@ import com.nuvio.app.core.ui.NuvioDropdownChip
 import com.nuvio.app.core.ui.NuvioDropdownOption
 import com.nuvio.app.core.ui.NuvioNetworkOfflineCard
 import com.nuvio.app.core.ui.NuvioPosterWatchedOverlay
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.posterCardClickable
 import com.nuvio.app.features.home.MetaPreview
@@ -238,6 +239,7 @@ private fun DiscoverPosterTile(
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
+    val cardShape = RoundedCornerShape(cornerRadiusDp.dp)
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -246,9 +248,15 @@ private fun DiscoverPosterTile(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(item.posterShape.discoverAspectRatio())
-                .clip(RoundedCornerShape(cornerRadiusDp.dp))
+                .clip(cardShape)
                 .background(MaterialTheme.colorScheme.surface)
-                .posterCardClickable(onClick = onClick, onLongClick = onLongClick),
+                .posterCardClickable(onClick = onClick, onLongClick = onLongClick)
+                .nuvioDesktopFocusEffect(
+                    enabled = onClick != null || onLongClick != null,
+                    shape = cardShape,
+                    focusedScale = if (item.posterShape == PosterShape.Landscape) 1.025f else 1.04f,
+                    focusedShadowElevation = 22.dp,
+                ),
         ) {
             if (item.poster != null) {
                 AsyncImage(

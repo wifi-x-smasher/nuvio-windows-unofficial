@@ -49,7 +49,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.isDesktop
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
@@ -403,6 +405,31 @@ private fun HeroContentBlock(
             item.releaseInfo?.takeIf { it.isNotBlank() }?.let { info ->
                 HeroMetaDot()
                 HeroMetaText(text = formatReleaseDateForDisplay(info))
+            }
+        }
+
+        if (isDesktop && layout.isTablet && onItemClick != null) {
+            Spacer(modifier = Modifier.height(18.dp))
+            val detailsShape = RoundedCornerShape(40.dp)
+            Surface(
+                modifier = Modifier
+                    .clickable { onItemClick(item) }
+                    .nuvioDesktopFocusEffect(
+                        enabled = true,
+                        shape = detailsShape,
+                        focusedScale = 1.025f,
+                        focusedShadowElevation = 14.dp,
+                    ),
+                color = MaterialTheme.colorScheme.onBackground,
+                contentColor = MaterialTheme.colorScheme.background,
+                shape = detailsShape,
+            ) {
+                Text(
+                    text = stringResource(Res.string.home_view_details),
+                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
     }

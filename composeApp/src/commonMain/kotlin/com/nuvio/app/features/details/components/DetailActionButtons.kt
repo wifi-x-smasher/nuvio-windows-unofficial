@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.AppIconResource
 import com.nuvio.app.core.ui.appIconPainter
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_play
 import nuvio.composeapp.generated.resources.action_save
@@ -62,7 +63,19 @@ fun DetailActionButtons(
         }
 
         Surface(
-            modifier = rowButtonModifier.height(50.dp),
+            modifier = rowButtonModifier
+                .height(50.dp)
+                .combinedClickable(
+                    onClick = onPlayClick,
+                    onLongClick = onPlayLongClick,
+                    role = Role.Button,
+                )
+                .nuvioDesktopFocusEffect(
+                    enabled = true,
+                    shape = playShape,
+                    focusedScale = 1.025f,
+                    focusedShadowElevation = 14.dp,
+                ),
             shape = playShape,
             color = MaterialTheme.colorScheme.onBackground,
             contentColor = MaterialTheme.colorScheme.background,
@@ -70,11 +83,6 @@ fun DetailActionButtons(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .combinedClickable(
-                        onClick = onPlayClick,
-                        onLongClick = onPlayLongClick,
-                        role = Role.Button,
-                    )
                     .height(50.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
@@ -94,9 +102,22 @@ fun DetailActionButtons(
             }
         }
 
+        val saveShape = RoundedCornerShape(40.dp)
         Surface(
-            modifier = rowButtonModifier.height(50.dp),
-            shape = RoundedCornerShape(40.dp),
+            modifier = rowButtonModifier
+                .height(50.dp)
+                .combinedClickable(
+                    onClick = onSaveClick,
+                    onLongClick = onSaveLongClick,
+                    role = Role.Button,
+                )
+                .nuvioDesktopFocusEffect(
+                    enabled = true,
+                    shape = saveShape,
+                    focusedScale = 1.025f,
+                    focusedShadowElevation = 14.dp,
+                ),
+            shape = saveShape,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0f),
             contentColor = MaterialTheme.colorScheme.onSurface,
@@ -104,11 +125,6 @@ fun DetailActionButtons(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .combinedClickable(
-                        onClick = onSaveClick,
-                        onLongClick = onSaveLongClick,
-                        role = Role.Button,
-                    )
                     .height(50.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,

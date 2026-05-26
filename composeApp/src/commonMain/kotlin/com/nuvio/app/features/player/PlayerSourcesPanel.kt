@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.i18n.localizedByteUnit
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsUiState
@@ -267,6 +268,12 @@ private fun SourceStreamRow(
                 },
             )
             .clickable(enabled = enabled, onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = enabled,
+                shape = cardShape,
+                focusedScale = 1.015f,
+                focusedShadowElevation = 10.dp,
+            )
             .padding(14.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -375,10 +382,11 @@ internal fun AddonFilterChip(
     onClick: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(20.dp)
 
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(shape)
             .background(
                 when {
                     isSelected -> colorScheme.primaryContainer
@@ -387,12 +395,18 @@ internal fun AddonFilterChip(
             )
             .then(
                 if (isSelected) {
-                    Modifier.border(1.dp, colorScheme.primary.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                    Modifier.border(1.dp, colorScheme.primary.copy(alpha = 0.4f), shape)
                 } else {
-                    Modifier.border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f), RoundedCornerShape(20.dp))
+                    Modifier.border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f), shape)
                 },
             )
             .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.025f,
+                focusedShadowElevation = 8.dp,
+            )
             .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
         Row(
@@ -427,13 +441,20 @@ internal fun PanelChipButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(16.dp)
 
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(shape)
             .background(colorScheme.surfaceVariant.copy(alpha = 0.9f))
-            .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f), RoundedCornerShape(16.dp))
+            .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f), shape)
             .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.025f,
+                focusedShadowElevation = 8.dp,
+            )
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Row(

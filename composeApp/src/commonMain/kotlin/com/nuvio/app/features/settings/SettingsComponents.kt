@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.NuvioActionLabel
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.NuvioSectionLabel
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.core.ui.nuvioBlockPointerPassthrough
 import com.nuvio.app.features.home.HomeCatalogSettingsItem
 import nuvio.composeapp.generated.resources.Res
@@ -152,13 +153,20 @@ internal fun SettingsSidebarItem(
     val background = if (selected) primary.copy(alpha = 0.10f) else Color.Transparent
     val iconChip = if (selected) primary.copy(alpha = 0.15f) else Color.Transparent
     val contentColor = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+    val shape = RoundedCornerShape(10.dp)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 2.dp)
-            .background(background, RoundedCornerShape(10.dp))
+            .background(background, shape)
             .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.012f,
+                focusedShadowElevation = 8.dp,
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -227,11 +235,18 @@ internal fun SettingsNavigationRow(
     val iconRadius = if (isTablet) 12.dp else 10.dp
     val verticalPadding = if (isTablet) 16.dp else 14.dp
     val horizontalPadding = if (isTablet) 20.dp else 16.dp
+    val shape = RoundedCornerShape(if (isTablet) 14.dp else 12.dp)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 8.dp,
+            )
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
@@ -302,11 +317,18 @@ internal fun SettingsSwitchRow(
 ) {
     val verticalPadding = if (isTablet) 16.dp else 14.dp
     val horizontalPadding = if (isTablet) 20.dp else 16.dp
+    val shape = RoundedCornerShape(if (isTablet) 14.dp else 12.dp)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled) { onCheckedChange(!checked) }
+            .nuvioDesktopFocusEffect(
+                enabled = enabled,
+                shape = shape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 8.dp,
+            )
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
@@ -362,11 +384,18 @@ internal fun HomescreenCatalogRow(
     val horizontalPadding = if (isTablet) 20.dp else 16.dp
     val verticalPadding = if (isTablet) 18.dp else 16.dp
     val hapticFeedback = LocalHapticFeedback.current
+    val shape = RoundedCornerShape(if (isTablet) 14.dp else 12.dp)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onExpandedChange(!expanded) }
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 8.dp,
+            )
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.AppIconResource
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.appIconPainter
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.core.ui.nuvioTypeScale
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
@@ -701,10 +702,17 @@ private fun PlayerActionPillButton(
     icon: ImageVector? = null,
     painter: Painter? = null,
 ) {
+    val shape = RoundedCornerShape(22.dp)
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(22.dp))
+            .clip(shape)
             .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.025f,
+                focusedShadowElevation = 10.dp,
+            )
             .padding(horizontal = 12.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,

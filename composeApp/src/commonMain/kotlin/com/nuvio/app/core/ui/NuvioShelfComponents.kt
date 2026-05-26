@@ -118,6 +118,7 @@ fun NuvioPosterCard(
         shape = shape,
     )
     val shouldShowTitleBelow = showTitleBelow && !posterCardStyle.hideLabelsEnabled
+    val focusScale = if (shape == NuvioPosterShape.Landscape) 1.025f else 1.04f
 
     Column(
         modifier = modifier.width(cardWidth),
@@ -129,7 +130,13 @@ fun NuvioPosterCard(
                 .aspectRatio(shape.aspectRatio)
                 .clip(cardShape)
                 .background(MaterialTheme.colorScheme.surface)
-                .posterCardClickable(onClick = onClick, onLongClick = onLongClick),
+                .posterCardClickable(onClick = onClick, onLongClick = onLongClick)
+                .nuvioDesktopFocusEffect(
+                    enabled = onClick != null || onLongClick != null,
+                    shape = cardShape,
+                    focusedScale = focusScale,
+                    focusedShadowElevation = 22.dp,
+                ),
             contentAlignment = Alignment.Center,
         ) {
             if (imageUrl != null) {
@@ -258,6 +265,7 @@ private fun NuvioViewAllPill(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val isAmoled = colorScheme.background == androidx.compose.ui.graphics.Color.Black && colorScheme.surface == androidx.compose.ui.graphics.Color(0xFF050505)
+    val shape = RoundedCornerShape(20.dp)
     val horizontalPadding = if (size == NuvioViewAllPillSize.Compact) 12.dp else 18.dp
     val verticalPadding = if (size == NuvioViewAllPillSize.Compact) 9.dp else 14.dp
     val textStyle = if (size == NuvioViewAllPillSize.Compact) {
@@ -271,9 +279,15 @@ private fun NuvioViewAllPill(
         modifier = Modifier
             .background(
                 color = if (isAmoled) androidx.compose.ui.graphics.Color(0xFF0D0D0D) else colorScheme.surface,
-                shape = RoundedCornerShape(20.dp),
+                shape = shape,
             )
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .nuvioDesktopFocusEffect(
+                enabled = onClick != null,
+                shape = shape,
+                focusedScale = 1.02f,
+                focusedShadowElevation = 10.dp,
+            )
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         horizontalArrangement = Arrangement.spacedBy(iconSpacing),
         verticalAlignment = Alignment.CenterVertically,

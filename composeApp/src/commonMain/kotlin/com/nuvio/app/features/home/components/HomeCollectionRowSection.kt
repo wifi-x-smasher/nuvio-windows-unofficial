@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.NuvioShelfSection
 import com.nuvio.app.core.ui.PosterLandscapeAspectRatio
 import com.nuvio.app.core.ui.landscapePosterWidth
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.core.ui.posterCardClickable
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.features.collection.Collection
@@ -134,7 +135,14 @@ private fun CollectionFolderCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(aspectRatio),
+                .aspectRatio(aspectRatio)
+                .posterCardClickable(onClick = onClick, onLongClick = null)
+                .nuvioDesktopFocusEffect(
+                    enabled = onClick != null,
+                    shape = shapeCorner,
+                    focusedScale = if (shape == PosterShape.Landscape) 1.025f else 1.04f,
+                    focusedShadowElevation = 22.dp,
+                ),
             shape = shapeCorner,
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface,
@@ -173,13 +181,6 @@ private fun CollectionFolderCard(
                     }
                 }
 
-                if (onClick != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .posterCardClickable(onClick = onClick, onLongClick = null),
-                    )
-                }
             }
         }
 
