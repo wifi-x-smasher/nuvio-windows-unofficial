@@ -191,7 +191,9 @@ val generatedRuntimeConfigDir = layout.buildDirectory.dir("generated/runtime-con
 
 val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generateRuntimeConfigs") {
     outputDir.set(generatedRuntimeConfigDir)
-    localPropertiesFile.set(rootProject.layout.projectDirectory.file("local.properties"))
+    rootProject.layout.projectDirectory.file("local.properties").asFile
+        .takeIf { it.exists() }
+        ?.let { localPropertiesFile.set(it) }
     appVersionName.set(releaseAppVersionName)
     appVersionCode.set(releaseAppVersionCode)
 }
@@ -204,6 +206,12 @@ kotlin {
     androidTarget {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_11)
+        }
+    }
+
+    jvm("desktop") {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
         }
     }
     
@@ -292,6 +300,20 @@ kotlin {
             implementation(libs.supabase.functions)
             implementation(libs.reorderable)
         }
+        val desktopMain by getting {
+            kotlin.srcDir(fullCommonSourceDir)
+            dependencies {
+                implementation(compose.desktop.currentOs)
+                implementation(libs.ktor.client.cio)
+                implementation(libs.kotlinx.coroutines.swing)
+                implementation(libs.vlcj)
+                implementation(libs.jna)
+                implementation(libs.jna.platform)
+                implementation(libs.slf4j.simple)
+                implementation(libs.quickjs.kt)
+                implementation(libs.ksoup)
+            }
+        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
@@ -308,6 +330,24 @@ afterEvaluate {
 dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     debugImplementation(libs.compose.uiTooling)
+}
+
+compose.desktop {
+    application {
+        mainClass = "com.nuvio.app.DesktopMainKt"
+        nativeDistributions {
+            targetFormats(TargetFormat.Exe, TargetFormat.Msi)
+            packageName = "Nuvio"
+            packageVersion = releaseAppVersionName
+            description = "Nuvio media hub for Windows"
+            vendor = "NuvioMedia"
+            modules("java.instrument", "java.management", "java.naming", "jdk.unsupported")
+            windows {
+                menuGroup = "Nuvio"
+                upgradeUuid = "8B1D3C65-4F85-4AE9-9AE4-5E66A8C95B67"
+            }
+        }
+    }
 }
 
 configurations.all {
