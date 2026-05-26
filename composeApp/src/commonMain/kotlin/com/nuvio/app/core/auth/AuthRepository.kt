@@ -44,6 +44,12 @@ object AuthRepository {
             )
         }
 
+        if (!SupabaseProvider.isConfigured()) {
+            if (savedAnonId == null) _state.value = AuthState.Unauthenticated
+            log.w { SupabaseProvider.configurationError.orEmpty() }
+            return
+        }
+
         scope.launch {
             SupabaseProvider.client.auth.sessionStatus.collect { status ->
                 if (AuthStorage.loadAnonymousUserId() != null) return@collect
@@ -84,6 +90,7 @@ object AuthRepository {
 
     suspend fun signUpWithEmail(email: String, password: String): Result<Unit> = runCatching {
         _error.value = null
+        SupabaseProvider.requireConfigured()
         SupabaseProvider.client.auth.signUpWith(Email) {
             this.email = email
             this.password = password
@@ -96,6 +103,7 @@ object AuthRepository {
 
     suspend fun signInWithEmail(email: String, password: String): Result<Unit> = runCatching {
         _error.value = null
+        SupabaseProvider.requireConfigured()
         SupabaseProvider.client.auth.signInWith(Email) {
             this.email = email
             this.password = password
@@ -110,6 +118,7 @@ object AuthRepository {
         val wasAnonymous = AuthStorage.loadAnonymousUserId() != null
         AuthStorage.clearAnonymousUserId()
         if (!wasAnonymous) {
+            SupabaseProvider.requireConfigured()
             SupabaseProvider.client.auth.signOut()
         }
         _state.value = AuthState.Unauthenticated
@@ -121,6 +130,7 @@ object AuthRepository {
 
     suspend fun deleteAccount(): Result<Unit> = runCatching {
         _error.value = null
+        SupabaseProvider.requireConfigured()
         SupabaseProvider.client.functions.invoke("delete-account")
         SupabaseProvider.client.auth.signOut()
         LocalAccountDataCleaner.wipe()

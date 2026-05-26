@@ -2,6 +2,7 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
@@ -11,6 +12,21 @@ import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 import java.util.Properties
+
+val runtimeConfigOverrideKeys = listOf(
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+    "TRAKT_CLIENT_ID",
+    "TRAKT_CLIENT_SECRET",
+    "TRAKT_REDIRECT_URI",
+    "INTRODB_API_URL",
+    "IMDB_RATINGS_API_BASE_URL",
+    "IMDB_TAPFRAME_API_BASE_URL",
+    "PREMIUMIZE_CLIENT_ID",
+    "CONTRIBUTIONS_URL",
+    "DONATIONS_BASE_URL",
+    "DONATIONS_DONATE_URL",
+)
 
 abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     @get:OutputDirectory
@@ -26,10 +42,18 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     @get:Input
     abstract val appVersionCode: Property<Int>
 
+    @get:Input
+    abstract val runtimeConfigOverrides: MapProperty<String, String>
+
     @TaskAction
     fun generate() {
         val props = Properties()
         localPropertiesFile.asFile.orNull?.takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+        val overrides = runtimeConfigOverrides.get()
+        fun configValue(key: String, defaultValue: String = "") =
+            overrides[key]?.takeIf { it.isNotBlank() }
+                ?: props.getProperty(key)?.takeIf { it.isNotBlank() }
+                ?: defaultValue
 
         val outDir = outputDir.get().asFile
         outDir.resolve("com/nuvio/app/core/network").apply {
@@ -39,8 +63,8 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |package com.nuvio.app.core.network
                 |
                 |object SupabaseConfig {
-                |    const val URL = "${props.getProperty("SUPABASE_URL", "")}" 
-                |    const val ANON_KEY = "${props.getProperty("SUPABASE_ANON_KEY", "")}" 
+                |    const val URL = "${configValue("SUPABASE_URL")}"
+                |    const val ANON_KEY = "${configValue("SUPABASE_ANON_KEY")}"
                 |}
                 """.trimMargin()
             )
@@ -55,9 +79,9 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |package com.nuvio.app.features.trakt
                 |
                 |object TraktConfig {
-                |    const val CLIENT_ID = "${props.getProperty("TRAKT_CLIENT_ID", "")}" 
-                |    const val CLIENT_SECRET = "${props.getProperty("TRAKT_CLIENT_SECRET", "")}" 
-                |    const val REDIRECT_URI = "${props.getProperty("TRAKT_REDIRECT_URI", "nuvio://auth/trakt")}" 
+                |    const val CLIENT_ID = "${configValue("TRAKT_CLIENT_ID")}"
+                |    const val CLIENT_SECRET = "${configValue("TRAKT_CLIENT_SECRET")}"
+                |    const val REDIRECT_URI = "${configValue("TRAKT_REDIRECT_URI", "nuvio://auth/trakt")}"
                 |}
                 """.trimMargin()
             )
@@ -70,7 +94,7 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |package com.nuvio.app.features.player.skip
                 |
                 |object IntroDbConfig {
-                |    const val URL = "${props.getProperty("INTRODB_API_URL", "")}" 
+                |    const val URL = "${configValue("INTRODB_API_URL")}"
                 |}
                 """.trimMargin()
             )
@@ -83,8 +107,8 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |package com.nuvio.app.features.details
                 |
                 |object ImdbEpisodeRatingsConfig {
-                |    const val IMDB_RATINGS_API_BASE_URL = "${props.getProperty("IMDB_RATINGS_API_BASE_URL", "")}" 
-                |    const val IMDB_TAPFRAME_API_BASE_URL = "${props.getProperty("IMDB_TAPFRAME_API_BASE_URL", "")}" 
+                |    const val IMDB_RATINGS_API_BASE_URL = "${configValue("IMDB_RATINGS_API_BASE_URL")}"
+                |    const val IMDB_TAPFRAME_API_BASE_URL = "${configValue("IMDB_TAPFRAME_API_BASE_URL")}"
                 |}
                 """.trimMargin()
             )
@@ -97,7 +121,7 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |package com.nuvio.app.features.debrid
                 |
                 |object PremiumizeConfig {
-                |    const val CLIENT_ID = "${props.getProperty("PREMIUMIZE_CLIENT_ID", "")}"
+                |    const val CLIENT_ID = "${configValue("PREMIUMIZE_CLIENT_ID")}"
                 |}
                 """.trimMargin()
             )
@@ -124,11 +148,53 @@ abstract class GenerateRuntimeConfigsTask : DefaultTask() {
                 |package com.nuvio.app.features.settings
                 |
                 |object CommunityConfig {
-                |    const val CONTRIBUTIONS_URL = "${props.getProperty("CONTRIBUTIONS_URL", "")}" 
-                |    const val DONATIONS_BASE_URL = "${props.getProperty("DONATIONS_BASE_URL", "")}" 
-                |    const val DONATIONS_DONATE_URL = "${props.getProperty("DONATIONS_DONATE_URL", "")}" 
+                |    const val CONTRIBUTIONS_URL = "${configValue("CONTRIBUTIONS_URL")}"
+                |    const val DONATIONS_BASE_URL = "${configValue("DONATIONS_BASE_URL")}"
+                |    const val DONATIONS_DONATE_URL = "${configValue("DONATIONS_DONATE_URL")}"
                 |}
                 """.trimMargin()
+            )
+        }
+    }
+}
+
+abstract class ValidatePackagedRuntimeConfigsTask : DefaultTask() {
+    @get:Optional
+    @get:InputFile
+    abstract val localPropertiesFile: RegularFileProperty
+
+    @get:Input
+    abstract val runtimeConfigOverrides: MapProperty<String, String>
+
+    @TaskAction
+    fun validate() {
+        val props = Properties()
+        localPropertiesFile.asFile.orNull?.takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+        val overrides = runtimeConfigOverrides.get()
+        fun configValue(key: String): String =
+            overrides[key]?.takeIf { it.isNotBlank() }
+                ?: props.getProperty(key)?.takeIf { it.isNotBlank() }
+                ?: ""
+
+        val supabaseUrl = configValue("SUPABASE_URL")
+        val supabaseAnonKey = configValue("SUPABASE_ANON_KEY")
+        val normalizedUrl = supabaseUrl.trim().trimEnd('/').lowercase()
+        val host = normalizedUrl
+            .removePrefix("https://")
+            .substringBefore('/')
+            .substringBefore(':')
+        val isValidPackagedSupabaseConfig = normalizedUrl.startsWith("https://") &&
+            host != "localhost" &&
+            host != "127.0.0.1" &&
+            host != "::1" &&
+            !normalizedUrl.contains("your_supabase_url_here") &&
+            supabaseAnonKey.isNotBlank() &&
+            !supabaseAnonKey.contains("your_supabase_anon_key_here", ignoreCase = true)
+
+        if (!isValidPackagedSupabaseConfig) {
+            error(
+                "Cannot build a Windows installer without production Supabase configuration. " +
+                    "Set SUPABASE_URL and SUPABASE_ANON_KEY in local.properties, Gradle properties, or environment variables.",
             )
         }
     }
@@ -189,6 +255,17 @@ val iosFrameworkBundleId = "com.nuvio.media"
 val fullCommonSourceDir = project.file("src/fullCommonMain/kotlin")
 val generatedRuntimeConfigDir = layout.buildDirectory.dir("generated/runtime-config/kotlin")
 
+fun configureRuntimeConfigOverrides(overrides: MapProperty<String, String>) {
+    runtimeConfigOverrideKeys.forEach { key ->
+        overrides.put(
+            key,
+            providers.gradleProperty(key)
+                .orElse(providers.environmentVariable(key))
+                .orElse(""),
+        )
+    }
+}
+
 val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generateRuntimeConfigs") {
     outputDir.set(generatedRuntimeConfigDir)
     rootProject.layout.projectDirectory.file("local.properties").asFile
@@ -196,10 +273,30 @@ val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generat
         ?.let { localPropertiesFile.set(it) }
     appVersionName.set(releaseAppVersionName)
     appVersionCode.set(releaseAppVersionCode)
+    configureRuntimeConfigOverrides(runtimeConfigOverrides)
+}
+
+val validatePackagedRuntimeConfigs = tasks.register<ValidatePackagedRuntimeConfigsTask>("validatePackagedRuntimeConfigs") {
+    rootProject.layout.projectDirectory.file("local.properties").asFile
+        .takeIf { it.exists() }
+        ?.let { localPropertiesFile.set(it) }
+    configureRuntimeConfigOverrides(runtimeConfigOverrides)
 }
 
 tasks.withType<KotlinCompilationTask<*>>().configureEach {
     dependsOn(generateRuntimeConfigs)
+}
+
+tasks.matching {
+    it.name in setOf(
+        "createDistributable",
+        "packageDistributionForCurrentOS",
+        "packageExe",
+        "packageMsi",
+        "runDistributable",
+    )
+}.configureEach {
+    dependsOn(validatePackagedRuntimeConfigs)
 }
 
 kotlin {
