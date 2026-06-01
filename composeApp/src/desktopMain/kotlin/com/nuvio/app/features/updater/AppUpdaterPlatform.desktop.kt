@@ -68,7 +68,7 @@ actual object AppUpdaterPlatform {
         check(Files.isRegularFile(installer)) { "Downloaded update file is missing." }
         check(isSupportedInstaller(installer)) { "Downloaded update file is not a Windows installer." }
 
-        ProcessBuilder(installer.toString())
+        ProcessBuilder(windowsElevatedInstallerCommand(installer))
             .directory(installer.parent.toFile())
             .start()
         exitProcess(0)
@@ -88,6 +88,26 @@ actual object AppUpdaterPlatform {
         val name = path.fileName.toString()
         return getSupportedAssetExtensions().any { extension -> name.endsWith(".$extension", ignoreCase = true) }
     }
+
+    private fun windowsElevatedInstallerCommand(installer: Path): List<String> {
+        val installerPath = installer.toString().powershellSingleQuoted()
+        val command = if (installer.fileName.toString().endsWith(".msi", ignoreCase = true)) {
+            "Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', '$installerPath') -Verb RunAs"
+        } else {
+            "Start-Process -FilePath '$installerPath' -Verb RunAs"
+        }
+        return listOf(
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            command,
+        )
+    }
+
+    private fun String.powershellSingleQuoted(): String =
+        replace("'", "''")
 
     private fun downloadFile(
         assetUrl: String,

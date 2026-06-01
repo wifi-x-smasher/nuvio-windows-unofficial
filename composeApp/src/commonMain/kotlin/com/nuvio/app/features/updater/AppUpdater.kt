@@ -200,7 +200,7 @@ private object AppUpdaterRepository {
         val updateAssets = assets.filter { asset ->
             supportedExtensions.any { extension -> asset.name.endsWith(extension, ignoreCase = true) } ||
                 (supportsApk && asset.contentType == "application/vnd.android.package-archive")
-        }
+        }.sortedWith(compareBy({ assetExtensionPriority(it.name) }, { it.name.lowercase() }))
         if (updateAssets.isEmpty()) return null
         if (updateAssets.size == 1) return updateAssets.first()
 
@@ -232,6 +232,13 @@ private object AppUpdaterRepository {
 
     private fun String.ensureExtensionPrefix(): String =
         if (startsWith(".")) this else ".$this"
+
+    private fun assetExtensionPriority(assetName: String): Int =
+        AppUpdaterPlatform.getSupportedAssetExtensions()
+            .map { extension -> extension.lowercase().ensureExtensionPrefix() }
+            .indexOfFirst { extension -> assetName.endsWith(extension, ignoreCase = true) }
+            .takeIf { it >= 0 }
+            ?: Int.MAX_VALUE
 }
 
 class AppUpdaterController internal constructor(

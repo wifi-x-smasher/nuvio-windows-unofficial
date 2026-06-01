@@ -56,7 +56,23 @@ jobs:
         shell: pwsh
         run: |
           $artifactRoot = "composeApp\build\compose\binaries\main"
-          $files = Get-ChildItem $artifactRoot -Recurse -Include *.msi,*.exe
+          $releaseRoot = "release-assets"
+          New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
+
+          $tagName = "${{ github.ref_name }}"
+          $version = $tagName.TrimStart("v")
+
+          $msi = Get-ChildItem $artifactRoot -Recurse -Filter *.msi | Select-Object -First 1
+          if ($null -ne $msi) {
+            Copy-Item -LiteralPath $msi.FullName -Destination (Join-Path $releaseRoot "Nuvio-Windows-$version.msi") -Force
+          }
+
+          $exe = Get-ChildItem $artifactRoot -Recurse -Filter *.exe | Select-Object -First 1
+          if ($null -ne $exe) {
+            Copy-Item -LiteralPath $exe.FullName -Destination (Join-Path $releaseRoot "Nuvio-Setup-$version.exe") -Force
+          }
+
+          $files = Get-ChildItem (Join-Path $releaseRoot "*") -File -Include *.msi,*.exe
           foreach ($file in $files) {
             $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName
             "$($hash.Hash.ToLowerInvariant())  $($file.Name)" | Set-Content -Encoding ASCII -LiteralPath "$($file.FullName).sha256"
@@ -67,9 +83,9 @@ jobs:
         with:
           name: nuvio-windows-installers
           path: |
-            composeApp/build/compose/binaries/main/**/*.msi
-            composeApp/build/compose/binaries/main/**/*.exe
-            composeApp/build/compose/binaries/main/**/*.sha256
+            release-assets/*.msi
+            release-assets/*.exe
+            release-assets/*.sha256
 
       - name: Publish draft release
         if: startsWith(github.ref, 'refs/tags/')
@@ -78,6 +94,6 @@ jobs:
           draft: true
           target_commitish: main
           files: |
-            composeApp/build/compose/binaries/main/**/*.msi
-            composeApp/build/compose/binaries/main/**/*.exe
-            composeApp/build/compose/binaries/main/**/*.sha256
+            release-assets/*.msi
+            release-assets/*.exe
+            release-assets/*.sha256
