@@ -19,7 +19,7 @@ captures
 .externalNativeBuild
 .cxx
 crash-dumps/
-diagnostics/
+/diagnostics/
 reports/
 release/
 releases/
