@@ -32,6 +32,9 @@ class DesktopDeepLinkBridgeTest {
             .windowsProtocolRegistryWrites(executable)
             .single { it.label == "open_command" }
 
-        assertTrue(commandWrite.args.contains("\"C:\\Program Files\\Nuvio\\Nuvio.exe\" \"%1\""))
+        assertEquals("powershell.exe", commandWrite.executable)
+        assertTrue(commandWrite.args.contains("-Command"))
+        assertTrue(commandWrite.args.any { it.contains("Set-Item -Path") })
+        assertTrue(commandWrite.args.any { it.contains("\"C:\\Program Files\\Nuvio\\Nuvio.exe\" \"%1\"") })
     }
 }

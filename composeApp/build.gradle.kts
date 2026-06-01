@@ -11,6 +11,8 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
+import java.net.URI
+import java.security.MessageDigest
 import java.util.Properties
 
 val runtimeConfigOverrideKeys = listOf(
@@ -27,6 +29,25 @@ val runtimeConfigOverrideKeys = listOf(
     "DONATIONS_BASE_URL",
     "DONATIONS_DONATE_URL",
 )
+
+val bundledVlcVersion = "3.0.21"
+val bundledVlcDownloadUrl = "https://get.videolan.org/vlc/$bundledVlcVersion/win64/vlc-$bundledVlcVersion-win64.zip"
+val bundledVlcZipSha256 = "a0b7ec02b50adf6417eed014fb8df50af39690505a4225b85b3dc2ed17d14843"
+val bundledVlcZip = layout.buildDirectory.file("downloads/vlc/vlc-$bundledVlcVersion-win64.zip")
+val bundledVlcResourcesDir = layout.buildDirectory.dir("desktop-runtime-resources/vlc")
+
+fun sha256Hex(file: File): String {
+    val digest = MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            digest.update(buffer, 0, read)
+        }
+    }
+    return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+}
 
 abstract class GenerateRuntimeConfigsTask : DefaultTask() {
     @get:OutputDirectory
@@ -435,12 +456,54 @@ dependencies {
     debugImplementation(libs.compose.uiTooling)
 }
 
+val downloadVlcRuntime by tasks.registering {
+    group = "distribution"
+    description = "Downloads the 64-bit VLC runtime used by the Windows internal player."
+    outputs.file(bundledVlcZip)
+
+    doLast {
+        if (!System.getProperty("os.name").contains("Windows", ignoreCase = true)) return@doLast
+
+        val destination = bundledVlcZip.get().asFile
+        destination.parentFile.mkdirs()
+        if (!destination.isFile || sha256Hex(destination) != bundledVlcZipSha256) {
+            logger.lifecycle("Downloading VLC runtime $bundledVlcVersion")
+            URI.create(bundledVlcDownloadUrl).toURL().openStream().use { input ->
+                destination.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+
+        val actualSha256 = sha256Hex(destination)
+        check(actualSha256 == bundledVlcZipSha256) {
+            "VLC runtime checksum mismatch. Expected $bundledVlcZipSha256 but got $actualSha256"
+        }
+    }
+}
+
+val prepareDesktopRuntimeResources by tasks.registering(Copy::class) {
+    group = "distribution"
+    description = "Prepares bundled desktop player runtimes for native Windows packages."
+    dependsOn(downloadVlcRuntime)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(zipTree(bundledVlcZip)) {
+        eachFile {
+            val rootPrefix = "vlc-$bundledVlcVersion/"
+            if (path.startsWith(rootPrefix)) {
+                path = path.removePrefix(rootPrefix)
+            }
+        }
+        includeEmptyDirs = false
+    }
+    into(bundledVlcResourcesDir)
+}
+
 compose.desktop {
     application {
         mainClass = "com.nuvio.app.DesktopMainKt"
         desktopJavaHomeOverride?.let { javaHome = it }
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
+            appResourcesRootDir.set(layout.buildDirectory.dir("desktop-runtime-resources"))
             packageName = "Nuvio"
             packageVersion = releaseAppVersionName
             description = "Nuvio media hub for Windows"
@@ -456,7 +519,9 @@ compose.desktop {
 }
 
 tasks.matching { it.name == "packageMsi" }.configureEach {
+    dependsOn(prepareDesktopRuntimeResources)
     inputs.file(project.file("scripts/brand-windows-msi.ps1"))
+    inputs.dir(bundledVlcResourcesDir)
     inputs.files(
         project.file("src/desktopMain/installer/WixUIDialogBmp.bmp"),
         project.file("src/desktopMain/installer/WixUIBannerBmp.bmp"),
@@ -491,6 +556,11 @@ tasks.matching { it.name == "packageMsi" }.configureEach {
             )
         }
     }
+}
+
+tasks.matching { it.name == "packageExe" || it.name == "createDistributable" }.configureEach {
+    dependsOn(prepareDesktopRuntimeResources)
+    inputs.dir(bundledVlcResourcesDir)
 }
 
 configurations.all {

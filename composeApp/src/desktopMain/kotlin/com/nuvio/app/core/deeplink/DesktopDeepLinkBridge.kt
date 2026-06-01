@@ -18,6 +18,7 @@ internal object DesktopDeepLinkBridge {
 
     internal data class RegistryWrite(
         val label: String,
+        val executable: String,
         val args: List<String>,
     )
 
@@ -122,7 +123,7 @@ internal object DesktopDeepLinkBridge {
 
         writes.forEach { write ->
             runCatching {
-                val process = ProcessBuilder(regExecutablePath(), *write.args.toTypedArray())
+                val process = ProcessBuilder(write.executable, *write.args.toTypedArray())
                     .redirectErrorStream(true)
                     .start()
                 val output = process.inputStream.bufferedReader(StandardCharsets.UTF_8).readText().trim()
@@ -160,18 +161,41 @@ internal object DesktopDeepLinkBridge {
         return listOf(
             RegistryWrite(
                 label = "root_default",
+                executable = regExecutablePath(),
                 args = listOf("add", "HKCU\\Software\\Classes\\$PROTOCOL", "/ve", "/t", "REG_SZ", "/d", "URL:Nuvio Protocol", "/f"),
             ),
             RegistryWrite(
                 label = "url_protocol",
+                executable = regExecutablePath(),
                 args = listOf("add", "HKCU\\Software\\Classes\\$PROTOCOL", "/v", "URL Protocol", "/t", "REG_SZ", "/d", "", "/f"),
             ),
             RegistryWrite(
                 label = "open_command",
-                args = listOf("add", "HKCU\\Software\\Classes\\$PROTOCOL\\shell\\open\\command", "/ve", "/t", "REG_SZ", "/d", command, "/f"),
+                executable = "powershell.exe",
+                args = listOf(
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    powershellSetDefaultRegistryValueScript(
+                        keyPath = "Registry::HKEY_CURRENT_USER\\Software\\Classes\\$PROTOCOL\\shell\\open\\command",
+                        value = command,
+                    ),
+                ),
             ),
         )
     }
+
+    private fun powershellSetDefaultRegistryValueScript(
+        keyPath: String,
+        value: String,
+    ): String =
+        "\$key = ${keyPath.toPowerShellSingleQuotedString()}; " +
+            "New-Item -Force -Path \$key | Out-Null; " +
+            "Set-Item -Path \$key -Value ${value.toPowerShellSingleQuotedString()}"
+
+    private fun String.toPowerShellSingleQuotedString(): String =
+        "'" + replace("'", "''") + "'"
 
     private fun isWindows(): Boolean =
         System.getProperty("os.name").orEmpty().lowercase(Locale.ROOT).contains("windows")

@@ -20,11 +20,14 @@ internal actual object InternalPlayerPlatform {
 
 internal object DesktopVlcRuntime {
     private const val jnaLibraryPathProperty = "jna.library.path"
+    private const val composeResourcesDirProperty = "compose.application.resources.dir"
 
     fun compatibleRuntimeDirectory(): Path? =
         compatibleRuntimeDirectory(
             env = System.getenv(),
             property = System.getProperty(jnaLibraryPathProperty),
+            appResourcesDir = System.getProperty(composeResourcesDirProperty),
+            executablePath = currentExecutablePath(),
             exists = { path -> path.isDirectory() },
             hasLibrary = { path -> path.resolve("libvlc.dll").isRegularFile() },
         )
@@ -34,6 +37,7 @@ internal object DesktopVlcRuntime {
             event = "player.vlc.runtime.prepare.start",
             details = mapOf(
                 "jnaLibraryPathSet" to (!System.getProperty(jnaLibraryPathProperty).isNullOrBlank()).toString(),
+                "appResourcesDirSet" to (!System.getProperty(composeResourcesDirProperty).isNullOrBlank()).toString(),
                 "vlcHomeSet" to (!System.getenv("VLC_HOME").isNullOrBlank()).toString(),
             ),
         )
@@ -74,10 +78,12 @@ internal object DesktopVlcRuntime {
     internal fun compatibleRuntimeDirectory(
         env: Map<String, String>,
         property: String?,
+        appResourcesDir: String? = null,
+        executablePath: Path? = null,
         exists: (Path) -> Boolean,
         hasLibrary: (Path) -> Boolean,
     ): Path? =
-        runtimeCandidates(env, property).firstOrNull { path ->
+        runtimeCandidates(env, property, appResourcesDir, executablePath).firstOrNull { path ->
             runCatching {
                 exists(path) && hasLibrary(path) && !path.isKnown32BitProgramFilesPath()
             }.getOrDefault(false)
@@ -86,8 +92,21 @@ internal object DesktopVlcRuntime {
     private fun runtimeCandidates(
         env: Map<String, String>,
         property: String?,
+        appResourcesDir: String?,
+        executablePath: Path?,
     ): List<Path> =
         buildList {
+            appResourcesDir
+                ?.takeIf(String::isNotBlank)
+                ?.let { add(Path.of(it, "vlc")) }
+            executablePath
+                ?.parent
+                ?.let { appDir ->
+                    add(appDir.resolve("app").resolve("vlc"))
+                    add(appDir.resolve("app").resolve("resources").resolve("vlc"))
+                    add(appDir.resolve("resources").resolve("vlc"))
+                    add(appDir.resolve("vlc"))
+                }
             property
                 ?.split(File.pathSeparatorChar)
                 ?.mapNotNull { it.takeIf(String::isNotBlank)?.let(Path::of) }
@@ -99,4 +118,11 @@ internal object DesktopVlcRuntime {
 
     private fun Path.isKnown32BitProgramFilesPath(): Boolean =
         toString().contains("Program Files (x86)", ignoreCase = true)
+
+    private fun currentExecutablePath(): Path? =
+        ProcessHandle.current()
+            .info()
+            .command()
+            .orElse(null)
+            ?.let(Path::of)
 }
