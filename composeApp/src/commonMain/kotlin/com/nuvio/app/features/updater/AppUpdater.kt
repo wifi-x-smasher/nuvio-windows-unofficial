@@ -104,7 +104,7 @@ private val appUpdaterJson = Json {
 }
 
 private class NoChannelReleaseException : IllegalStateException(
-    "No cmp-rewrite release has been published yet.",
+    "No public Nuvio Windows release has been published yet.",
 )
 
 private object VersionUtils {
@@ -168,7 +168,7 @@ private object AppUpdaterRepository {
             ?: error("Release has no tag or name")
 
         val asset = chooseBestUpdateAsset(release.assets)
-            ?: error("No compatible update asset found in the ${AppUpdaterPlatform.releaseChannel} release")
+            ?: error("No compatible Windows installer found in the latest Nuvio Windows release")
 
         AppUpdate(
             tag = tag,
