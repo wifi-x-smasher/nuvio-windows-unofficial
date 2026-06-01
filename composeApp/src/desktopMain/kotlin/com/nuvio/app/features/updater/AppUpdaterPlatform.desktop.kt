@@ -16,8 +16,8 @@ actual object AppUpdaterPlatform {
     private val preferences = DesktopPreferences("nuvio_updater")
 
     actual val isSupported: Boolean = true
-    actual val releaseOwner: String = "NuvioMedia"
-    actual val releaseRepository: String = "NuvioWindows"
+    actual val releaseOwner: String = "wifi-x-smasher"
+    actual val releaseRepository: String = "nuvio-windows-unofficial"
     actual val releaseChannel: String = "main"
 
     actual fun getSupportedAbis(): List<String> = listOf("windows", "win", "x64", "desktop")

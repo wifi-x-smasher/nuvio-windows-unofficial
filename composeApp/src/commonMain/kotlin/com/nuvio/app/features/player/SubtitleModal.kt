@@ -6,7 +6,9 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,11 +19,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -89,21 +93,40 @@ fun SubtitleModal(
             contentAlignment = Alignment.Center,
         ) {
             val maxH = maxHeight
+            val isDesktopPanel = maxWidth >= 900.dp
             val isCompact = maxWidth < 360.dp || maxHeight < 640.dp
+            val panelShape = RoundedCornerShape(if (isDesktopPanel) 18.dp else 24.dp)
+            val panelModifier = if (isDesktopPanel) {
+                Modifier
+                    .padding(top = 32.dp, end = 32.dp, bottom = 32.dp)
+                    .width(480.dp)
+                    .fillMaxHeight()
+            } else {
+                Modifier
+                    .widthIn(max = 420.dp)
+                    .fillMaxWidth(0.9f)
+                    .heightIn(max = maxH * 0.95f)
+            }
 
             AnimatedVisibility(
                 visible = visible,
-                enter = slideInVertically(tween(300)) { it / 3 } + fadeIn(tween(300)),
-                exit = slideOutVertically(tween(250)) { it / 3 } + fadeOut(tween(250)),
+                modifier = Modifier.align(if (isDesktopPanel) Alignment.CenterEnd else Alignment.Center),
+                enter = if (isDesktopPanel) {
+                    slideInHorizontally(tween(300)) { it / 3 } + fadeIn(tween(300))
+                } else {
+                    slideInVertically(tween(300)) { it / 3 } + fadeIn(tween(300))
+                },
+                exit = if (isDesktopPanel) {
+                    slideOutHorizontally(tween(250)) { it / 3 } + fadeOut(tween(250))
+                } else {
+                    slideOutVertically(tween(250)) { it / 3 } + fadeOut(tween(250))
+                },
             ) {
                 Box(
-                    modifier = Modifier
-                        .widthIn(max = 420.dp)
-                        .fillMaxWidth(0.9f)
-                        .heightIn(max = maxH * 0.95f)
-                        .clip(RoundedCornerShape(24.dp))
+                    modifier = panelModifier
+                        .clip(panelShape)
                         .background(colorScheme.surface)
-                        .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.8f), RoundedCornerShape(24.dp))
+                        .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.8f), panelShape)
                         .clickable(
                             indication = null,
                             interactionSource = remember { MutableInteractionSource() },

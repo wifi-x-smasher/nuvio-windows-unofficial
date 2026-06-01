@@ -21,10 +21,14 @@ import com.nuvio.app.core.ui.PosterCardStyleRepository
 import com.nuvio.app.core.ui.PosterCardStyleStorage
 import com.nuvio.app.features.settings.ThemeSettingsStorage
 import com.nuvio.app.features.settings.ThemeSettingsRepository
+import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
+import com.nuvio.app.features.streams.StreamBadgeSettingsStorage
 import com.nuvio.app.features.tmdb.TmdbSettingsStorage
 import com.nuvio.app.features.tmdb.TmdbSettingsRepository
 import com.nuvio.app.features.trakt.TraktCommentsStorage
 import com.nuvio.app.features.trakt.TraktCommentsSettings
+import com.nuvio.app.features.trakt.TraktAuthRepository
+import com.nuvio.app.features.trakt.TraktAuthStorage
 import com.nuvio.app.features.trakt.TraktSettingsStorage
 import com.nuvio.app.features.trakt.TraktSettingsRepository
 import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesStorage
@@ -160,11 +164,13 @@ object ProfileSettingsSync {
             PosterCardStyleRepository.uiState.map { "poster_card_style" },
             PlayerSettingsRepository.uiState.map { "player" },
             DebridSettingsRepository.uiState.map { "debrid" },
+            StreamBadgeSettingsRepository.uiState.map { "stream_badges" },
             TmdbSettingsRepository.uiState.map { "tmdb" },
             MdbListSettingsRepository.uiState.map { "mdblist" },
             MetaScreenSettingsRepository.uiState.map { "meta" },
             CollectionMobileSettingsRepository.uiState.map { "collection_mobile_settings" },
             ContinueWatchingPreferencesRepository.uiState.map { "continue_watching" },
+            TraktAuthRepository.isAuthenticated.map { "trakt_auth" },
             TraktSettingsRepository.uiState.map { "trakt_settings" },
             TraktCommentsSettings.enabled.map { "trakt_comments" },
             EpisodeReleaseNotificationsRepository.uiState.map { "episode_release_alerts" },
@@ -206,11 +212,13 @@ object ProfileSettingsSync {
                 posterCardStyleSettingsPayload = PosterCardStyleStorage.loadPayload().orEmpty().trim(),
                 playerSettings = PlayerSettingsStorage.exportToSyncPayload(),
                 debridSettings = DebridSettingsStorage.exportToSyncPayload(),
+                streamBadgeSettings = StreamBadgeSettingsStorage.exportToSyncPayload(),
                 tmdbSettings = TmdbSettingsStorage.exportToSyncPayload(),
                 mdbListSettings = MdbListSettingsStorage.exportToSyncPayload(),
                 metaScreenSettingsPayload = MetaScreenSettingsStorage.loadPayload().orEmpty().trim(),
                 collectionMobileSettingsPayload = CollectionMobileSettingsStorage.loadPayload().orEmpty().trim(),
                 continueWatchingSettingsPayload = ContinueWatchingPreferencesStorage.loadPayload().orEmpty().trim(),
+                traktAuthPayload = TraktAuthStorage.loadPayload().orEmpty().trim(),
                 traktSettingsPayload = TraktSettingsStorage.loadPayload().orEmpty().trim(),
                 traktCommentsSettings = TraktCommentsStorage.exportToSyncPayload(),
                 notificationsSettings = NotificationsSettingsPayload(
@@ -233,6 +241,9 @@ object ProfileSettingsSync {
         DebridSettingsStorage.replaceFromSyncPayload(blob.features.debridSettings)
         DebridSettingsRepository.onProfileChanged()
 
+        StreamBadgeSettingsStorage.replaceFromSyncPayload(blob.features.streamBadgeSettings)
+        StreamBadgeSettingsRepository.onProfileChanged()
+
         TmdbSettingsStorage.replaceFromSyncPayload(blob.features.tmdbSettings)
         TmdbSettingsRepository.onProfileChanged()
 
@@ -249,6 +260,11 @@ object ProfileSettingsSync {
         ContinueWatchingPreferencesStorage.savePayload(blob.features.continueWatchingSettingsPayload)
         ContinueWatchingPreferencesRepository.onProfileChanged()
 
+        if (blob.features.traktAuthPayload.isNotBlank()) {
+            TraktAuthStorage.savePayload(blob.features.traktAuthPayload)
+            TraktAuthRepository.onProfileChanged()
+        }
+
         TraktSettingsStorage.savePayload(blob.features.traktSettingsPayload)
         TraktSettingsRepository.onProfileChanged()
 
@@ -263,11 +279,13 @@ object ProfileSettingsSync {
         PosterCardStyleRepository.ensureLoaded()
         PlayerSettingsRepository.ensureLoaded()
         DebridSettingsRepository.ensureLoaded()
+        StreamBadgeSettingsRepository.ensureLoaded()
         TmdbSettingsRepository.ensureLoaded()
         MdbListSettingsRepository.ensureLoaded()
         MetaScreenSettingsRepository.ensureLoaded()
         CollectionMobileSettingsRepository.ensureLoaded()
         ContinueWatchingPreferencesRepository.ensureLoaded()
+        TraktAuthRepository.ensureLoaded()
         TraktSettingsRepository.ensureLoaded()
         TraktCommentsSettings.ensureLoaded()
         EpisodeReleaseNotificationsRepository.ensureLoaded()
@@ -286,11 +304,13 @@ object ProfileSettingsSync {
         "poster_card_style=${PosterCardStyleRepository.uiState.value}",
         "player=${PlayerSettingsRepository.uiState.value}",
         "debrid=${DebridSettingsRepository.uiState.value}",
+        "stream_badges=${StreamBadgeSettingsRepository.uiState.value}",
         "tmdb=${TmdbSettingsRepository.uiState.value}",
         "mdblist=${MdbListSettingsRepository.uiState.value}",
         "meta=${MetaScreenSettingsRepository.uiState.value}",
         "collection_mobile_settings=${CollectionMobileSettingsRepository.uiState.value}",
         "continue=${ContinueWatchingPreferencesRepository.uiState.value}",
+        "trakt_auth=${TraktAuthRepository.uiState.value.mode}",
         "trakt_settings=${TraktSettingsRepository.uiState.value}",
         "trakt_comments=${TraktCommentsSettings.enabled.value}",
         "episode_release_alerts=${EpisodeReleaseNotificationsRepository.uiState.value.isEnabled}",
@@ -309,11 +329,13 @@ private data class MobileProfileSettingsFeatures(
     @SerialName("poster_card_style_settings_payload") val posterCardStyleSettingsPayload: String = "",
     @SerialName("player_settings") val playerSettings: JsonObject = JsonObject(emptyMap()),
     @SerialName("debrid_settings") val debridSettings: JsonObject = JsonObject(emptyMap()),
+    @SerialName("stream_badge_settings") val streamBadgeSettings: JsonObject = JsonObject(emptyMap()),
     @SerialName("tmdb_settings") val tmdbSettings: JsonObject = JsonObject(emptyMap()),
     @SerialName("mdblist_settings") val mdbListSettings: JsonObject = JsonObject(emptyMap()),
     @SerialName("meta_screen_settings_payload") val metaScreenSettingsPayload: String = "",
     @SerialName("collection_mobile_settings_payload") val collectionMobileSettingsPayload: String = "",
     @SerialName("continue_watching_settings_payload") val continueWatchingSettingsPayload: String = "",
+    @SerialName("trakt_auth_payload") val traktAuthPayload: String = "",
     @SerialName("trakt_settings_payload") val traktSettingsPayload: String = "",
     @SerialName("trakt_comments_settings") val traktCommentsSettings: JsonObject = JsonObject(emptyMap()),
     @SerialName("notifications_settings") val notificationsSettings: NotificationsSettingsPayload = NotificationsSettingsPayload(),

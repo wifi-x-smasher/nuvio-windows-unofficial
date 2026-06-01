@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
@@ -115,10 +116,18 @@ internal fun Modifier.nuvioBlockPointerPassthrough(): Modifier =
 fun NuvioSurfaceCard(
     modifier: Modifier = Modifier,
     tonalElevation: Int = 0,
+    maxWidth: Dp? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val surfaceModifier = if (maxWidth != null) {
+        modifier
+            .widthIn(max = maxWidth)
+            .fillMaxWidth()
+    } else {
+        modifier.fillMaxWidth()
+    }
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = surfaceModifier,
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(24.dp),
         tonalElevation = tonalElevation.dp,

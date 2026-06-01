@@ -251,6 +251,12 @@ val iosDistributionSourceDir = if (iosDistribution == "full") {
 } else {
     "src/iosAppStore/kotlin"
 }
+val desktopJavaHomeOverride = (
+    providers.gradleProperty("nuvio.desktop.javaHome").orNull
+        ?: System.getenv("NUVIO_DESKTOP_JAVA_HOME")
+        ?: System.getenv("NUVIO_DESKTOP_PACKAGING_JDK")
+        ?: supabaseProps.getProperty("NUVIO_DESKTOP_JAVA_HOME")
+    )?.trim()?.takeIf { it.isNotBlank() }
 val iosFrameworkBundleId = "com.nuvio.media"
 val fullCommonSourceDir = project.file("src/fullCommonMain/kotlin")
 val generatedRuntimeConfigDir = layout.buildDirectory.dir("generated/runtime-config/kotlin")
@@ -432,6 +438,7 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.nuvio.app.DesktopMainKt"
+        desktopJavaHomeOverride?.let { javaHome = it }
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             packageName = "Nuvio"
@@ -441,6 +448,7 @@ compose.desktop {
             modules("java.instrument", "java.management", "java.naming", "jdk.unsupported")
             windows {
                 menuGroup = "Nuvio"
+                iconFile.set(project.file("src/desktopMain/resources/app-icon.ico"))
                 upgradeUuid = "8B1D3C65-4F85-4AE9-9AE4-5E66A8C95B67"
             }
         }

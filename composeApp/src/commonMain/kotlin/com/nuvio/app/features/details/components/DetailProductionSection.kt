@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.features.details.MetaCompany
 import com.nuvio.app.features.details.MetaDetails
 import nuvio.composeapp.generated.resources.*
@@ -109,12 +110,19 @@ private fun ProductionChip(
     logoHeight: androidx.compose.ui.unit.Dp,
     onClick: (() -> Unit)? = null,
 ) {
+    val shape = RoundedCornerShape(12.dp)
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(shape)
             .background(color = ProductionChipBackground)
             .then(
                 if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+            )
+            .nuvioDesktopFocusEffect(
+                enabled = onClick != null,
+                shape = shape,
+                focusedScale = 1.018f,
+                focusedShadowElevation = 8.dp,
             )
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .height(chipHeight),

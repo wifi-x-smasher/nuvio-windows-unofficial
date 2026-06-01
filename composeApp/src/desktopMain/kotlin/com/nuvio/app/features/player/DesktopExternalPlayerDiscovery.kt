@@ -27,13 +27,7 @@ internal object DesktopExternalPlayerDiscovery {
         env: Map<String, String>,
         exists: (Path) -> Boolean,
     ): List<DesktopExternalPlayer> {
-        val players = mutableListOf(
-            DesktopExternalPlayer(
-                id = "system",
-                name = "System default",
-                kind = DesktopExternalPlayerKind.System,
-            )
-        )
+        val players = mutableListOf<DesktopExternalPlayer>()
 
         firstExisting(vlcCandidates(env), exists)?.let {
             players += DesktopExternalPlayer(
@@ -52,6 +46,12 @@ internal object DesktopExternalPlayerDiscovery {
                 executable = it,
             )
         }
+
+        players += DesktopExternalPlayer(
+            id = "system",
+            name = "System default",
+            kind = DesktopExternalPlayerKind.System,
+        )
 
         return players
     }
@@ -80,6 +80,9 @@ internal object DesktopExternalPlayerDiscovery {
     ): Path? =
         paths.firstOrNull { path -> runCatching { exists(path) }.getOrDefault(false) }
 }
+
+internal fun List<DesktopExternalPlayer>.preferredImplicitExternalPlayer(): DesktopExternalPlayer? =
+    firstOrNull { it.kind != DesktopExternalPlayerKind.System }
 
 internal object DesktopExternalPlayerCommandBuilder {
     fun build(

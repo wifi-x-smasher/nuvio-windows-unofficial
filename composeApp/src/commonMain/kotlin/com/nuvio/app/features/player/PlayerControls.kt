@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Forward10
@@ -88,6 +89,7 @@ internal fun PlayerControlsShell(
     onVideoSettingsClick: (() -> Unit)? = null,
     onSourcesClick: (() -> Unit)? = null,
     onEpisodesClick: (() -> Unit)? = null,
+    onExternalPlayerClick: (() -> Unit)? = null,
     onSubmitIntroClick: (() -> Unit)? = null,
     parentalWarnings: List<ParentalWarning> = emptyList(),
     showParentalGuide: Boolean = false,
@@ -188,6 +190,7 @@ internal fun PlayerControlsShell(
                     onAudioClick = onAudioClick,
                     onSourcesClick = onSourcesClick,
                     onEpisodesClick = onEpisodesClick,
+                    onExternalPlayerClick = onExternalPlayerClick,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
@@ -357,12 +360,19 @@ private fun PlayerHeaderIconButton(
     iconSize: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
 ) {
+    val shape = CircleShape
     Box(
         modifier = Modifier
             .size(buttonSize)
-            .clip(CircleShape)
+            .clip(shape)
             .background(Color.Black.copy(alpha = 0.35f))
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.06f,
+                focusedShadowElevation = 14.dp,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -416,10 +426,17 @@ private fun SideControlButton(
     metrics: PlayerLayoutMetrics,
     onClick: () -> Unit,
 ) {
+    val shape = CircleShape
     Box(
         modifier = Modifier
-            .clip(CircleShape)
+            .clip(shape)
             .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.06f,
+                focusedShadowElevation = 16.dp,
+            )
             .padding(metrics.sideButtonPadding),
         contentAlignment = Alignment.Center,
     ) {
@@ -442,11 +459,18 @@ private fun PlayPauseControlButton(
     val playPausePainter = appIconPainter(
         if (isPlaying) AppIconResource.PlayerPause else AppIconResource.PlayerPlay,
     )
+    val shape = CircleShape
 
     Box(
         modifier = Modifier
-            .clip(CircleShape)
+            .clip(shape)
             .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.05f,
+                focusedShadowElevation = 18.dp,
+            )
             .padding(metrics.playButtonPadding),
         contentAlignment = Alignment.Center,
     ) {
@@ -485,6 +509,7 @@ private fun ProgressControls(
     onAudioClick: () -> Unit,
     onSourcesClick: (() -> Unit)? = null,
     onEpisodesClick: (() -> Unit)? = null,
+    onExternalPlayerClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val durationMs = playbackSnapshot.durationMs.coerceAtLeast(1L)
@@ -566,6 +591,13 @@ private fun ProgressControls(
                             onClick = onEpisodesClick,
                         )
                     }
+                    if (onExternalPlayerClick != null) {
+                        PlayerActionPillButton(
+                            label = stringResource(Res.string.streams_open_external_player),
+                            icon = Icons.AutoMirrored.Rounded.OpenInNew,
+                            onClick = onExternalPlayerClick,
+                        )
+                    }
                 }
             }
         }
@@ -619,7 +651,13 @@ internal fun LockedPlayerOverlay(
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.52f))
                     .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
-                    .clickable(onClick = onUnlock),
+                    .clickable(onClick = onUnlock)
+                    .nuvioDesktopFocusEffect(
+                        enabled = true,
+                        shape = CircleShape,
+                        focusedScale = 1.05f,
+                        focusedShadowElevation = 16.dp,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(

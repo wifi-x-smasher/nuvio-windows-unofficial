@@ -1,6 +1,6 @@
 # Windows QA Checklist
 
-Last updated: 2026-05-26
+Last updated: 2026-05-28
 
 Use this checklist before tagging a Windows beta release. Run tests against a clean Windows user profile when possible so local desktop storage, secure storage, and updater behavior are not masked by previous runs.
 
@@ -17,6 +17,8 @@ Use this checklist before tagging a Windows beta release. Run tests against a cl
 
 - [ ] Windows 11, 1920x1080, 100 percent scaling.
 - [ ] Windows 11 laptop, 1366x768, 100 percent scaling.
+- [ ] Windows 11 desktop, 2560x1440, 100 percent scaling.
+- [ ] Windows 11 ultrawide display, 3440x1440 or wider.
 - [ ] Windows 11, 4K display, 150 percent scaling.
 - [ ] Mouse and trackpad.
 - [ ] Keyboard only.
@@ -32,17 +34,21 @@ Use this checklist before tagging a Windows beta release. Run tests against a cl
 - [ ] Close app with window close button.
 - [ ] Relaunch and confirm local state persists.
 - [ ] Toggle full screen/windowed/maximized where available.
+- [ ] Switch away from Nuvio and back during auth, catalog loading, stream selection, and playback; no white screen should remain.
 - [ ] Confirm app data is written under the Windows desktop app data location.
 
 ## Auth And Profiles
 
 - [ ] Signed-out launch reaches the expected auth/offline state.
+- [ ] Login screen is capped and TV-compatible, with no stretched fields on desktop.
+- [ ] Email Enter moves to password; password Enter submits; Escape/back behavior is predictable.
 - [ ] Anonymous/offline mode works without account-only affordance breakage.
 - [ ] Full account sign-in succeeds.
 - [ ] Profile list pulls from remote after sign-in.
 - [ ] Create profile.
 - [ ] Edit profile name/color/avatar.
 - [ ] Enable and verify PIN lock.
+- [ ] PIN works with number row, numpad, Backspace/Delete, Enter, Escape, and mouse keypad.
 - [ ] Switch profiles and verify profile-scoped data changes.
 - [ ] Secondary profile with `usesPrimaryAddons` reads primary add-ons.
 - [ ] Secondary profile with `usesPrimaryPlugins` reads primary plugin repositories.
@@ -81,6 +87,8 @@ Use this checklist before tagging a Windows beta release. Run tests against a cl
 
 - [ ] Stream list opens from a movie.
 - [ ] Stream list opens from an episode.
+- [ ] Desktop stream screen uses TV-style fixed source panel sizing, not phone-style stretched columns.
+- [ ] Stream cards show structured resolution/quality/codec/audio/language badges matching Android/TV metadata, with size shown once.
 - [ ] Add-on streams are grouped and selectable.
 - [ ] Debrid stream preparation works when credentials are configured.
 - [ ] Embedded VLCJ playback starts for a user-authorized local file.
@@ -90,6 +98,8 @@ Use this checklist before tagging a Windows beta release. Run tests against a cl
 - [ ] Playback speed changes.
 - [ ] Audio track list appears for multi-audio media.
 - [ ] Subtitle track list appears for subtitle media.
+- [ ] Source, episode, subtitle, and audio controls open as right-side desktop panels.
+- [ ] Player shortcuts work: Space/Enter/K play-pause, J/Left seek back, L/Right seek forward, Up/Down volume, M mute, Escape closes top panel/back.
 - [ ] External subtitle URI can be selected.
 - [ ] Snapshot/progress updates persist after leaving the player.
 - [ ] Next episode prompt appears where applicable.
@@ -122,6 +132,8 @@ Use this checklist before tagging a Windows beta release. Run tests against a cl
 - [ ] Trakt connect/disconnect flow opens browser and returns via callback.
 - [ ] Trakt library/watch progress modes behave as selected.
 - [ ] Episode release notification settings do not expose unsupported Windows notification behavior unless implemented.
+- [ ] About version matches the packaged app version and code.
+- [ ] Diagnostics page opens from Settings > About, shows local log path/folder, supports copy/open actions, and contains no sensitive values.
 
 ## Updater And Release
 
@@ -139,6 +151,7 @@ Use this checklist before tagging a Windows beta release. Run tests against a cl
 ## Accessibility And Input
 
 - [ ] Keyboard focus is visible on all interactive controls.
+- [ ] Keyboard focus is visible on search recent rows, library/cloud rows, details cast/company/trailer/season controls, collection editor rows, profile menu, PIN keypad, stream cards, and player panels.
 - [ ] Tab/Shift+Tab traversal is sane in settings pages.
 - [ ] Arrow-key navigation works in rows and stream lists.
 - [ ] Enter activates focused items.
@@ -151,6 +164,7 @@ Use this checklist before tagging a Windows beta release. Run tests against a cl
 
 - [ ] No `Pending` MVP items remain in `docs/windows-parity-matrix.md`.
 - [ ] No known crash on launch, auth, profile selection, stream selection, playback, or settings.
+- [ ] `%APPDATA%\Nuvio\logs\nuvio.log` captures redacted breadcrumbs for startup, catalog, stream, playback, and crash boundaries.
 - [ ] No plaintext secret leakage in app data or committed files.
 - [ ] Installer and updater paths have been verified on a clean Windows machine.
 - [ ] GPL/license obligations and third-party native dependency notices are reviewed for distribution.

@@ -68,6 +68,7 @@ import com.nuvio.app.features.plugins.PluginsUiState
 import com.nuvio.app.features.plugins.PluginRepository
 import com.nuvio.app.features.streams.StreamAutoPlayMode
 import com.nuvio.app.features.streams.StreamAutoPlaySource
+import com.nuvio.app.isDesktop
 import com.nuvio.app.isIos
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
@@ -224,22 +225,22 @@ private fun PlaybackSettingsSection(
                 SettingsSwitchRow(
                     title = stringResource(Res.string.settings_playback_external_player),
                     description = stringResource(
-                        if (isIos) {
-                            Res.string.settings_playback_external_player_description_ios
-                        } else {
-                            Res.string.settings_playback_external_player_description_android
+                        when {
+                            isDesktop -> Res.string.settings_playback_external_player_description_desktop
+                            isIos -> Res.string.settings_playback_external_player_description_ios
+                            else -> Res.string.settings_playback_external_player_description_android
                         },
                     ),
                     checked = autoPlayPlayerSettings.externalPlayerEnabled,
                     isTablet = isTablet,
                     onCheckedChange = { enabled ->
                         PlayerSettingsRepository.setExternalPlayerEnabled(enabled)
-                        if (enabled && isIos) {
+                        if (enabled && (isIos || isDesktop)) {
                             showExternalPlayerDialog = true
                         }
                     },
                 )
-                if (isIos && autoPlayPlayerSettings.externalPlayerEnabled) {
+                if ((isIos || isDesktop) && autoPlayPlayerSettings.externalPlayerEnabled) {
                     SettingsGroupDivider(isTablet = isTablet)
                     SettingsNavigationRow(
                         title = stringResource(Res.string.settings_playback_external_player_app),

@@ -17,13 +17,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.home_view_all
 import nuvio.composeapp.generated.resources.poster_logo_content_description
@@ -63,6 +67,17 @@ fun <T> NuvioShelfSection(
     key: ((T) -> Any)? = null,
     itemContent: @Composable (T) -> Unit,
 ) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val showScrollControls = entries.size > 1
+    fun scrollShelf(direction: Int) {
+        val targetIndex = (listState.firstVisibleItemIndex + (direction * 4))
+            .coerceIn(0, entries.lastIndex.coerceAtLeast(0))
+        scope.launch {
+            listState.animateScrollToItem(targetIndex)
+        }
+    }
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -74,9 +89,12 @@ fun <T> NuvioShelfSection(
                 showAccent = showHeaderAccent,
                 onViewAllClick = onViewAllClick,
                 viewAllPillSize = viewAllPillSize,
+                onScrollLeftClick = if (showScrollControls) { { scrollShelf(-1) } } else null,
+                onScrollRightClick = if (showScrollControls) { { scrollShelf(1) } } else null,
             )
         }
         LazyRow(
+            state = listState,
             contentPadding = rowContentPadding,
             horizontalArrangement = Arrangement.spacedBy(itemSpacing),
         ) {
@@ -220,6 +238,8 @@ private fun NuvioShelfSectionHeader(
     showAccent: Boolean = true,
     onViewAllClick: (() -> Unit)? = null,
     viewAllPillSize: NuvioViewAllPillSize = NuvioViewAllPillSize.Default,
+    onScrollLeftClick: (() -> Unit)? = null,
+    onScrollRightClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -249,12 +269,70 @@ private fun NuvioShelfSectionHeader(
                 )
             }
         }
-        if (onViewAllClick != null) {
-            NuvioViewAllPill(
-                onClick = onViewAllClick,
-                size = viewAllPillSize,
-            )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (onScrollLeftClick != null) {
+                NuvioShelfArrowButton(
+                    onClick = onScrollLeftClick,
+                    direction = ShelfArrowDirection.Left,
+                )
+            }
+            if (onScrollRightClick != null) {
+                NuvioShelfArrowButton(
+                    onClick = onScrollRightClick,
+                    direction = ShelfArrowDirection.Right,
+                )
+            }
+            if (onViewAllClick != null) {
+                NuvioViewAllPill(
+                    onClick = onViewAllClick,
+                    size = viewAllPillSize,
+                )
+            }
         }
+    }
+}
+
+private enum class ShelfArrowDirection {
+    Left,
+    Right,
+}
+
+@Composable
+private fun NuvioShelfArrowButton(
+    onClick: () -> Unit,
+    direction: ShelfArrowDirection,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(999.dp)
+    Box(
+        modifier = Modifier
+            .width(38.dp)
+            .height(38.dp)
+            .background(
+                color = colorScheme.surface.copy(alpha = 0.82f),
+                shape = shape,
+            )
+            .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.04f,
+                focusedShadowElevation = 10.dp,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = when (direction) {
+                ShelfArrowDirection.Left -> Icons.AutoMirrored.Rounded.KeyboardArrowLeft
+                ShelfArrowDirection.Right -> Icons.AutoMirrored.Rounded.KeyboardArrowRight
+            },
+            contentDescription = null,
+            tint = colorScheme.onSurface,
+            modifier = Modifier.height(22.dp),
+        )
     }
 }
 

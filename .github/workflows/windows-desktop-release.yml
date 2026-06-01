@@ -24,6 +24,25 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Prepare local properties
+        shell: pwsh
+        env:
+          LOCAL_PROPERTIES_BASE64: ${{ secrets.LOCAL_PROPERTIES_BASE64 }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:LOCAL_PROPERTIES_BASE64)) {
+            throw "Missing required GitHub Actions secret: LOCAL_PROPERTIES_BASE64. Add it in Repository Settings > Secrets and variables > Actions."
+          }
+
+          [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:LOCAL_PROPERTIES_BASE64)) |
+            Set-Content -Encoding UTF8 -NoNewline -LiteralPath "local.properties"
+
+          $localProperties = Get-Content -LiteralPath "local.properties" -Raw
+          foreach ($name in @("SUPABASE_URL", "SUPABASE_ANON_KEY")) {
+            if ($localProperties -notmatch "(?m)^\s*$name\s*=\s*\S+") {
+              throw "LOCAL_PROPERTIES_BASE64 is missing required key: $name"
+            }
+          }
+
       - name: Validate desktop tests
         run: .\gradlew.bat :composeApp:desktopTest --no-daemon --stacktrace --no-configuration-cache
 

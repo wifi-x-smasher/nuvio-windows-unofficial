@@ -1,5 +1,8 @@
 package com.nuvio.app.features.home.components
 
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,9 +19,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -132,11 +138,21 @@ private fun CollectionFolderCard(
     ) {
         val shapeCorner = RoundedCornerShape(posterCardStyle.cornerRadiusDp.dp)
         val imageUrl = collectionFolderCardImageUrl(folder)
+        val interactionSource = remember { MutableInteractionSource() }
+        val isHovered by interactionSource.collectIsHoveredAsState()
+        var isFocused by remember { mutableStateOf(false) }
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(aspectRatio)
+                .hoverable(
+                    interactionSource = interactionSource,
+                    enabled = onClick != null,
+                )
                 .posterCardClickable(onClick = onClick, onLongClick = null)
+                .onFocusChanged { focusState ->
+                    isFocused = focusState.isFocused || focusState.hasFocus
+                }
                 .nuvioDesktopFocusEffect(
                     enabled = onClick != null,
                     shape = shapeCorner,
@@ -162,7 +178,7 @@ private fun CollectionFolderCard(
                             contentDescription = folder.title,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
-                            animateIfPossible = animateGifs && isAnimatedCollectionFolderImage(folder, imageUrl),
+                            animateIfPossible = false,
                         )
                     }
                     !folder.coverEmoji.isNullOrBlank() -> {
@@ -181,6 +197,20 @@ private fun CollectionFolderCard(
                     }
                 }
 
+                val focusGifUrl = if (animateGifs && (isFocused || isHovered) && folder.mobileFocusGifEnabled) {
+                    firstNonBlank(folder.focusGifUrl)
+                } else {
+                    null
+                }
+                if (!focusGifUrl.isNullOrBlank()) {
+                    CollectionCardRemoteImage(
+                        imageUrl = focusGifUrl,
+                        contentDescription = folder.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        animateIfPossible = true,
+                    )
+                }
             }
         }
 
@@ -197,21 +227,9 @@ private fun CollectionFolderCard(
 }
 
 private fun collectionFolderCardImageUrl(folder: CollectionFolder): String? {
-    return if (folder.mobileFocusGifEnabled) {
-        firstNonBlank(folder.focusGifUrl, folder.coverImageUrl)
-    } else {
-        firstNonBlank(folder.coverImageUrl)
-    }
+    return firstNonBlank(folder.coverImageUrl)
 }
 
 private fun firstNonBlank(vararg candidates: String?): String? {
     return candidates.firstOrNull { !it.isNullOrBlank() }?.trim()
-}
-
-private fun isAnimatedCollectionFolderImage(
-    folder: CollectionFolder,
-    imageUrl: String,
-): Boolean {
-    val gifUrl = firstNonBlank(folder.focusGifUrl) ?: return false
-    return folder.mobileFocusGifEnabled && imageUrl == gifUrl
 }

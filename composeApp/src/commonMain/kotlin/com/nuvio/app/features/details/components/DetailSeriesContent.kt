@@ -64,6 +64,7 @@ import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.i18n.localizedSeasonEpisodeCode
 import com.nuvio.app.core.ui.NuvioAnimatedWatchedBadge
 import com.nuvio.app.core.ui.NuvioProgressBar
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaEpisodeCardStyle
 import com.nuvio.app.features.details.MetaVideo
@@ -338,9 +339,10 @@ private fun SeasonViewModeToggle(
     onClick: () -> Unit,
 ) {
     val isPosters = mode == SeasonViewMode.Posters
+    val shape = RoundedCornerShape(8.dp)
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(shape)
             .background(
                 if (isPosters) {
                     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
@@ -351,9 +353,15 @@ private fun SeasonViewModeToggle(
             .border(
                 width = 1.dp,
                 color = Color.White.copy(alpha = if (isPosters) 0.2f else 0.3f),
-                shape = RoundedCornerShape(8.dp),
+                shape = shape,
             )
             .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.018f,
+                focusedShadowElevation = 8.dp,
+            )
             .padding(horizontal = 10.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -407,9 +415,10 @@ private fun SeasonTextChipScrollRow(
     ) {
         items(seasons, key = { season -> season }) { season ->
             val isSelected = season == currentSeason
+            val shape = RoundedCornerShape(sizing.seasonChipRadius)
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(sizing.seasonChipRadius))
+                    .clip(shape)
                     .background(
                         if (isSelected) {
                             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
@@ -420,6 +429,12 @@ private fun SeasonTextChipScrollRow(
                     .combinedClickable(
                         onClick = { onSelect(season) },
                         onLongClick = onLongPress?.let { handler -> { handler(season) } },
+                    )
+                    .nuvioDesktopFocusEffect(
+                        enabled = true,
+                        shape = shape,
+                        focusedScale = 1.018f,
+                        focusedShadowElevation = 8.dp,
                     )
                     .padding(
                         horizontal = sizing.seasonChipHorizontalPadding,
@@ -501,12 +516,19 @@ private fun SeasonPosterButton(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
 ) {
+    val shape = RoundedCornerShape(sizing.seasonPosterRadius)
     Column(
         modifier = Modifier
             .width(sizing.seasonPosterWidth)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
+            )
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.018f,
+                focusedShadowElevation = 10.dp,
             ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -514,7 +536,7 @@ private fun SeasonPosterButton(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(sizing.seasonPosterHeight)
-                .clip(RoundedCornerShape(sizing.seasonPosterRadius))
+                .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 .border(
                     width = if (isSelected) 2.dp else 1.dp,
@@ -523,7 +545,7 @@ private fun SeasonPosterButton(
                     } else {
                         Color.White.copy(alpha = 0.1f)
                     },
-                    shape = RoundedCornerShape(sizing.seasonPosterRadius),
+                    shape = shape,
                 ),
         ) {
             if (imageUrl != null) {

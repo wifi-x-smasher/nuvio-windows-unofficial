@@ -5,6 +5,7 @@ import com.nuvio.app.core.build.AppFeaturePolicy
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,12 +13,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -36,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -44,11 +48,14 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.AppTheme
 import com.nuvio.app.core.ui.LocalNuvioBottomNavigationOverlayPadding
+import com.nuvio.app.core.ui.NuvioDesktopContentMaxWidth
+import com.nuvio.app.core.ui.NuvioDesktopSettingsRailWidth
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.PlatformBackHandler
@@ -241,6 +248,7 @@ fun SettingsScreen(
 
         if (maxWidth >= 768.dp) {
             TabletSettingsScreen(
+                isDesktopWorkspace = maxWidth >= 900.dp,
                 page = page,
                 scrollToTopRequests = scrollToTopRequests,
                 onPageChange = { currentPage = it.name },
@@ -491,16 +499,18 @@ private fun MobileSettingsScreen(
                         onTargetClick = { openSearchTarget(it) },
                     )
                     if (settingsSearchQuery.isBlank()) {
-                        settingsRootContent(
-                            isTablet = false,
-                            onPlaybackClick = { onPageChange(SettingsPage.Playback) },
-                            onAppearanceClick = { onPageChange(SettingsPage.Appearance) },
+                            settingsRootContent(
+                                isTablet = false,
+                                onPlaybackClick = { onPageChange(SettingsPage.Playback) },
+                                onStreamsClick = { onPageChange(SettingsPage.Streams) },
+                                onAppearanceClick = { onPageChange(SettingsPage.Appearance) },
                             onNotificationsClick = { onPageChange(SettingsPage.Notifications) },
                             onContentDiscoveryClick = { onPageChange(SettingsPage.ContentDiscovery) },
                             onIntegrationsClick = { onPageChange(SettingsPage.Integrations) },
                             onTraktClick = { onPageChange(SettingsPage.TraktAuthentication) },
                             onSupportersContributorsClick = onSupportersContributorsClick,
                             onLicensesAttributionsClick = onLicensesAttributionsClick,
+                            onDiagnosticsClick = { onPageChange(SettingsPage.Diagnostics) },
                             onCheckForUpdatesClick = onCheckForUpdatesClick,
                             onDownloadsClick = onDownloadsClick,
                             onAccountClick = onAccountClick,
@@ -515,6 +525,9 @@ private fun MobileSettingsScreen(
                     isTablet = false,
                 )
                 SettingsPage.LicensesAttributions -> licensesAttributionsContent(
+                    isTablet = false,
+                )
+                SettingsPage.Diagnostics -> diagnosticsSettingsContent(
                     isTablet = false,
                 )
                 SettingsPage.Playback -> playbackSettingsContent(
@@ -533,6 +546,9 @@ private fun MobileSettingsScreen(
                     tunnelingEnabled = tunnelingEnabled,
                     useLibass = useLibass,
                     libassRenderType = libassRenderType,
+                )
+                SettingsPage.Streams -> streamsSettingsContent(
+                    isTablet = false,
                 )
                 SettingsPage.Appearance -> appearanceSettingsContent(
                     isTablet = false,
@@ -663,6 +679,7 @@ private fun rememberSettingsRootSearchRevealConnection(
 
 @Composable
 private fun TabletSettingsScreen(
+    isDesktopWorkspace: Boolean,
     page: SettingsPage,
     scrollToTopRequests: Flow<Unit>,
     onPageChange: (SettingsPage) -> Unit,
@@ -713,7 +730,12 @@ private fun TabletSettingsScreen(
     var selectedCategory by rememberSaveable { mutableStateOf(SettingsCategory.General.name) }
     val activeCategory = SettingsCategory.valueOf(selectedCategory)
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val topOffset = max(statusBarPadding + 24.dp, 48.dp) + 64.dp
+    val topOffset = if (isDesktopWorkspace) {
+        max(statusBarPadding + 16.dp, 40.dp)
+    } else {
+        max(statusBarPadding + 24.dp, 48.dp) + 64.dp
+    }
+    val sideRailWidth = if (isDesktopWorkspace) NuvioDesktopSettingsRailWidth else 280.dp
 
     LaunchedEffect(page) {
         if (page.opensInlineOnTablet) {
@@ -731,7 +753,7 @@ private fun TabletSettingsScreen(
     Row(modifier = Modifier.fillMaxSize()) {
         Surface(
             modifier = Modifier
-                .width(280.dp)
+                .width(sideRailWidth)
                 .fillMaxSize(),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -747,7 +769,11 @@ private fun TabletSettingsScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp)
                         .padding(bottom = 20.dp),
-                    style = MaterialTheme.typography.displayLarge,
+                    style = if (isDesktopWorkspace) {
+                        MaterialTheme.typography.headlineMedium
+                    } else {
+                        MaterialTheme.typography.displayLarge
+                    },
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
                 )
@@ -770,9 +796,15 @@ private fun TabletSettingsScreen(
             }
         }
 
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxSize(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
         saveableStateHolder.SaveableStateProvider(page.name) {
             var settingsSearchQuery by rememberSaveable { mutableStateOf("") }
-            var rootSearchVisible by rememberSaveable { mutableStateOf(false) }
+            var rootSearchVisible by rememberSaveable { mutableStateOf(isDesktopWorkspace) }
             var rootSearchRevealAnimating by rememberSaveable { mutableStateOf(false) }
             val hapticFeedback = LocalHapticFeedback.current
             val hapticScope = rememberCoroutineScope()
@@ -814,6 +846,11 @@ private fun TabletSettingsScreen(
                     rootSearchRevealAnimating = false
                 }
             }
+            LaunchedEffect(isDesktopWorkspace) {
+                if (isDesktopWorkspace) {
+                    rootSearchVisible = true
+                }
+            }
             LaunchedEffect(scrollToTopRequests) {
                 scrollToTopRequests.collect {
                     listState.animateScrollToItem(0)
@@ -822,12 +859,14 @@ private fun TabletSettingsScreen(
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxHeight()
+                    .fillMaxWidth()
+                    .widthIn(max = if (isDesktopWorkspace) NuvioDesktopContentMaxWidth else Dp.Unspecified)
                     .nestedScroll(rootSearchRevealConnection),
                 contentPadding = PaddingValues(
-                    start = 40.dp,
+                    start = if (isDesktopWorkspace) 32.dp else 40.dp,
                     top = topOffset,
-                    end = 40.dp,
+                    end = if (isDesktopWorkspace) 32.dp else 40.dp,
                     bottom = 40.dp + bottomOverlayPadding,
                 ),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
@@ -854,7 +893,7 @@ private fun TabletSettingsScreen(
                             query = settingsSearchQuery,
                             entries = searchEntries,
                             isTablet = true,
-                            showSearchField = rootSearchVisible,
+                            showSearchField = rootSearchVisible || isDesktopWorkspace,
                             animateSearchField = rootSearchRevealAnimating,
                             onQueryChange = { settingsSearchQuery = it },
                             onTargetClick = { openSearchTarget(it) },
@@ -863,6 +902,7 @@ private fun TabletSettingsScreen(
                             settingsRootContent(
                                 isTablet = true,
                                 onPlaybackClick = { openInlinePage(SettingsPage.Playback) },
+                                onStreamsClick = { openInlinePage(SettingsPage.Streams) },
                                 onAppearanceClick = { openInlinePage(SettingsPage.Appearance) },
                                 onNotificationsClick = { openInlinePage(SettingsPage.Notifications) },
                                 onContentDiscoveryClick = { openInlinePage(SettingsPage.ContentDiscovery) },
@@ -870,6 +910,7 @@ private fun TabletSettingsScreen(
                                 onTraktClick = { openInlinePage(SettingsPage.TraktAuthentication) },
                                 onSupportersContributorsClick = { openInlinePage(SettingsPage.SupportersContributors) },
                                 onLicensesAttributionsClick = { openInlinePage(SettingsPage.LicensesAttributions) },
+                                onDiagnosticsClick = { openInlinePage(SettingsPage.Diagnostics) },
                                 onCheckForUpdatesClick = onCheckForUpdatesClick,
                                 onDownloadsClick = onDownloadsClick,
                                 onAccountClick = { openInlinePage(SettingsPage.Account) },
@@ -889,6 +930,9 @@ private fun TabletSettingsScreen(
                     SettingsPage.LicensesAttributions -> licensesAttributionsContent(
                         isTablet = true,
                     )
+                    SettingsPage.Diagnostics -> diagnosticsSettingsContent(
+                        isTablet = true,
+                    )
                     SettingsPage.Playback -> playbackSettingsContent(
                         isTablet = true,
                         showLoadingOverlay = showLoadingOverlay,
@@ -905,6 +949,9 @@ private fun TabletSettingsScreen(
                         tunnelingEnabled = tunnelingEnabled,
                         useLibass = useLibass,
                         libassRenderType = libassRenderType,
+                    )
+                    SettingsPage.Streams -> streamsSettingsContent(
+                        isTablet = true,
                     )
                     SettingsPage.Appearance -> appearanceSettingsContent(
                         isTablet = true,
@@ -988,6 +1035,7 @@ private fun TabletSettingsScreen(
                     )
                 }
             }
+        }
         }
     }
 }

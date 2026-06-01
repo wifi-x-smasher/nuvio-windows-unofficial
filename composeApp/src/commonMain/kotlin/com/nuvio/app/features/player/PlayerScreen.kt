@@ -30,8 +30,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -191,6 +198,9 @@ fun PlayerScreen(
         val downloadedLabel = stringResource(Res.string.compose_player_downloaded)
         val airsPrefix = stringResource(Res.string.compose_player_airs_prefix)
         val tbaLabel = stringResource(Res.string.compose_player_tba)
+        val externalPlayerNotConfiguredText = stringResource(Res.string.external_player_not_configured)
+        val externalPlayerUnavailableText = stringResource(Res.string.external_player_unavailable)
+        val externalPlayerFailedText = stringResource(Res.string.external_player_failed)
         val parentalGuideLabels = ParentalGuideLabels(
             nudity = stringResource(Res.string.parental_nudity),
             violence = stringResource(Res.string.parental_violence),
@@ -1389,6 +1399,24 @@ fun PlayerScreen(
             controlsVisible = false
         }
 
+        fun openCurrentStreamInExternalPlayer() {
+            val result = ExternalPlayerPlatform.open(
+                request = ExternalPlayerPlaybackRequest(
+                    sourceUrl = activeSourceUrl,
+                    title = title,
+                    streamTitle = activeStreamTitle,
+                    sourceHeaders = activeSourceHeaders,
+                ),
+                playerId = playerSettingsUiState.externalPlayerId,
+            )
+            when (result) {
+                ExternalPlayerOpenResult.Opened -> Unit
+                ExternalPlayerOpenResult.NotConfigured -> NuvioToastController.show(externalPlayerNotConfiguredText)
+                ExternalPlayerOpenResult.NoPlayerAvailable -> NuvioToastController.show(externalPlayerUnavailableText)
+                ExternalPlayerOpenResult.Failed -> NuvioToastController.show(externalPlayerFailedText)
+            }
+        }
+
         fun fetchAddonSubtitlesForActiveItem() {
             val type = activeAddonSubtitleType.takeIf { it.isNotBlank() } ?: return
             val videoId = activeVideoId?.takeIf { it.isNotBlank() } ?: return
@@ -1424,6 +1452,79 @@ fun PlayerScreen(
 
         LaunchedEffect(playerController, subtitleStyle) {
             playerController?.applySubtitleStyle(subtitleStyle)
+        }
+
+        val playerFocusRequester = remember { FocusRequester() }
+
+        LaunchedEffect(Unit) {
+            runCatching { playerFocusRequester.requestFocus() }
+        }
+
+        fun closeTopPlayerPanelOrBack() {
+            when {
+                showSubtitleModal -> showSubtitleModal = false
+                showAudioModal -> showAudioModal = false
+                showVideoSettingsModal -> showVideoSettingsModal = false
+                showSubmitIntroModal -> showSubmitIntroModal = false
+                showSourcesPanel -> showSourcesPanel = false
+                showEpisodesPanel -> showEpisodesPanel = false
+                episodeStreamsPanelState.showStreams -> episodeStreamsPanelState = EpisodeStreamsPanelState()
+                playerControlsLocked -> unlockPlayerControls()
+                else -> onBackWithProgress()
+            }
+        }
+
+        fun adjustVolumeBy(delta: Float): Boolean {
+            val controller = gestureController ?: return false
+            val current = controller.currentVolume() ?: return false
+            val updated = controller.setVolume(current.fraction + delta) ?: return false
+            showVolumeFeedback(updated)
+            controlsVisible = true
+            return true
+        }
+
+        fun toggleMute(): Boolean {
+            val controller = gestureController ?: return false
+            val current = controller.currentVolume() ?: return false
+            val targetVolume = if (current.isMuted || current.fraction <= 0.01f) 0.8f else 0f
+            val updated = controller.setVolume(targetVolume) ?: return false
+            showVolumeFeedback(updated)
+            controlsVisible = true
+            return true
+        }
+
+        fun handleKeyboardShortcut(shortcut: PlayerKeyboardShortcut): Boolean {
+            val panelVisible = showSubtitleModal || showAudioModal || showVideoSettingsModal ||
+                showSubmitIntroModal || showSourcesPanel || showEpisodesPanel || episodeStreamsPanelState.showStreams
+            if (panelVisible && shortcut != PlayerKeyboardShortcut.CloseOrBack) {
+                return false
+            }
+            if (playerControlsLocked && shortcut != PlayerKeyboardShortcut.CloseOrBack) {
+                revealLockedOverlay()
+                return true
+            }
+
+            return when (shortcut) {
+                PlayerKeyboardShortcut.TogglePlayback -> {
+                    togglePlayback()
+                    true
+                }
+                PlayerKeyboardShortcut.SeekBackward -> {
+                    seekBy(-10_000L)
+                    true
+                }
+                PlayerKeyboardShortcut.SeekForward -> {
+                    seekBy(10_000L)
+                    true
+                }
+                PlayerKeyboardShortcut.VolumeUp -> adjustVolumeBy(0.05f)
+                PlayerKeyboardShortcut.VolumeDown -> adjustVolumeBy(-0.05f)
+                PlayerKeyboardShortcut.ToggleMute -> toggleMute()
+                PlayerKeyboardShortcut.CloseOrBack -> {
+                    closeTopPlayerPanelOrBack()
+                    true
+                }
+            }
         }
 
         LaunchedEffect(activeSourceUrl, addonSubtitleFetchKey) {
@@ -1729,6 +1830,17 @@ fun PlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .focusRequester(playerFocusRequester)
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) {
+                        false
+                    } else {
+                        playerKeyboardShortcutFor(event.key)
+                            ?.let(::handleKeyboardShortcut)
+                            ?: false
+                    }
+                }
+                .focusable()
                 .onSizeChanged { layoutSize = it }
                 .pointerInput(layoutSize) {
                     detectTapGestures(
@@ -1985,6 +2097,7 @@ fun PlayerScreen(
                     },
                     onSourcesClick = if (activeVideoId != null) { { openSourcesPanel() } } else null,
                     onEpisodesClick = if (isSeries) { { openEpisodesPanel() } } else null,
+                    onExternalPlayerClick = { openCurrentStreamInExternalPlayer() },
                     onSubmitIntroClick = if (isSeries && playerSettingsUiState.introSubmitEnabled && playerSettingsUiState.introDbApiKey.isNotBlank()) { { showSubmitIntroModal = true } } else null,
                     parentalWarnings = parentalWarnings,
                     showParentalGuide = showParentalGuide,

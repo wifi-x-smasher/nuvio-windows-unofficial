@@ -8,6 +8,7 @@ import com.nuvio.app.features.streams.StreamClientResolveRaw
 import com.nuvio.app.features.streams.StreamClientResolveStream
 import com.nuvio.app.features.streams.StreamDebridCacheState
 import com.nuvio.app.features.streams.StreamDebridCacheStatus
+import com.nuvio.app.features.streams.StreamBadge
 import com.nuvio.app.features.streams.StreamItem
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -111,6 +112,63 @@ class DebridStreamPresentationTest {
         ).single().streams
 
         assertEquals(listOf("2160p TB Instant", "1080p TB Instant", "Resolved addon URL"), presented.map { it.name })
+    }
+
+    @Test
+    fun `default stream preferences preserve addon result order`() {
+        val first = localTorboxStream(
+            name = "First",
+            filename = "Movie.1080p.WEB-DL.HEVC-GRP.mkv",
+            size = 10_000_000_000,
+        )
+        val second = localTorboxStream(
+            name = "Second",
+            filename = "Movie.2160p.BluRay.REMUX.HEVC-GRP.mkv",
+            size = 40_000_000_000,
+        )
+
+        val presented = DebridStreamPresentation.apply(
+            groups = listOf(
+                AddonStreamGroup(
+                    addonName = "Addon",
+                    addonId = "addon:test",
+                    streams = listOf(first, second),
+                ),
+            ),
+            settings = DebridSettings(
+                enabled = true,
+                providerApiKeys = mapOf(DebridProviders.TORBOX_ID to "key"),
+            ),
+        ).single().streams
+
+        assertEquals(listOf("1080p TB Instant", "2160p TB Instant"), presented.map { it.name })
+    }
+
+    @Test
+    fun `stream badges are exposed to debrid templates`() {
+        val stream = localTorboxStream(
+            filename = "Movie.2026.2160p.WEB-DL.DV.Atmos-GRP.mkv",
+            size = 22_000_000_000,
+        ).copy(
+            badges = listOf(
+                StreamBadge(name = "WEB-DL", imageURL = "https://example.test/webdl.png"),
+                StreamBadge(name = "Dolby Vision", imageURL = "https://example.test/dv.png"),
+            ),
+        )
+
+        val formatted = DebridStreamFormatter().format(
+            stream = stream,
+            settings = DebridSettings(
+                enabled = true,
+                providerApiKeys = mapOf(DebridProviders.TORBOX_ID to "key"),
+                streamNameTemplate = "{stream.regexMatched::join(\" + \")} {service.shortName}",
+                streamDescriptionTemplate = "{stream.rseMatched::join(\" | \")}",
+            ),
+        )
+
+        assertEquals("WEB-DL + Dolby Vision TB", formatted.name)
+        assertEquals("WEB-DL | Dolby Vision", formatted.description)
+        assertEquals(listOf("WEB-DL", "Dolby Vision"), formatted.badges.map { it.name })
     }
 
     @Test

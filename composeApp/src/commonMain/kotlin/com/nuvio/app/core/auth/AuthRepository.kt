@@ -115,16 +115,24 @@ object AuthRepository {
 
     suspend fun signOut(): Result<Unit> = runCatching {
         _error.value = null
-        val wasAnonymous = AuthStorage.loadAnonymousUserId() != null
-        AuthStorage.clearAnonymousUserId()
+        val wasAnonymous = runCatching { AuthStorage.loadAnonymousUserId() != null }
+            .getOrDefault(false)
+        runCatching { AuthStorage.clearAnonymousUserId() }
+            .onFailure { e -> log.e(e) { "Failed to clear local anonymous auth id" } }
+
         if (!wasAnonymous) {
-            SupabaseProvider.requireConfigured()
-            SupabaseProvider.client.auth.signOut()
+            runCatching {
+                SupabaseProvider.requireConfigured()
+                SupabaseProvider.client.auth.signOut()
+            }.onFailure { e ->
+                log.e(e) { "Remote sign-out failed; clearing local account data anyway" }
+            }
         }
+
         _state.value = AuthState.Unauthenticated
         LocalAccountDataCleaner.wipe()
     }.onFailure { e ->
-        log.e(e) { "Sign-out failed" }
+        log.e(e) { "Local sign-out cleanup failed" }
         _error.value = e.message ?: getString(Res.string.auth_sign_out_failed)
     }
 

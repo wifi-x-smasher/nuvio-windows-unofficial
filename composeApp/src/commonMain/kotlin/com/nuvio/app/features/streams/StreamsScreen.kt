@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -92,6 +93,7 @@ import com.nuvio.app.features.debrid.DebridProviders
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
+import com.nuvio.app.isDesktop
 import kotlinx.coroutines.launch
 import kotlin.math.round
 import kotlin.math.roundToInt
@@ -215,6 +217,7 @@ fun StreamsScreen(
 
         if (isTabletLayout) {
             TabletStreamsLayout(
+                isDesktopLayout = isDesktop,
                 isEpisode = isEpisode,
                 title = title,
                 logo = logo,
@@ -785,8 +788,8 @@ internal fun StreamList(
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(
-            horizontal = 12.dp,
-            vertical = 12.dp,
+            horizontal = if (isDesktop) 8.dp else 12.dp,
+            vertical = if (isDesktop) 8.dp else 12.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
@@ -855,10 +858,12 @@ private fun LazyListScope.streamSection(
     val streamsBySource = group.streams.groupBy { stream ->
         stream.sourceName?.takeIf { it.isNotBlank() } ?: stream.addonName
     }
-    val sortedSources = streamsBySource.keys.sortedBy { it.lowercase() }
-    val showSourceHeaders = sortedSources.size > 1
+    val sourceNames = group.streams
+        .map { stream -> stream.sourceName?.takeIf { it.isNotBlank() } ?: stream.addonName }
+        .distinct()
+    val showSourceHeaders = sourceNames.size > 1
 
-    sortedSources.forEachIndexed { sourceIndex, sourceName ->
+    sourceNames.forEachIndexed { sourceIndex, sourceName ->
         val sourceStreams = streamsBySource[sourceName].orEmpty()
         if (showSourceHeaders) {
             item(key = "source_${sectionKey}_$sourceIndex") {
@@ -991,24 +996,29 @@ private fun StreamCard(
     modifier: Modifier = Modifier,
 ) {
     val cardShape = RoundedCornerShape(12.dp)
+    val cardBackground = if (isDesktop) {
+        MaterialTheme.colorScheme.surface.copy(alpha = if (enabled) 0.88f else 0.48f)
+    } else {
+        Color.White.copy(alpha = if (enabled) 0.05f else 0.03f)
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 68.dp)
+            .heightIn(min = if (isDesktop) 82.dp else 68.dp)
             .shadow(
-                elevation = 2.dp,
+                elevation = if (isDesktop) 4.dp else 2.dp,
                 shape = cardShape,
-                ambientColor = Color.Black.copy(alpha = 0.04f),
-                spotColor = Color.Black.copy(alpha = 0.04f),
+                ambientColor = Color.Black.copy(alpha = if (isDesktop) 0.12f else 0.04f),
+                spotColor = Color.Black.copy(alpha = if (isDesktop) 0.12f else 0.04f),
             )
             .clip(cardShape)
-            .background(Color.White.copy(alpha = 0.05f))
+            .background(cardBackground)
             .combinedClickable(
                 enabled = enabled,
                 onClick = onClick,
                 onLongClick = onLongClick,
             )
-            .padding(14.dp),
+            .padding(if (isDesktop) 16.dp else 14.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -1017,22 +1027,34 @@ private fun StreamCard(
                 appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
             )
 
-            val subtitle = stream.streamSubtitle
+            val subtitle = stream.streamDisplayDescription()
             if (!subtitle.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
+                        fontSize = if (isDesktop) 13.sp else 12.sp,
+                        lineHeight = if (isDesktop) 19.sp else 18.sp,
                     ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = if (isDesktop) 6 else Int.MAX_VALUE,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                StreamFileSizeBadge(stream = stream)
+            val badgeImages = stream.badges.filter { it.imageURL.isNotBlank() }
+            if (badgeImages.isNotEmpty() || stream.streamSizeBytes() != null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    badgeImages.forEach { badge ->
+                        StreamBadgeImage(badge = badge)
+                    }
+                    StreamFileSizeBadge(stream = stream)
+                }
             }
         }
     }
@@ -1044,9 +1066,9 @@ private fun StreamNameWithInstantService(
     appendInstantServiceToDefaultName: Boolean,
 ) {
     val nameStyle = MaterialTheme.typography.bodyMedium.copy(
-        fontSize = 14.sp,
+        fontSize = if (isDesktop) 16.sp else 14.sp,
         fontWeight = FontWeight.Bold,
-        lineHeight = 20.sp,
+        lineHeight = if (isDesktop) 22.sp else 20.sp,
         letterSpacing = 0.sp,
     )
     val instantLabel = if (appendInstantServiceToDefaultName) {
@@ -1135,13 +1157,24 @@ private fun StreamActionsSheet(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                stream.streamSubtitle
+                stream.streamDisplayDescription()
                     ?.takeIf { it.isNotBlank() }
                     ?.let { subtitle ->
                         Text(
                             text = subtitle,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                stream.streamTechnicalMetadataLine()
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { metadata ->
+                        Text(
+                            text = metadata,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -1201,8 +1234,20 @@ private fun StreamItem.instantServiceLabel(): String? {
 }
 
 @Composable
+private fun StreamBadgeImage(badge: StreamBadge) {
+    StreamBadgeChip(
+        imageURL = badge.imageURL,
+        name = badge.name,
+        tagColor = badge.tagColor,
+        tagStyle = badge.tagStyle,
+        borderColor = badge.borderColor,
+        size = StreamBadgeChipSize.STREAM,
+    )
+}
+
+@Composable
 private fun StreamFileSizeBadge(stream: StreamItem) {
-    val bytes = stream.behaviorHints.videoSize ?: return
+    val bytes = stream.streamSizeBytes() ?: return
     val gib = bytes.toDouble() / (1024.0 * 1024.0 * 1024.0)
     val sizeLabel = if (gib >= 1.0) {
         val roundedGiB = round(gib * 10.0) / 10.0
@@ -1212,18 +1257,23 @@ private fun StreamFileSizeBadge(stream: StreamItem) {
         "${round(mib).toInt()} ${localizedByteUnit("MB")}"
     }
 
+    val badgeShape = StreamBadgeChipDefaults.shape
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .height(StreamBadgeChipSize.STREAM.containerHeight)
+            .clip(badgeShape)
             .background(Color(0xFF0A0C0C))
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .border(1.dp, Color(0xFF0A0C0C), badgeShape)
+            .padding(horizontal = StreamBadgeChipDefaults.fileSizeHorizontalPadding),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = stringResource(Res.string.streams_size, sizeLabel),
             style = MaterialTheme.typography.labelSmall.copy(
-                fontSize = 11.sp,
+                fontSize = StreamBadgeChipDefaults.fileSizeFontSize,
+                lineHeight = StreamBadgeChipDefaults.fileSizeLineHeight,
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.2.sp,
+                letterSpacing = StreamBadgeChipDefaults.fileSizeLetterSpacing,
             ),
             color = Color.White,
         )

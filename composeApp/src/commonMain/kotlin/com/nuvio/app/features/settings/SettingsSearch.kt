@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.CollectionsBookmark
@@ -92,10 +93,12 @@ internal fun settingsSearchEntries(
     val contentDiscoveryPage = stringResource(Res.string.compose_settings_page_content_discovery)
     val downloadsPage = stringResource(Res.string.compose_settings_root_downloads_title)
     val playbackPage = stringResource(Res.string.compose_settings_page_playback)
+    val streamsPage = stringResource(Res.string.compose_settings_page_streams)
     val integrationsPage = stringResource(Res.string.compose_settings_page_integrations)
     val notificationsPage = stringResource(Res.string.compose_settings_page_notifications)
     val supportersPage = stringResource(Res.string.compose_settings_page_supporters_contributors)
     val licensesPage = stringResource(Res.string.compose_settings_page_licenses_attributions)
+    val diagnosticsPage = stringResource(Res.string.compose_settings_page_diagnostics)
     val homeLayoutPage = stringResource(Res.string.compose_settings_page_homescreen)
     val detailPage = stringResource(Res.string.compose_settings_page_meta_screen)
     val continueWatchingPage = stringResource(Res.string.compose_settings_page_continue_watching)
@@ -229,6 +232,13 @@ internal fun settingsSearchEntries(
         icon = Icons.Rounded.PlayArrow,
     )
     addPage(
+        page = SettingsPage.Streams,
+        key = "streams",
+        title = streamsPage,
+        description = stringResource(Res.string.compose_settings_root_streams_description),
+        icon = Icons.Rounded.Style,
+    )
+    addPage(
         page = SettingsPage.Integrations,
         key = "integrations",
         title = integrationsPage,
@@ -257,6 +267,14 @@ internal fun settingsSearchEntries(
         description = stringResource(Res.string.about_licenses_attributions_subtitle),
         category = aboutCategory,
         icon = Icons.Rounded.Info,
+    )
+    addPage(
+        page = SettingsPage.Diagnostics,
+        key = "diagnostics",
+        title = diagnosticsPage,
+        description = stringResource(Res.string.compose_settings_root_diagnostics_description),
+        category = aboutCategory,
+        icon = Icons.Rounded.BugReport,
     )
     listOf(
         PlaybackSearchRow("nuvio-license", stringResource(Res.string.settings_licenses_attributions_nuvio_title), stringResource(Res.string.settings_licenses_attributions_nuvio_license)),
@@ -424,6 +442,15 @@ internal fun settingsSearchEntries(
     val playbackSubtitleRendering = stringResource(Res.string.settings_playback_section_subtitle_rendering)
     val playbackSkipSegments = stringResource(Res.string.settings_playback_section_skip_segments)
     val playbackNextEpisode = stringResource(Res.string.settings_playback_section_next_episode)
+    addRow(
+        page = SettingsPage.Streams,
+        key = "stream-badge-urls",
+        title = stringResource(Res.string.settings_stream_badge_urls_title),
+        description = stringResource(Res.string.settings_stream_badge_urls_search_description),
+        pageLabel = streamsPage,
+        section = stringResource(Res.string.settings_stream_badges_section),
+        icon = Icons.Rounded.Style,
+    )
     addPlaybackRows(
         addRow = ::addRow,
         pageLabel = playbackPage,

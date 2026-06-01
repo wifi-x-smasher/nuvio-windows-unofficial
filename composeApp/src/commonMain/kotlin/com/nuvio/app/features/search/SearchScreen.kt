@@ -46,6 +46,7 @@ import com.nuvio.app.core.ui.NuvioInputField
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioNetworkOfflineCard
 import com.nuvio.app.core.ui.NuvioScreenHeader
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.core.ui.nuvioBlockPointerPassthrough
 import com.nuvio.app.core.ui.withDuplicateSafeLazyKeys
 import com.nuvio.app.features.addons.AddonRepository
@@ -469,6 +470,7 @@ private fun SearchRecentRow(
     onRemovePress: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val rowShape = RoundedCornerShape(16.dp)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -476,7 +478,13 @@ private fun SearchRecentRow(
             .padding(vertical = 2.dp)
             .background(
                 color = MaterialTheme.colorScheme.background,
-                shape = RoundedCornerShape(16.dp),
+                shape = rowShape,
+            )
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = rowShape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 8.dp,
             )
             .padding(start = 2.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

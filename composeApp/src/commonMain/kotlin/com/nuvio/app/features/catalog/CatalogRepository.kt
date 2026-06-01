@@ -1,5 +1,6 @@
 package com.nuvio.app.features.catalog
 
+import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.features.library.LibraryRepository
 import com.nuvio.app.features.library.toMetaPreview
 import com.nuvio.app.features.home.HomeCatalogSettingsRepository
@@ -42,8 +43,16 @@ object CatalogRepository {
             supportsPagination = supportsPagination,
         )
         if (!force && activeRequest == request && (_uiState.value.items.isNotEmpty() || _uiState.value.isLoading)) {
+            AppDiagnostics.breadcrumb(
+                event = "catalog.load.skip",
+                details = request.diagnosticsDetails() + mapOf("reason" to "unchanged"),
+            )
             return
         }
+        AppDiagnostics.breadcrumb(
+            event = "catalog.load.request",
+            details = request.diagnosticsDetails() + mapOf("force" to force.toString()),
+        )
         activeRequest = request
         if (manifestUrl == INTERNAL_LIBRARY_MANIFEST_URL) {
             fetchInternalLibrary(request)
@@ -73,6 +82,10 @@ object CatalogRepository {
         )
 
         activeJob = scope.launch {
+            AppDiagnostics.breadcrumb(
+                event = "catalog.internal.start",
+                details = request.diagnosticsDetails(),
+            )
             runCatching {
                 LibraryRepository.ensureLoaded()
                 LibraryRepository.uiState.value.sections
@@ -84,6 +97,10 @@ object CatalogRepository {
             }.fold(
                 onSuccess = { items ->
                     if (activeRequest != request) return@fold
+                    AppDiagnostics.breadcrumb(
+                        event = "catalog.internal.success",
+                        details = request.diagnosticsDetails() + mapOf("items" to items.size.toString()),
+                    )
                     _uiState.value = CatalogUiState(
                         items = items,
                         isLoading = false,
@@ -93,6 +110,11 @@ object CatalogRepository {
                 },
                 onFailure = { error ->
                     if (activeRequest != request) return@fold
+                    AppDiagnostics.error(
+                        event = "catalog.internal.failure",
+                        throwable = error,
+                        details = request.diagnosticsDetails(),
+                    )
                     _uiState.value = CatalogUiState(
                         items = emptyList(),
                         isLoading = false,
@@ -120,6 +142,13 @@ object CatalogRepository {
         )
 
         activeJob = scope.launch {
+            AppDiagnostics.breadcrumb(
+                event = "catalog.page.start",
+                details = request.diagnosticsDetails() + mapOf(
+                    "reset" to reset.toString(),
+                    "skip" to requestedSkip.toString(),
+                ),
+            )
             runCatching {
                 fetchCatalogPage(
                     manifestUrl = request.manifestUrl,
@@ -139,6 +168,16 @@ object CatalogRepository {
                     }
                     val supportsPagination = request.supportsPagination || page.rawItemCount >= CATALOG_PAGE_SIZE
                     val loadedNewItems = reset || mergedItems.size > current.items.size
+                    AppDiagnostics.breadcrumb(
+                        event = "catalog.page.success",
+                        details = request.diagnosticsDetails() + mapOf(
+                            "reset" to reset.toString(),
+                            "rawItems" to page.rawItemCount.toString(),
+                            "pageItems" to page.items.size.toString(),
+                            "mergedItems" to mergedItems.size.toString(),
+                            "nextSkip" to page.nextSkip?.toString(),
+                        ),
+                    )
                     _uiState.value = CatalogUiState(
                         items = mergedItems,
                         isLoading = false,
@@ -148,6 +187,14 @@ object CatalogRepository {
                 },
                 onFailure = { error ->
                     if (activeRequest != request) return@fold
+                    AppDiagnostics.error(
+                        event = "catalog.page.failure",
+                        throwable = error,
+                        details = request.diagnosticsDetails() + mapOf(
+                            "reset" to reset.toString(),
+                            "skip" to requestedSkip.toString(),
+                        ),
+                    )
 
                     _uiState.value = current.copy(
                         items = if (reset) emptyList() else current.items,
@@ -173,4 +220,13 @@ private data class CatalogRequest(
     val catalogId: String,
     val genre: String?,
     val supportsPagination: Boolean,
-)
+) {
+    fun diagnosticsDetails(): Map<String, String?> =
+        mapOf(
+            "manifestUrl" to manifestUrl,
+            "type" to type,
+            "catalogId" to catalogId,
+            "genre" to genre,
+            "supportsPagination" to supportsPagination.toString(),
+        )
+}

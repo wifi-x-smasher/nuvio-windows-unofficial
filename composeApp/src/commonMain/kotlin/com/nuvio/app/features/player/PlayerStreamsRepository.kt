@@ -18,6 +18,8 @@ import com.nuvio.app.features.plugins.PluginScraper
 import com.nuvio.app.features.streams.AddonStreamWarmupRepository
 import com.nuvio.app.features.streams.AddonStreamGroup
 import com.nuvio.app.features.streams.StreamAutoPlaySelector
+import com.nuvio.app.features.streams.StreamBadgePresentation
+import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamParser
 import com.nuvio.app.features.streams.StreamsUiState
@@ -142,6 +144,7 @@ object PlayerStreamsRepository {
         jobHolder()?.cancel()
         stateFlow.value = StreamsUiState()
 
+        val streamBadgeRules = StreamBadgeSettingsRepository.snapshot()
         val embeddedStreams = MetaDetailsRepository.findEmbeddedStreams(videoId)
         if (embeddedStreams.isNotEmpty()) {
             log.d { "Using ${embeddedStreams.size} embedded streams for type=$type id=$videoId" }
@@ -151,8 +154,12 @@ object PlayerStreamsRepository {
                 streams = embeddedStreams,
                 isLoading = false,
             )
-            stateFlow.value = StreamsUiState(
+            val presentedGroup = StreamBadgePresentation.apply(
                 groups = listOf(group),
+                rules = streamBadgeRules,
+            ).firstOrNull() ?: group
+            stateFlow.value = StreamsUiState(
+                groups = listOf(presentedGroup),
                 activeAddonIds = setOf("embedded"),
                 isAnyLoading = false,
             )
@@ -212,7 +219,16 @@ object PlayerStreamsRepository {
             .associateBy { it.addonId }
         val warmedAddonIds = warmedAddonGroups.keys
         val initialGroups = StreamAutoPlaySelector.orderAddonStreams(streamAddons.map { addon ->
-            warmedAddonGroups[addon.addonId] ?: AddonStreamGroup(
+            warmedAddonGroups[addon.addonId]?.let { group ->
+                val badgeGroup = StreamBadgePresentation.apply(
+                    groups = listOf(group),
+                    rules = streamBadgeRules,
+                ).firstOrNull() ?: group
+                DebridStreamPresentation.apply(
+                    groups = listOf(badgeGroup),
+                    settings = debridSettings,
+                ).firstOrNull() ?: badgeGroup
+            } ?: AddonStreamGroup(
                 addonName = addon.addonName,
                 addonId = addon.addonId,
                 streams = emptyList(),
@@ -248,11 +264,16 @@ object PlayerStreamsRepository {
                     null
                 }
 
-            fun presentDebridGroup(group: AddonStreamGroup): AddonStreamGroup =
-                DebridStreamPresentation.apply(
+            fun presentStreamGroup(group: AddonStreamGroup): AddonStreamGroup {
+                val badgeGroup = StreamBadgePresentation.apply(
                     groups = listOf(group),
-                    settings = debridSettings,
+                    rules = streamBadgeRules,
                 ).firstOrNull() ?: group
+                return DebridStreamPresentation.apply(
+                    groups = listOf(badgeGroup),
+                    settings = debridSettings,
+                ).firstOrNull() ?: badgeGroup
+            }
 
             fun publishStreamGroup(group: AddonStreamGroup) {
                 stateFlow.update { current ->
@@ -286,7 +307,7 @@ object PlayerStreamsRepository {
                         groups = listOf(checkingGroup),
                         eligibleGroupIds = eligibleGroupIds,
                     ).firstOrNull() ?: checkingGroup
-                    publishStreamGroup(presentDebridGroup(availabilityGroup))
+                    publishStreamGroup(presentStreamGroup(availabilityGroup))
                 }
                 debridAvailabilityJobs += availabilityJob
             }
@@ -360,7 +381,7 @@ object PlayerStreamsRepository {
             }
             repeat(jobs.size) {
                 val result = completions.receive()
-                publishStreamGroup(result)
+                publishStreamGroup(presentStreamGroup(result))
                 launchDebridAvailability(result)
             }
             for (availabilityJob in debridAvailabilityJobs) {
@@ -404,10 +425,22 @@ private fun com.nuvio.app.features.addons.ManagedAddon.streamAddonInstanceId(man
     "addon:$manifestId:$manifestUrl"
 
 private fun PluginRuntimeResult.toStreamItem(scraper: PluginScraper): StreamItem {
+    val baseTitle = title.takeIf { it.isNotBlank() }
+    val baseName = name?.takeIf { it.isNotBlank() }
+    val qualityLabel = quality?.takeIf { it.isNotBlank() }
+    val displayName = buildString {
+        append(baseName ?: baseTitle ?: scraper.name)
+        if (!qualityLabel.isNullOrBlank() && !contains(qualityLabel, ignoreCase = true)) {
+            append(" - ")
+            append(qualityLabel)
+        }
+    }.takeIf { it.isNotBlank() }
+    val displayTitle = (baseTitle ?: baseName ?: scraper.name).takeIf { it.isNotBlank() }
     val subtitleParts = listOfNotNull(
-        quality?.takeIf { it.isNotBlank() },
         size?.takeIf { it.isNotBlank() },
         language?.takeIf { it.isNotBlank() },
+        seeders?.takeIf { it > 0 }?.let { "S:$it" },
+        peers?.takeIf { it > 0 }?.let { "P:$it" },
     )
     val requestHeaders = headers
         .orEmpty()
@@ -423,10 +456,12 @@ private fun PluginRuntimeResult.toStreamItem(scraper: PluginScraper): StreamItem
         .toMap()
 
     return StreamItem(
-        name = name ?: title,
+        name = displayName,
+        title = displayTitle,
         description = subtitleParts.joinToString(" • ").ifBlank { null },
         url = url,
         infoHash = infoHash,
+        sourceName = scraper.name,
         addonName = scraper.name,
         addonId = "plugin:${scraper.id}",
         behaviorHints = if (requestHeaders.isEmpty()) {

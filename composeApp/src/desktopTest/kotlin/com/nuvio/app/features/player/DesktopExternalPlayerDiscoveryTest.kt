@@ -23,7 +23,19 @@ class DesktopExternalPlayerDiscoveryTest {
             exists = { it in existing },
         )
 
-        assertEquals(listOf("system", "vlc", "mpv"), players.map { it.id })
+        assertEquals(listOf("vlc", "mpv", "system"), players.map { it.id })
+        assertEquals("vlc", players.preferredImplicitExternalPlayer()?.id)
+    }
+
+    @Test
+    fun systemDefaultIsNotUsedForImplicitExternalFallback() {
+        val players = DesktopExternalPlayerDiscovery.availablePlayers(
+            env = emptyMap(),
+            exists = { false },
+        )
+
+        assertEquals(listOf("system"), players.map { it.id })
+        assertEquals(null, players.preferredImplicitExternalPlayer()?.id)
     }
 
     @Test

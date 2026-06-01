@@ -14,6 +14,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -49,10 +50,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.ContentScale
@@ -69,6 +76,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.isIos
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -85,6 +93,7 @@ fun ProfileSwitcherTab(
     onProfileSelected: (NuvioProfile) -> Unit,
     onAddProfileRequested: () -> Unit,
     triggerContent: (@Composable (selected: Boolean) -> Unit)? = null,
+    openProfileMenuOnClick: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val profileState by ProfileRepository.state.collectAsStateWithLifecycle()
@@ -152,6 +161,20 @@ fun ProfileSwitcherTab(
         }
     }
 
+    fun handleTriggerClick() {
+        if (!openProfileMenuOnClick) {
+            onClick()
+            return
+        }
+        pinProfile = null
+        dragTargetProfileIndex = null
+        if (profiles.isEmpty()) {
+            onAddProfileRequested()
+        } else {
+            showPopup = !showPopup
+        }
+    }
+
     // Popup entrance/exit animation
     val popupAlpha = remember { Animatable(0f) }
     val popupScale = remember { Animatable(0.5f) }
@@ -200,7 +223,7 @@ fun ProfileSwitcherTab(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onClick,
+                onClick = ::handleTriggerClick,
             )
             .pointerInput(profiles) {
                 detectDragGesturesAfterLongPress(
@@ -342,6 +365,7 @@ private fun PopupAddProfileBubble(
 ) {
     val itemAlpha = remember { Animatable(0f) }
     val itemScale = remember { Animatable(0.4f) }
+    val bubbleShape = RoundedCornerShape(16.dp)
 
     LaunchedEffect(Unit) {
         delay(delayMs.toLong())
@@ -365,11 +389,17 @@ private fun PopupAddProfileBubble(
                 scaleX = itemScale.value
                 scaleY = itemScale.value
             }
-            .clip(RoundedCornerShape(16.dp))
+            .clip(bubbleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick,
+            )
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = bubbleShape,
+                focusedScale = 1.06f,
+                focusedShadowElevation = 12.dp,
             )
             .padding(4.dp),
     ) {
@@ -446,6 +476,7 @@ private fun PopupProfileBubble(
         ),
         label = "pressScale",
     )
+    val bubbleShape = RoundedCornerShape(16.dp)
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -458,11 +489,17 @@ private fun PopupProfileBubble(
                 scaleX = itemScale.value * pressScale
                 scaleY = itemScale.value * pressScale
             }
-            .clip(RoundedCornerShape(16.dp))
+            .clip(bubbleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick,
+            )
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = bubbleShape,
+                focusedScale = 1.06f,
+                focusedShadowElevation = 12.dp,
             )
             .padding(4.dp),
     ) {
@@ -593,10 +630,76 @@ private fun InlinePinEntry(
     var isVerifying by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val pinFocusRequester = remember { FocusRequester() }
+
+    fun verifyEnteredPin(enteredPin: String) {
+        isVerifying = true
+        scope.launch {
+            val result = verifyPin(enteredPin)
+            if (result.unlocked) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onVerified()
+            } else {
+                error = if (result.retryAfterSeconds > 0) {
+                    getString(Res.string.pin_locked_try_again, result.retryAfterSeconds)
+                } else {
+                    getString(Res.string.pin_incorrect)
+                }
+                pin = ""
+            }
+            isVerifying = false
+        }
+    }
+
+    fun appendDigit(digit: String) {
+        if (pin.length >= 4 || isVerifying) return
+        error = null
+        val enteredPin = pin + digit
+        pin = enteredPin
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (enteredPin.length == 4) {
+            verifyEnteredPin(enteredPin)
+        }
+    }
+
+    fun removeDigit() {
+        if (pin.isEmpty() || isVerifying) return
+        pin = pin.dropLast(1)
+        error = null
+    }
+
+    LaunchedEffect(Unit) {
+        runCatching { pinFocusRequester.requestFocus() }
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(top = 16.dp),
+        modifier = Modifier
+            .focusRequester(pinFocusRequester)
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) {
+                    false
+                } else {
+                    val digit = pinDigitForKey(event.key)
+                    when {
+                        digit != null -> {
+                            appendDigit(digit)
+                            true
+                        }
+                        isPinBackspaceKey(event.key) -> {
+                            removeDigit()
+                            true
+                        }
+                        isPinCancelKey(event.key) -> {
+                            onCancel()
+                            true
+                        }
+                        else -> false
+                    }
+                }
+            }
+            .focusable()
+            .padding(top = 16.dp),
     ) {
         Text(
             text = stringResource(Res.string.pin_enter_for, profileName),
@@ -663,37 +766,8 @@ private fun InlinePinEntry(
 
         // Compact number pad
         CompactPinKeypad(
-            onDigit = { digit ->
-                if (pin.length < 4 && !isVerifying) {
-                    error = null
-                    pin += digit
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    if (pin.length == 4) {
-                        isVerifying = true
-                        scope.launch {
-                            val result = verifyPin(pin)
-                            if (result.unlocked) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onVerified()
-                            } else {
-                                error = if (result.retryAfterSeconds > 0) {
-                                    getString(Res.string.pin_locked_try_again, result.retryAfterSeconds)
-                                } else {
-                                    getString(Res.string.pin_incorrect)
-                                }
-                                pin = ""
-                            }
-                            isVerifying = false
-                        }
-                    }
-                }
-            },
-            onBackspace = {
-                if (pin.isNotEmpty() && !isVerifying) {
-                    pin = pin.dropLast(1)
-                    error = null
-                }
-            },
+            onDigit = ::appendDigit,
+            onBackspace = ::removeDigit,
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -706,6 +780,12 @@ private fun InlinePinEntry(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .clickable(onClick = onCancel)
+                .nuvioDesktopFocusEffect(
+                    enabled = true,
+                    shape = RoundedCornerShape(8.dp),
+                    focusedScale = 1.018f,
+                    focusedShadowElevation = 8.dp,
+                )
                 .padding(horizontal = 16.dp, vertical = 6.dp),
         )
     }
@@ -738,7 +818,13 @@ private fun CompactPinKeypad(
                                     .size(48.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .clickable(onClick = onBackspace),
+                                    .clickable(onClick = onBackspace)
+                                    .nuvioDesktopFocusEffect(
+                                        enabled = true,
+                                        shape = CircleShape,
+                                        focusedScale = 1.05f,
+                                        focusedShadowElevation = 8.dp,
+                                    ),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
@@ -755,7 +841,13 @@ private fun CompactPinKeypad(
                                     .size(48.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .clickable { onDigit(key) },
+                                    .clickable { onDigit(key) }
+                                    .nuvioDesktopFocusEffect(
+                                        enabled = true,
+                                        shape = CircleShape,
+                                        focusedScale = 1.05f,
+                                        focusedShadowElevation = 8.dp,
+                                    ),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(

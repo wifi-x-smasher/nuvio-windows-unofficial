@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.nuvio.app.core.ui.nuvioDesktopTvMetrics
 import com.nuvio.app.isIos
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -50,6 +52,7 @@ import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun TabletStreamsLayout(
+    isDesktopLayout: Boolean = false,
     isEpisode: Boolean,
     title: String,
     logo: String?,
@@ -82,7 +85,11 @@ internal fun TabletStreamsLayout(
     }
 
     val backdropAlpha by animateFloatAsState(
-        targetValue = if (backdropVisible) 1f else 0f,
+        targetValue = if (backdropVisible) {
+            if (isDesktopLayout) 0.72f else 1f
+        } else {
+            0f
+        },
         animationSpec = tween(durationMillis = 520),
         label = "tablet_backdrop_alpha",
     )
@@ -92,7 +99,9 @@ internal fun TabletStreamsLayout(
         label = "tablet_backdrop_scale",
     )
 
-    Box(modifier = modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val desktopMetrics = remember(maxWidth) { nuvioDesktopTvMetrics(maxWidth) }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -132,15 +141,50 @@ internal fun TabletStreamsLayout(
                         ),
                     ),
             )
+            if (isDesktopLayout) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.horizontalGradient(
+                                colorStops = arrayOf(
+                                    0.0f to MaterialTheme.colorScheme.background.copy(alpha = 0.96f),
+                                    0.22f to MaterialTheme.colorScheme.background.copy(alpha = 0.72f),
+                                    0.48f to MaterialTheme.colorScheme.background.copy(alpha = 0.24f),
+                                    0.78f to MaterialTheme.colorScheme.background.copy(alpha = 0.52f),
+                                    1.0f to MaterialTheme.colorScheme.background.copy(alpha = 0.90f),
+                                ),
+                            ),
+                        ),
+                )
+            }
         }
 
         Row(modifier = Modifier.fillMaxSize()) {
-            Box(
-                modifier = Modifier
+            val artworkPanelModifier = if (isDesktopLayout) {
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(
+                        start = desktopMetrics.horizontalGutter,
+                        top = desktopMetrics.horizontalGutter,
+                        end = 32.dp,
+                        bottom = desktopMetrics.horizontalGutter,
+                    )
+            } else {
+                Modifier
                     .weight(0.4f)
                     .fillMaxHeight()
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center,
+                    .padding(
+                        start = 24.dp,
+                        top = 24.dp,
+                        end = 24.dp,
+                        bottom = 24.dp,
+                    )
+            }
+            Box(
+                modifier = artworkPanelModifier,
+                contentAlignment = if (isDesktopLayout) Alignment.CenterStart else Alignment.Center,
             ) {
                 if (isEpisode && seasonNumber != null && episodeNumber != null) {
                     TabletEpisodeInfoPanel(
@@ -158,27 +202,55 @@ internal fun TabletStreamsLayout(
                 }
             }
 
-            Box(
-                modifier = Modifier
+            val streamPanelOuterModifier = if (isDesktopLayout) {
+                Modifier
+                    .padding(
+                        top = desktopMetrics.horizontalGutter,
+                        end = desktopMetrics.horizontalGutter,
+                        bottom = desktopMetrics.horizontalGutter,
+                    )
+                    .width(desktopMetrics.streamPanelWidth)
+                    .fillMaxHeight()
+            } else {
+                Modifier
                     .weight(0.6f)
                     .fillMaxHeight()
                     .padding(
                         top = if (isIos) 20.dp else 60.dp,
                         end = 12.dp,
                         bottom = 12.dp,
-                    ),
+                    )
+            }
+            Box(
+                modifier = streamPanelOuterModifier,
             ) {
-                Box(
-                    modifier = Modifier
+                val panelShape = RoundedCornerShape(if (isDesktopLayout) 16.dp else 24.dp)
+                val panelModifier = if (isDesktopLayout) {
+                    Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(panelShape)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                                ),
+                            ),
+                        )
+                } else {
+                    Modifier
+                        .fillMaxSize()
+                        .clip(panelShape)
                         .hazeEffect(state = hazeState)
-                        .background(Color.Black.copy(alpha = 0.22f)),
+                        .background(Color.Black.copy(alpha = 0.22f))
+                }
+                Box(
+                    modifier = panelModifier,
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(16.dp),
+                            .padding(if (isDesktopLayout) 20.dp else 16.dp),
                     ) {
                         if ((resumePositionMs != null && resumePositionMs > 0L) || (resumeProgressFraction != null && resumeProgressFraction > 0f)) {
                             ResumeBanner(
@@ -242,7 +314,7 @@ private fun TabletMovieInfoPanel(
                 style = MaterialTheme.typography.displayLarge.copy(
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Black,
-                    letterSpacing = (-0.5).sp,
+                    letterSpacing = 0.sp,
                     shadow = Shadow(
                         color = Color.Black.copy(alpha = 0.8f),
                         offset = Offset(0f, 2f),
@@ -303,7 +375,7 @@ private fun TabletEpisodeInfoPanel(
                 style = MaterialTheme.typography.displayMedium.copy(
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Black,
-                    letterSpacing = (-0.5).sp,
+                    letterSpacing = 0.sp,
                     shadow = textShadow,
                 ),
                 color = MaterialTheme.colorScheme.onBackground,

@@ -65,6 +65,7 @@ import com.nuvio.app.core.ui.NuvioNetworkOfflineCard
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioViewAllPillSize
 import com.nuvio.app.core.ui.NuvioShelfSection
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.core.ui.nuvioBlockPointerPassthrough
 import com.nuvio.app.features.cloud.CloudLibraryFile
 import com.nuvio.app.features.cloud.CloudLibraryItem
@@ -560,11 +561,18 @@ private fun LibraryChip(
     onClick: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(18.dp)
     Surface(
         modifier = Modifier
-            .clip(RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
+            .clip(shape)
+            .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.018f,
+                focusedShadowElevation = 8.dp,
+            ),
+        shape = shape,
         color = if (selected) colorScheme.primaryContainer else colorScheme.surfaceContainerLow,
         border = if (selected) BorderStroke(1.dp, colorScheme.primary.copy(alpha = 0.45f)) else null,
     ) {
@@ -603,12 +611,19 @@ private fun CloudLibraryRow(
     modifier: Modifier = Modifier,
 ) {
     val playableCount = item.playableFiles.size
+    val shape = MaterialTheme.shapes.medium
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .clickable(enabled = playableCount > 0, onClick = onClick),
-        shape = MaterialTheme.shapes.medium,
+            .clickable(enabled = playableCount > 0, onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = playableCount > 0,
+                shape = shape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 10.dp,
+            ),
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
         Column(
@@ -752,11 +767,18 @@ private fun CloudLibraryFileRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val shape = RoundedCornerShape(8.dp)
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
+            .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 8.dp,
+            ),
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.58f),
     ) {
         Column(

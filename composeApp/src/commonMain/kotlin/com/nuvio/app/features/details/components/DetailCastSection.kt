@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.features.details.MetaPerson
 import com.nuvio.app.features.details.castAvatarSharedTransitionKey
 import nuvio.composeapp.generated.resources.*
@@ -128,10 +129,18 @@ private fun CastItem(
         Modifier
     }
 
+    val focusShape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
+
     Column(
         modifier = modifier
             .width(sizing.itemWidth)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .nuvioDesktopFocusEffect(
+                enabled = onClick != null,
+                shape = focusShape,
+                focusedScale = 1.018f,
+                focusedShadowElevation = 10.dp,
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -27,9 +28,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -84,6 +87,7 @@ import coil3.svg.SvgDecoder
 import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
+import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.core.deeplink.AppDeepLink
 import com.nuvio.app.core.deeplink.AppDeepLinkRepository
 import com.nuvio.app.core.network.NetworkCondition
@@ -106,8 +110,11 @@ import com.nuvio.app.core.ui.NuvioTheme
 import com.nuvio.app.core.ui.LocalNuvioBottomNavigationOverlayPadding
 import com.nuvio.app.core.ui.NativeNavigationTab
 import com.nuvio.app.core.ui.NativeTabBridge
+import com.nuvio.app.core.ui.NuvioDesktopTvMetrics
 import com.nuvio.app.core.ui.isLiquidGlassNativeTabBarSupported
 import com.nuvio.app.core.ui.localizedContinueWatchingSubtitle
+import com.nuvio.app.core.ui.nuvioDesktopTvMetrics
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.features.auth.AuthScreen
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.enabledAddons
@@ -151,6 +158,7 @@ import com.nuvio.app.features.player.PlayerScreen
 import com.nuvio.app.features.player.ExternalPlayerOpenResult
 import com.nuvio.app.features.player.ExternalPlayerPlatform
 import com.nuvio.app.features.player.ExternalPlayerPlaybackRequest
+import com.nuvio.app.features.player.InternalPlayerPlatform
 import com.nuvio.app.features.player.sanitizePlaybackHeaders
 import com.nuvio.app.features.player.sanitizePlaybackResponseHeaders
 import com.nuvio.app.features.profiles.ActiveProfileMiniAvatar
@@ -837,12 +845,23 @@ private fun MainAppContent(
         }
 
         fun openExternalPlayback(launch: PlayerLaunch): Boolean {
-            return when (
-                ExternalPlayerPlatform.open(
-                    request = launch.toExternalPlayerPlaybackRequest(),
-                    playerId = playerSettingsUiState.externalPlayerId,
-                )
-            ) {
+            AppDiagnostics.breadcrumb(
+                event = "playback.external.open.start",
+                details = launch.diagnosticsDetails() + mapOf(
+                    "playerId" to playerSettingsUiState.externalPlayerId,
+                    "externalPlayerEnabled" to playerSettingsUiState.externalPlayerEnabled.toString(),
+                    "internalAvailable" to InternalPlayerPlatform.isAvailable().toString(),
+                ),
+            )
+            val result = ExternalPlayerPlatform.open(
+                request = launch.toExternalPlayerPlaybackRequest(),
+                playerId = playerSettingsUiState.externalPlayerId,
+            )
+            AppDiagnostics.breadcrumb(
+                event = "playback.external.open.result",
+                details = launch.diagnosticsDetails() + mapOf("result" to result.name),
+            )
+            return when (result) {
                 ExternalPlayerOpenResult.Opened -> true
                 ExternalPlayerOpenResult.NotConfigured -> {
                     NuvioToastController.show(externalPlayerNotConfiguredText)
@@ -891,7 +910,7 @@ private fun MainAppContent(
                         initialPositionMs = if (startFromBeginning) 0L else (resumePositionMs ?: 0L),
                         initialProgressFraction = if (startFromBeginning) null else resumeProgressFraction,
                     )
-                    if (playerSettingsUiState.externalPlayerEnabled) {
+                    if (shouldUseExternalPlayback(playerSettingsUiState.externalPlayerEnabled)) {
                         openExternalPlayback(playerLaunch)
                         true
                     } else {
@@ -960,7 +979,7 @@ private fun MainAppContent(
                             initialPositionMs = targetResumePositionMs,
                             initialProgressFraction = targetResumeProgressFraction,
                         )
-                    if (playerSettingsUiState.externalPlayerEnabled) {
+                    if (shouldUseExternalPlayback(playerSettingsUiState.externalPlayerEnabled)) {
                         openExternalPlayback(playerLaunch)
                         return
                     }
@@ -1182,7 +1201,9 @@ private fun MainAppContent(
                         val isTabletLayout = maxWidth >= 768.dp
                         val useNativeBottomTabs =
                             liquidGlassNativeTabBarSupported && liquidGlassNativeTabBarEnabled && initialHomeReady
-                        val useDesktopSidebar = isDesktop && maxWidth >= 900.dp && !useNativeBottomTabs
+                        val desktopTvMetrics = remember(maxWidth) { nuvioDesktopTvMetrics(maxWidth) }
+                        val useDesktopSidebar = isDesktop && desktopTvMetrics.useDesktopSidebar && !useNativeBottomTabs
+                        val useExpandedDesktopSidebar = useDesktopSidebar && desktopTvMetrics.useExpandedSidebar
                         val tabsRouteActive = currentBackStackEntry?.destination?.hasRoute<TabsRoute>() == true
                         val onProfileSelected: (NuvioProfile) -> Unit = { profile ->
                             profileSwitchLoading = true
@@ -1341,6 +1362,8 @@ private fun MainAppContent(
                                             onTabSelected = ::handleRootTabClick,
                                             onProfileSelected = onProfileSelected,
                                             onAddProfileRequested = onSwitchProfile,
+                                            expanded = useExpandedDesktopSidebar,
+                                            metrics = desktopTvMetrics,
                                         ) { contentModifier ->
                                             tabHost(contentModifier)
                                         }
@@ -1635,7 +1658,7 @@ private fun MainAppContent(
                                     initialPositionMs = launch.resumePositionMs ?: 0L,
                                     initialProgressFraction = launch.resumeProgressFraction,
                                 )
-                            if (playerSettings.externalPlayerEnabled) {
+                            if (shouldUseExternalPlayback(playerSettings.externalPlayerEnabled)) {
                                 openExternalPlayback(playerLaunch)
                                 reuseNavigated = true
                                 return@LaunchedEffect
@@ -1670,7 +1693,20 @@ private fun MainAppContent(
                         if (autoPlayHandled) return@LaunchedEffect
                         if (streamsUiState.requestToken != expectedStreamsRequestToken) return@LaunchedEffect
                         val selectedStream = streamsUiState.autoPlayStream ?: return@LaunchedEffect
+                        AppDiagnostics.breadcrumb(
+                            event = "stream.autoplay.select",
+                            details = selectedStream.diagnosticsDetails() + mapOf(
+                                "type" to launch.type,
+                                "videoId" to effectiveVideoId,
+                                "season" to launch.seasonNumber?.toString(),
+                                "episode" to launch.episodeNumber?.toString(),
+                            ),
+                        )
                         val stream = if (DirectDebridPlaybackResolver.shouldResolveToPlayableStream(selectedStream)) {
+                            AppDiagnostics.breadcrumb(
+                                event = "stream.autoplay.debrid.resolve.start",
+                                details = selectedStream.diagnosticsDetails(),
+                            )
                             when (
                                 val resolved = DirectDebridPlaybackResolver.resolveToPlayableStream(
                                     stream = selectedStream,
@@ -1680,6 +1716,12 @@ private fun MainAppContent(
                             ) {
                                 is DirectDebridPlayableResult.Success -> resolved.stream
                                 else -> {
+                                    AppDiagnostics.breadcrumb(
+                                        event = "stream.autoplay.debrid.resolve.result",
+                                        details = selectedStream.diagnosticsDetails() + mapOf(
+                                            "result" to resolved.diagnosticsName(),
+                                        ),
+                                    )
                                     val hasNextCandidate = StreamsRepository.skipAutoPlayStream(selectedStream)
                                     if (!hasNextCandidate) {
                                         resolved.toastMessage()?.let { NuvioToastController.show(it) }
@@ -1702,6 +1744,10 @@ private fun MainAppContent(
                         }
                         val sourceUrl = stream.playableDirectUrl
                         if (sourceUrl == null) {
+                            AppDiagnostics.breadcrumb(
+                                event = "stream.autoplay.missing_source",
+                                details = stream.diagnosticsDetails(),
+                            )
                             StreamsRepository.skipAutoPlayStream(selectedStream)
                             return@LaunchedEffect
                         }
@@ -1725,6 +1771,14 @@ private fun MainAppContent(
                                 filename = stream.behaviorHints.filename,
                                 videoSize = stream.behaviorHints.videoSize,
                                 bingeGroup = stream.behaviorHints.bingeGroup,
+                            )
+                            AppDiagnostics.breadcrumb(
+                                event = "stream.cache.save",
+                                details = stream.diagnosticsDetails() + mapOf(
+                                    "type" to launch.type,
+                                    "videoId" to effectiveVideoId,
+                                    "source" to "autoplay",
+                                ),
                             )
                         }
                         val playerLaunch = PlayerLaunch(
@@ -1754,10 +1808,18 @@ private fun MainAppContent(
                             )
                         StreamsRepository.consumeAutoPlay()
                         StreamsRepository.cancelLoading()
-                        if (playerSettings.externalPlayerEnabled) {
+                        if (shouldUseExternalPlayback(playerSettings.externalPlayerEnabled)) {
+                            AppDiagnostics.breadcrumb(
+                                event = "playback.route.external",
+                                details = playerLaunch.diagnosticsDetails() + mapOf("source" to "autoplay"),
+                            )
                             openExternalPlayback(playerLaunch)
                             return@LaunchedEffect
                         }
+                        AppDiagnostics.breadcrumb(
+                            event = "playback.route.internal",
+                            details = playerLaunch.diagnosticsDetails() + mapOf("source" to "autoplay"),
+                        )
                         val launchId = PlayerLaunchStore.put(playerLaunch)
                         navController.navigate(PlayerRoute(launchId = launchId)) {
                             popUpTo<StreamRoute> { inclusive = true }
@@ -1781,10 +1843,25 @@ private fun MainAppContent(
                         forceExternal: Boolean,
                         forceInternal: Boolean,
                     ) {
+                        AppDiagnostics.breadcrumb(
+                            event = "stream.manual.select",
+                            details = stream.diagnosticsDetails() + mapOf(
+                                "type" to launch.type,
+                                "videoId" to effectiveVideoId,
+                                "season" to launch.seasonNumber?.toString(),
+                                "episode" to launch.episodeNumber?.toString(),
+                                "forceExternal" to forceExternal.toString(),
+                                "forceInternal" to forceInternal.toString(),
+                            ),
+                        )
                         if (DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
                             if (resolvingDebridStream) return
                             streamRouteScope.launch {
                                 resolvingDebridStream = true
+                                AppDiagnostics.breadcrumb(
+                                    event = "stream.manual.debrid.resolve.start",
+                                    details = stream.diagnosticsDetails(),
+                                )
                                 val resolved = DirectDebridPlaybackResolver.resolveToPlayableStream(
                                     stream = stream,
                                     season = launch.seasonNumber,
@@ -1800,6 +1877,12 @@ private fun MainAppContent(
                                         forceInternal = forceInternal,
                                     )
                                     else -> {
+                                        AppDiagnostics.breadcrumb(
+                                            event = "stream.manual.debrid.resolve.result",
+                                            details = stream.diagnosticsDetails() + mapOf(
+                                                "result" to resolved.diagnosticsName(),
+                                            ),
+                                        )
                                         resolved.toastMessage()?.let { NuvioToastController.show(it) }
                                         if (resolved == DirectDebridPlayableResult.Stale) {
                                             StreamsRepository.reload(
@@ -1816,7 +1899,14 @@ private fun MainAppContent(
                             }
                             return
                         }
-                        val sourceUrl = stream.playableDirectUrl ?: return
+                        val sourceUrl = stream.playableDirectUrl
+                        if (sourceUrl == null) {
+                            AppDiagnostics.breadcrumb(
+                                event = "stream.manual.missing_source",
+                                details = stream.diagnosticsDetails(),
+                            )
+                            return
+                        }
                         if (playerSettings.streamReuseLastLinkEnabled) {
                             val cacheKey = StreamLinkCacheRepository.contentKey(
                                 type = launch.type,
@@ -1836,6 +1926,14 @@ private fun MainAppContent(
                                 filename = stream.behaviorHints.filename,
                                 videoSize = stream.behaviorHints.videoSize,
                                 bingeGroup = stream.behaviorHints.bingeGroup,
+                            )
+                            AppDiagnostics.breadcrumb(
+                                event = "stream.cache.save",
+                                details = stream.diagnosticsDetails() + mapOf(
+                                    "type" to launch.type,
+                                    "videoId" to effectiveVideoId,
+                                    "source" to "manual",
+                                ),
                             )
                         }
                         val playerLaunch = PlayerLaunch(
@@ -1864,12 +1962,33 @@ private fun MainAppContent(
                             initialProgressFraction = resolvedResumeProgressFraction,
                         )
 
-                        if (!forceInternal && (forceExternal || playerSettings.externalPlayerEnabled)) {
+                        if (shouldUseExternalPlayback(
+                                externalPlayerEnabled = playerSettings.externalPlayerEnabled,
+                                forceExternal = forceExternal,
+                                forceInternal = forceInternal,
+                            )
+                        ) {
+                            AppDiagnostics.breadcrumb(
+                                event = "playback.route.external",
+                                details = playerLaunch.diagnosticsDetails() + mapOf(
+                                    "source" to "manual",
+                                    "forceExternal" to forceExternal.toString(),
+                                    "forceInternal" to forceInternal.toString(),
+                                ),
+                            )
                             openExternalPlayback(playerLaunch)
                             StreamsRepository.cancelLoading()
                             return
                         }
 
+                        AppDiagnostics.breadcrumb(
+                            event = "playback.route.internal",
+                            details = playerLaunch.diagnosticsDetails() + mapOf(
+                                "source" to "manual",
+                                "forceExternal" to forceExternal.toString(),
+                                "forceInternal" to forceInternal.toString(),
+                            ),
+                        )
                         val launchId = PlayerLaunchStore.put(playerLaunch)
                         StreamsRepository.cancelLoading()
                         navController.navigate(
@@ -2096,7 +2215,7 @@ private fun MainAppContent(
                                     initialPositionMs = resumeEntry?.lastPositionMs?.takeIf { it > 0L } ?: 0L,
                                     initialProgressFraction = resumeEntry?.progressFraction?.takeIf { it > 0f },
                             )
-                            if (playerSettingsUiState.externalPlayerEnabled) {
+                            if (shouldUseExternalPlayback(playerSettingsUiState.externalPlayerEnabled)) {
                                 openExternalPlayback(playerLaunch)
                                 return@DownloadsScreen
                             }
@@ -2544,9 +2663,12 @@ private fun DesktopRootSidebarScaffold(
     onTabSelected: (AppScreenTab) -> Unit,
     onProfileSelected: (NuvioProfile) -> Unit,
     onAddProfileRequested: () -> Unit,
+    expanded: Boolean,
+    metrics: NuvioDesktopTvMetrics,
     modifier: Modifier = Modifier,
     content: @Composable (Modifier) -> Unit,
 ) {
+    val sidebarWidth = if (expanded) metrics.expandedSidebarWidth else metrics.collapsedSidebarWidth
     Row(
         modifier = modifier
             .fillMaxSize()
@@ -2557,8 +2679,9 @@ private fun DesktopRootSidebarScaffold(
             onTabSelected = onTabSelected,
             onProfileSelected = onProfileSelected,
             onAddProfileRequested = onAddProfileRequested,
+            expanded = expanded,
             modifier = Modifier
-                .width(112.dp)
+                .width(sidebarWidth)
                 .fillMaxHeight(),
         )
         Box(
@@ -2577,83 +2700,135 @@ private fun DesktopRootSidebar(
     onTabSelected: (AppScreenTab) -> Unit,
     onProfileSelected: (NuvioProfile) -> Unit,
     onAddProfileRequested: () -> Unit,
+    expanded: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val panelShape = RoundedCornerShape(8.dp)
     Surface(
-        modifier = modifier.padding(start = 8.dp, top = 8.dp, bottom = 8.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
-        shape = RoundedCornerShape(8.dp),
+        modifier = modifier
+            .padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 8.dp)
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.10f),
+                shape = panelShape,
+            ),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        shape = panelShape,
         tonalElevation = 3.dp,
         shadowElevation = 8.dp,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 12.dp),
+                .padding(horizontal = if (expanded) 14.dp else 10.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Image(
-                painter = painterResource(Res.drawable.app_logo_wordmark),
+                painter = painterResource(
+                    if (expanded) Res.drawable.app_logo_wordmark else Res.drawable.app_logo_mark,
+                ),
                 contentDescription = stringResource(Res.string.app_brand_name),
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(28.dp)
-                    .padding(horizontal = 4.dp),
+                    .then(
+                        if (expanded) {
+                            Modifier
+                                .fillMaxWidth(0.78f)
+                                .height(38.dp)
+                        } else {
+                            Modifier.size(44.dp)
+                        },
+                    ),
                 contentScale = ContentScale.Fit,
             )
-            Spacer(modifier = Modifier.height(28.dp))
-            DesktopSidebarItem(
-                label = stringResource(Res.string.compose_nav_home),
-                selected = selectedTab == AppScreenTab.Home,
-                onClick = { onTabSelected(AppScreenTab.Home) },
-                icon = { tint ->
-                    Icon(
-                        imageVector = Icons.Filled.Home,
-                        contentDescription = stringResource(Res.string.compose_nav_home),
-                        modifier = Modifier.size(22.dp),
-                        tint = tint,
-                    )
-                },
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            DesktopSidebarItem(
-                label = stringResource(Res.string.compose_nav_search),
-                selected = selectedTab == AppScreenTab.Search,
-                onClick = { onTabSelected(AppScreenTab.Search) },
-                icon = { tint ->
-                    Icon(
-                        painter = painterResource(Res.drawable.sidebar_search),
-                        contentDescription = stringResource(Res.string.compose_nav_search),
-                        modifier = Modifier.size(22.dp),
-                        tint = tint,
-                    )
-                },
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            DesktopSidebarItem(
-                label = stringResource(Res.string.compose_nav_library),
-                selected = selectedTab == AppScreenTab.Library,
-                onClick = { onTabSelected(AppScreenTab.Library) },
-                icon = { tint ->
-                    Icon(
-                        painter = painterResource(Res.drawable.sidebar_library),
-                        contentDescription = stringResource(Res.string.compose_nav_library),
-                        modifier = Modifier.size(22.dp),
-                        tint = tint,
-                    )
-                },
-            )
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(18.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                DesktopSidebarItem(
+                    label = stringResource(Res.string.compose_nav_home),
+                    selected = selectedTab == AppScreenTab.Home,
+                    expanded = expanded,
+                    onClick = { onTabSelected(AppScreenTab.Home) },
+                    icon = { tint ->
+                        Icon(
+                            imageVector = Icons.Filled.Home,
+                            contentDescription = stringResource(Res.string.compose_nav_home),
+                            modifier = Modifier.size(22.dp),
+                            tint = tint,
+                        )
+                    },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                DesktopSidebarItem(
+                    label = stringResource(Res.string.compose_nav_search),
+                    selected = selectedTab == AppScreenTab.Search,
+                    expanded = expanded,
+                    onClick = { onTabSelected(AppScreenTab.Search) },
+                    icon = { tint ->
+                        Icon(
+                            painter = painterResource(Res.drawable.sidebar_search),
+                            contentDescription = stringResource(Res.string.compose_nav_search),
+                            modifier = Modifier.size(22.dp),
+                            tint = tint,
+                        )
+                    },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                DesktopSidebarItem(
+                    label = stringResource(Res.string.compose_nav_library),
+                    selected = selectedTab == AppScreenTab.Library,
+                    expanded = expanded,
+                    onClick = { onTabSelected(AppScreenTab.Library) },
+                    icon = { tint ->
+                        Icon(
+                            painter = painterResource(Res.drawable.sidebar_library),
+                            contentDescription = stringResource(Res.string.compose_nav_library),
+                            modifier = Modifier.size(22.dp),
+                            tint = tint,
+                        )
+                    },
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                DesktopSidebarItem(
+                    label = stringResource(Res.string.compose_settings_page_root),
+                    selected = selectedTab == AppScreenTab.Settings,
+                    expanded = expanded,
+                    onClick = { onTabSelected(AppScreenTab.Settings) },
+                    icon = { tint ->
+                        Icon(
+                            imageVector = Icons.Rounded.Settings,
+                            contentDescription = stringResource(Res.string.compose_settings_page_root),
+                            modifier = Modifier.size(22.dp),
+                            tint = tint,
+                        )
+                    },
+                )
+            }
+            val navItemShape = RoundedCornerShape(14.dp)
             ProfileSwitcherTab(
-                selected = selectedTab == AppScreenTab.Settings,
+                selected = false,
                 onClick = { onTabSelected(AppScreenTab.Settings) },
                 onProfileSelected = onProfileSelected,
                 onAddProfileRequested = onAddProfileRequested,
+                openProfileMenuOnClick = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(68.dp),
+                    .height(56.dp)
+                    .nuvioDesktopFocusEffect(
+                        enabled = true,
+                        shape = navItemShape,
+                        focusedScale = 1.012f,
+                        focusedShadowElevation = 8.dp,
+                    ),
                 triggerContent = { selected ->
-                    DesktopSidebarProfileTrigger(selected = selected)
+                    DesktopSidebarProfileTrigger(
+                        selected = selected,
+                        expanded = expanded,
+                    )
                 },
             )
         }
@@ -2664,54 +2839,92 @@ private fun DesktopRootSidebar(
 private fun DesktopSidebarItem(
     label: String,
     selected: Boolean,
+    expanded: Boolean,
     onClick: () -> Unit,
     icon: @Composable (Color) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(14.dp)
+    val colorScheme = MaterialTheme.colorScheme
     val containerColor = when {
-        selected -> MaterialTheme.colorScheme.primaryContainer
-        focused -> MaterialTheme.colorScheme.surfaceContainerHigh
+        selected -> colorScheme.primaryContainer.copy(alpha = 0.88f)
+        focused -> colorScheme.primaryContainer.copy(alpha = 0.58f)
         else -> Color.Transparent
     }
-    val contentColor = if (selected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
+    val contentColor = if (selected || focused) {
+        colorScheme.onPrimaryContainer
     } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
+        colorScheme.onSurfaceVariant
+    }
+    val iconCircleColor = if (selected || focused) {
+        colorScheme.primary.copy(alpha = 0.20f)
+    } else {
+        colorScheme.surfaceVariant
     }
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(68.dp)
+            .height(56.dp)
             .clip(shape)
             .onFocusChanged { focused = it.isFocused || it.hasFocus }
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.012f,
+                focusedShadowElevation = 8.dp,
+            ),
         color = containerColor,
         contentColor = contentColor,
         shape = shape,
-        tonalElevation = if (selected) 2.dp else 0.dp,
+        tonalElevation = 0.dp,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            icon(contentColor)
-            Spacer(modifier = Modifier.height(5.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = contentColor,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
+        if (expanded) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(iconCircleColor),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    icon(contentColor)
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = contentColor,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(iconCircleColor),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    icon(contentColor)
+                }
+            }
         }
     }
 }
@@ -2719,51 +2932,71 @@ private fun DesktopSidebarItem(
 @Composable
 private fun DesktopSidebarProfileTrigger(
     selected: Boolean,
+    expanded: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val profileState by ProfileRepository.state.collectAsStateWithLifecycle()
     val avatars by AvatarRepository.avatars.collectAsStateWithLifecycle()
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(14.dp)
+    val colorScheme = MaterialTheme.colorScheme
     val contentColor = if (selected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
+        colorScheme.onPrimaryContainer
     } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
+        colorScheme.onSurfaceVariant
     }
+    val containerColor = if (selected) colorScheme.primaryContainer.copy(alpha = 0.88f) else Color.Transparent
+    val profileLabel = profileState.activeProfile?.name
+        ?.takeIf { it.isNotBlank() }
+        ?: stringResource(Res.string.compose_nav_profile)
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(68.dp)
+            .height(56.dp)
             .clip(shape),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        color = containerColor,
         contentColor = contentColor,
         shape = shape,
-        tonalElevation = if (selected) 2.dp else 0.dp,
+        tonalElevation = 0.dp,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            ActiveProfileMiniAvatar(
-                profile = profileState.activeProfile,
-                avatars = avatars,
-                selected = selected,
-                size = 28,
-            )
-            Spacer(modifier = Modifier.height(5.dp))
-            Text(
-                text = stringResource(Res.string.compose_nav_profile),
-                style = MaterialTheme.typography.labelMedium,
-                color = contentColor,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
+        if (expanded) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ActiveProfileMiniAvatar(
+                    profile = profileState.activeProfile,
+                    avatars = avatars,
+                    selected = selected,
+                    size = 34,
+                )
+                Spacer(modifier = Modifier.width(14.dp))
+                Text(
+                    text = profileLabel,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = contentColor,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                ActiveProfileMiniAvatar(
+                    profile = profileState.activeProfile,
+                    avatars = avatars,
+                    selected = selected,
+                    size = 34,
+                )
+            }
         }
     }
 }
@@ -2884,6 +3117,73 @@ private fun TabletFloatingTopBar(
 
 private fun ContinueWatchingItem.isCloudLibraryContinueWatchingItem(): Boolean =
     parentMetaType.equals(CloudLibraryContentType, ignoreCase = true)
+
+private fun PlayerLaunch.diagnosticsDetails(): Map<String, String?> =
+    mapOf(
+        "title" to title,
+        "contentType" to contentType,
+        "videoId" to videoId,
+        "parentMetaId" to parentMetaId,
+        "parentMetaType" to parentMetaType,
+        "season" to seasonNumber?.toString(),
+        "episode" to episodeNumber?.toString(),
+        "streamTitle" to streamTitle,
+        "providerName" to providerName,
+        "providerAddonId" to providerAddonId,
+        "sourceKind" to sourceUrl.diagnosticSourceKind(),
+        "hasSourceAudio" to (!sourceAudioUrl.isNullOrBlank()).toString(),
+        "requestHeaderCount" to sourceHeaders.size.toString(),
+        "responseHeaderCount" to sourceResponseHeaders.size.toString(),
+        "initialPositionMs" to initialPositionMs.toString(),
+    )
+
+private fun StreamItem.diagnosticsDetails(): Map<String, String?> =
+    mapOf(
+        "streamTitle" to streamLabel,
+        "streamSubtitle" to streamSubtitle,
+        "addonName" to addonName,
+        "addonId" to addonId,
+        "sourceName" to sourceName,
+        "directUrlKind" to playableDirectUrl.diagnosticSourceKind(),
+        "hasInfoHash" to (!infoHash.isNullOrBlank()).toString(),
+        "hasClientResolve" to (clientResolve != null).toString(),
+        "isDirectDebrid" to isDirectDebridStream.toString(),
+        "isTorrent" to isTorrentStream.toString(),
+        "requestHeaderCount" to behaviorHints.proxyHeaders?.request?.size?.toString(),
+        "responseHeaderCount" to behaviorHints.proxyHeaders?.response?.size?.toString(),
+        "bingeGroup" to behaviorHints.bingeGroup,
+    )
+
+private fun DirectDebridPlayableResult.diagnosticsName(): String =
+    when (this) {
+        is DirectDebridPlayableResult.Success -> "Success"
+        DirectDebridPlayableResult.MissingApiKey -> "MissingApiKey"
+        DirectDebridPlayableResult.NotCached -> "NotCached"
+        DirectDebridPlayableResult.Stale -> "Stale"
+        DirectDebridPlayableResult.Error -> "Error"
+    }
+
+private fun String?.diagnosticSourceKind(): String =
+    when {
+        isNullOrBlank() -> "none"
+        startsWith("magnet:", ignoreCase = true) -> "magnet"
+        startsWith("file:", ignoreCase = true) -> "file"
+        startsWith("http://", ignoreCase = true) -> "http"
+        startsWith("https://", ignoreCase = true) -> "https"
+        contains(':') -> substringBefore(':').take(24)
+        else -> "unknown"
+    }
+
+private fun shouldUseExternalPlayback(
+    externalPlayerEnabled: Boolean,
+    forceExternal: Boolean = false,
+    forceInternal: Boolean = false,
+): Boolean =
+    !forceInternal && (
+        forceExternal ||
+            (!isDesktop && externalPlayerEnabled) ||
+            !InternalPlayerPlatform.isAvailable()
+        )
 
 @Composable
 private fun TabletTopPillItem(

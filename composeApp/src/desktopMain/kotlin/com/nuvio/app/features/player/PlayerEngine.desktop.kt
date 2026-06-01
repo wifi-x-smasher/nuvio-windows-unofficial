@@ -8,13 +8,22 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.Color
+import com.nuvio.app.core.diagnostics.AppDiagnostics
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.atomic.AtomicBoolean
 import uk.co.caprica.vlcj.media.MediaSlaveType
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
@@ -41,23 +50,45 @@ actual fun PlatformPlayerSurface(
 ) {
     val latestOnSnapshot = rememberUpdatedState(onSnapshot)
     val latestOnError = rememberUpdatedState(onError)
+    val uiScope = rememberCoroutineScope()
     var componentError by remember { mutableStateOf<String?>(null) }
-    val mediaComponent = remember {
-        runCatching {
-            EmbeddedMediaPlayerComponent(
-                "--no-video-title-show",
-                "--quiet",
-            )
-        }.onFailure { throwable ->
-            componentError = throwable.message ?: throwable::class.simpleName ?: "VLCJ initialization failed"
-        }.getOrNull()
+    var mediaComponent by remember { mutableStateOf<EmbeddedMediaPlayerComponent?>(null) }
+
+    LaunchedEffect(Unit) {
+        AppDiagnostics.breadcrumb("player.vlc.component.prepare.start", emptyMap())
+        val componentResult = withContext(Dispatchers.IO) {
+            DesktopVlcRuntime.prepare().mapCatching {
+                EmbeddedMediaPlayerComponent(
+                    "--no-video-title-show",
+                    "--quiet",
+                )
+            }
+        }
+        componentResult
+            .onSuccess { component ->
+                AppDiagnostics.breadcrumb("player.vlc.component.prepare.success", emptyMap())
+                componentError = null
+                mediaComponent = component
+            }
+            .onFailure { throwable ->
+                AppDiagnostics.error(
+                    event = "player.vlc.component.prepare.failure",
+                    throwable = throwable,
+                    details = emptyMap(),
+                )
+                componentError = throwable.message ?: throwable::class.simpleName ?: "VLCJ initialization failed"
+            }
     }
     val controller = remember(mediaComponent) {
         mediaComponent?.let {
             DesktopVlcPlayerController(
                 component = it,
-                onSnapshot = { latestOnSnapshot.value(it) },
-                onError = { latestOnError.value(it) },
+                onSnapshot = { snapshot ->
+                    uiScope.launch { latestOnSnapshot.value(snapshot) }
+                },
+                onError = { message ->
+                    uiScope.launch { latestOnError.value(message) }
+                },
             )
         }
     }
@@ -73,7 +104,6 @@ actual fun PlatformPlayerSurface(
         sourceHeaders,
         sourceResponseHeaders,
         useYoutubeChunkedPlayback,
-        playWhenReady,
         resizeMode,
     ) {
         val activeController = controller ?: return@LaunchedEffect
@@ -87,26 +117,38 @@ actual fun PlatformPlayerSurface(
         )
     }
 
+    LaunchedEffect(controller, playWhenReady) {
+        val activeController = controller ?: return@LaunchedEffect
+        if (playWhenReady) {
+            activeController.play()
+        } else {
+            activeController.pause()
+        }
+    }
+
     LaunchedEffect(controller) {
         val activeController = controller ?: return@LaunchedEffect
         while (isActive) {
-            latestOnSnapshot.value(activeController.snapshot())
+            latestOnSnapshot.value(withContext(Dispatchers.IO) { activeController.snapshot() })
             delay(snapshotIntervalMs)
         }
     }
 
     DisposableEffect(mediaComponent) {
         onDispose {
-            controller?.release()
-            mediaComponent?.release()
+            uiScope.launch(Dispatchers.IO) {
+                controller?.release()
+                mediaComponent?.release()
+            }
         }
     }
 
-    if (mediaComponent != null) {
+    val activeMediaComponent = mediaComponent
+    if (activeMediaComponent != null) {
         SwingPanel(
             modifier = modifier.background(Color.Black),
-            factory = { mediaComponent },
-            update = { it.mediaPlayer().controls().setPause(!playWhenReady) },
+            factory = { activeMediaComponent },
+            update = {},
             background = Color.Black,
         )
     } else {
@@ -118,15 +160,26 @@ private class DesktopVlcPlayerController(
     private val component: EmbeddedMediaPlayerComponent,
     private val onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     private val onError: (String?) -> Unit,
+    private val operationDispatcher: DesktopPlayerOperationDispatcher =
+        ExecutorDesktopPlayerOperationDispatcher(),
 ) : PlayerEngineController {
     private val player = component.mediaPlayer()
+    @Volatile
     private var sourceUrl: String = ""
+    @Volatile
     private var sourceAudioUrl: String? = null
+    @Volatile
     private var sourceHeaders: Map<String, String> = emptyMap()
+    @Volatile
     private var playWhenReady: Boolean = true
+    @Volatile
     private var released = false
     private val listener = object : MediaPlayerEventAdapter() {
         override fun opening(mediaPlayer: MediaPlayer) {
+            AppDiagnostics.breadcrumb(
+                event = "player.vlc.event.opening",
+                details = playbackDetails(),
+            )
             onSnapshot(snapshot())
         }
 
@@ -135,6 +188,10 @@ private class DesktopVlcPlayerController(
         }
 
         override fun playing(mediaPlayer: MediaPlayer) {
+            AppDiagnostics.breadcrumb(
+                event = "player.vlc.event.playing",
+                details = playbackDetails(),
+            )
             onError(null)
             onSnapshot(snapshot())
         }
@@ -144,14 +201,26 @@ private class DesktopVlcPlayerController(
         }
 
         override fun stopped(mediaPlayer: MediaPlayer) {
+            AppDiagnostics.breadcrumb(
+                event = "player.vlc.event.stopped",
+                details = playbackDetails(),
+            )
             onSnapshot(snapshot())
         }
 
         override fun finished(mediaPlayer: MediaPlayer) {
+            AppDiagnostics.breadcrumb(
+                event = "player.vlc.event.finished",
+                details = playbackDetails(),
+            )
             onSnapshot(snapshot())
         }
 
         override fun error(mediaPlayer: MediaPlayer) {
+            AppDiagnostics.error(
+                event = "player.vlc.event.error",
+                details = playbackDetails() + mapOf("state" to mediaPlayer.status().state().toString()),
+            )
             onError("Playback failed: ${mediaPlayer.status().state()}")
             onSnapshot(snapshot())
         }
@@ -181,51 +250,92 @@ private class DesktopVlcPlayerController(
         this.sourceHeaders = sanitizePlaybackHeaders(sourceHeaders)
         this.playWhenReady = playWhenReady
 
+        AppDiagnostics.breadcrumb(
+            event = "player.vlc.load.start",
+            details = playbackDetails() + mapOf(
+                "sourceKind" to sourceUrl.diagnosticSourceKind(),
+                "hasSourceAudio" to (!sourceAudioUrl.isNullOrBlank()).toString(),
+                "headerCount" to this.sourceHeaders.size.toString(),
+                "playWhenReady" to playWhenReady.toString(),
+                "resizeMode" to resizeMode.name,
+            ),
+        )
         if (sourceUrl.isBlank()) {
+            AppDiagnostics.error(
+                event = "player.vlc.load.missing_source",
+                details = playbackDetails(),
+            )
             onSnapshot(PlayerPlaybackSnapshot(isLoading = false))
             onError("Missing playback source")
             return
         }
 
-        runCatching {
-            applyResizeMode(resizeMode)
-            val options = mediaOptions(this.sourceHeaders)
-            val started = if (playWhenReady) {
-                player.media().play(sourceUrl, *options)
-            } else {
-                player.media().startPaused(sourceUrl, *options)
+        onSnapshot(PlayerPlaybackSnapshot(isLoading = true))
+        operationDispatcher.dispatch {
+            if (released) return@dispatch
+            runCatching {
+                applyResizeMode(resizeMode)
+                val options = mediaOptions(this.sourceHeaders)
+                val started = if (playWhenReady) {
+                    player.media().play(sourceUrl, *options)
+                } else {
+                    player.media().startPaused(sourceUrl, *options)
+                }
+                if (!started) {
+                    AppDiagnostics.error(
+                        event = "player.vlc.load.not_started",
+                        details = playbackDetails() + mapOf("state" to player.status().state().toString()),
+                    )
+                    onError("Playback failed: ${player.status().state()}")
+                } else {
+                    sourceAudioUrl
+                        ?.takeIf(String::isNotBlank)
+                        ?.let { player.media().addSlave(MediaSlaveType.AUDIO, it, true) }
+                    AppDiagnostics.breadcrumb(
+                        event = "player.vlc.load.started",
+                        details = playbackDetails() + mapOf("state" to player.status().state().toString()),
+                    )
+                    onError(null)
+                    onSnapshot(snapshot())
+                }
+            }.onFailure { throwable ->
+                AppDiagnostics.error(
+                    event = "player.vlc.load.failure",
+                    throwable = throwable,
+                    details = playbackDetails(),
+                )
+                onError("Playback failed: ${throwable.message ?: throwable::class.simpleName}")
             }
-            if (!started) {
-                onError("Playback failed: ${player.status().state()}")
-            } else {
-                sourceAudioUrl
-                    ?.takeIf(String::isNotBlank)
-                    ?.let { player.media().addSlave(MediaSlaveType.AUDIO, it, true) }
-                onError(null)
-                onSnapshot(snapshot())
-            }
-        }.onFailure { throwable ->
-            onError("Playback failed: ${throwable.message ?: throwable::class.simpleName}")
         }
     }
 
     override fun play() {
         playWhenReady = true
-        runCatching { player.controls().play() }
+        operationDispatcher.dispatch {
+            if (!released) runCatching { player.controls().play() }
+        }
     }
 
     override fun pause() {
         playWhenReady = false
-        runCatching { player.controls().pause() }
+        operationDispatcher.dispatch {
+            if (!released) runCatching { player.controls().pause() }
+        }
     }
 
     override fun seekTo(positionMs: Long) {
-        runCatching { player.controls().setTime(positionMs.coerceAtLeast(0L)) }
+        operationDispatcher.dispatch {
+            if (!released) runCatching { player.controls().setTime(positionMs.coerceAtLeast(0L)) }
+        }
     }
 
     override fun seekBy(offsetMs: Long) {
-        val nextPosition = (player.status().time() + offsetMs).coerceAtLeast(0L)
-        runCatching { player.controls().setTime(nextPosition) }
+        operationDispatcher.dispatch {
+            if (!released) {
+                val nextPosition = (player.status().time() + offsetMs).coerceAtLeast(0L)
+                runCatching { player.controls().setTime(nextPosition) }
+            }
+        }
     }
 
     override fun retry() {
@@ -239,7 +349,9 @@ private class DesktopVlcPlayerController(
     }
 
     override fun setPlaybackSpeed(speed: Float) {
-        runCatching { player.controls().setRate(speed.coerceIn(0.25f, 4f)) }
+        operationDispatcher.dispatch {
+            if (!released) runCatching { player.controls().setRate(speed.coerceIn(0.25f, 4f)) }
+        }
     }
 
     override fun getAudioTracks(): List<AudioTrack> =
@@ -270,21 +382,31 @@ private class DesktopVlcPlayerController(
 
     override fun selectAudioTrack(index: Int) {
         val trackId = audioTrackDescriptions().getOrNull(index)?.id() ?: return
-        runCatching { player.audio().setTrack(trackId) }
+        operationDispatcher.dispatch {
+            if (!released) runCatching { player.audio().setTrack(trackId) }
+        }
     }
 
     override fun selectSubtitleTrack(index: Int) {
         val trackId = if (index < 0) -1 else subtitleTrackDescriptions().getOrNull(index)?.id() ?: return
-        runCatching { player.subpictures().setTrack(trackId) }
+        operationDispatcher.dispatch {
+            if (!released) runCatching { player.subpictures().setTrack(trackId) }
+        }
     }
 
     override fun setSubtitleUri(url: String) {
-        runCatching { player.subpictures().setSubTitleUri(url) }
-            .onFailure { onError("Playback failed: ${it.message ?: it::class.simpleName}") }
+        operationDispatcher.dispatch {
+            if (!released) {
+                runCatching { player.subpictures().setSubTitleUri(url) }
+                    .onFailure { onError("Playback failed: ${it.message ?: it::class.simpleName}") }
+            }
+        }
     }
 
     override fun clearExternalSubtitle() {
-        runCatching { player.subpictures().setTrack(-1) }
+        operationDispatcher.dispatch {
+            if (!released) runCatching { player.subpictures().setTrack(-1) }
+        }
     }
 
     override fun clearExternalSubtitleAndSelect(trackIndex: Int) {
@@ -316,6 +438,11 @@ private class DesktopVlcPlayerController(
     fun release() {
         if (released) return
         released = true
+        AppDiagnostics.breadcrumb(
+            event = "player.vlc.release",
+            details = playbackDetails(),
+        )
+        operationDispatcher.close()
         runCatching { player.events().removeMediaPlayerEventListener(listener) }
         runCatching { player.controls().stop() }
     }
@@ -343,6 +470,46 @@ private class DesktopVlcPlayerController(
             }
         }
     }
+
+    private fun playbackDetails(): Map<String, String?> =
+        mapOf(
+            "sourceKind" to sourceUrl.diagnosticSourceKind(),
+            "hasSourceAudio" to (!sourceAudioUrl.isNullOrBlank()).toString(),
+            "headerCount" to sourceHeaders.size.toString(),
+            "released" to released.toString(),
+        )
+}
+
+internal interface DesktopPlayerOperationDispatcher {
+    fun dispatch(operation: () -> Unit)
+    fun close()
+}
+
+internal class ExecutorDesktopPlayerOperationDispatcher(
+    threadName: String = "Nuvio-VLC-Player",
+) : DesktopPlayerOperationDispatcher {
+    private val closed = AtomicBoolean(false)
+    private val executor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, threadName).apply { isDaemon = true }
+    }
+
+    override fun dispatch(operation: () -> Unit) {
+        if (closed.get()) return
+        try {
+            executor.execute {
+                if (!closed.get()) {
+                    operation()
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+        }
+    }
+
+    override fun close() {
+        if (closed.compareAndSet(false, true)) {
+            executor.shutdownNow()
+        }
+    }
 }
 
 private fun String?.orTrackLabel(index: Int): String =
@@ -366,3 +533,14 @@ private fun mediaOptions(headers: Map<String, String>): Array<String> {
     }
     return options.toTypedArray()
 }
+
+private fun String?.diagnosticSourceKind(): String =
+    when {
+        isNullOrBlank() -> "none"
+        startsWith("magnet:", ignoreCase = true) -> "magnet"
+        startsWith("file:", ignoreCase = true) -> "file"
+        startsWith("http://", ignoreCase = true) -> "http"
+        startsWith("https://", ignoreCase = true) -> "https"
+        contains(':') -> substringBefore(':').take(24)
+        else -> "unknown"
+    }

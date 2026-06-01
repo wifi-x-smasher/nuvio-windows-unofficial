@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.auth.AuthRepository
 import com.nuvio.app.core.auth.AuthState
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
@@ -242,10 +243,11 @@ fun ProfileSelectionScreen(
 
             Spacer(modifier = Modifier.height(if (isTabletLayout) 28.dp else 48.dp))
 
+            val manageShape = RoundedCornerShape(24.dp)
             Box(
                 modifier = Modifier
                     .graphicsLayer { alpha = manageAlpha.value }
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(manageShape)
                     .background(
                         if (isEditMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                         else Color.Transparent,
@@ -254,9 +256,15 @@ fun ProfileSelectionScreen(
                         width = 1.dp,
                         color = if (isEditMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                        shape = RoundedCornerShape(24.dp),
+                        shape = manageShape,
                     )
                     .clickable { isEditMode = !isEditMode }
+                    .nuvioDesktopFocusEffect(
+                        enabled = true,
+                        shape = manageShape,
+                        focusedScale = 1.02f,
+                        focusedShadowElevation = 10.dp,
+                    )
                     .padding(horizontal = 24.dp, vertical = 10.dp),
             ) {
                 Text(
@@ -322,6 +330,7 @@ private fun ProfileAvatarCard(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale = if (isPressed) 0.95f else 1f
+    val cardShape = RoundedCornerShape(20.dp)
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -333,11 +342,17 @@ private fun ProfileAvatarCard(
                 scaleY = animScale.value * pressScale
                 translationY = animOffset.value
             }
-            .clip(RoundedCornerShape(20.dp))
+            .clip(cardShape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
+            )
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = cardShape,
+                focusedScale = 1.045f,
+                focusedShadowElevation = 20.dp,
             )
             .padding(8.dp),
     ) {
@@ -470,6 +485,7 @@ private fun AddProfileCard(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale = if (isPressed) 0.95f else 1f
+    val cardShape = RoundedCornerShape(20.dp)
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -481,11 +497,17 @@ private fun AddProfileCard(
                 scaleY = animScale.value * pressScale
                 translationY = animOffset.value
             }
-            .clip(RoundedCornerShape(20.dp))
+            .clip(cardShape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
+            )
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = cardShape,
+                focusedScale = 1.045f,
+                focusedShadowElevation = 20.dp,
             )
             .padding(8.dp),
     ) {

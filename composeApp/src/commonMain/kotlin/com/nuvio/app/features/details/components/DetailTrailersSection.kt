@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.features.details.MetaTrailer
 import nuvio.composeapp.generated.resources.*
 import nuvio.composeapp.generated.resources.detail_tab_trailer
@@ -185,6 +186,7 @@ private fun TrailerCard(
     metaFontSize: androidx.compose.ui.unit.TextUnit,
     onClick: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(cornerRadius)
     Column(
         modifier = Modifier.width(cardWidth),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -192,8 +194,14 @@ private fun TrailerCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(cornerRadius))
-                .clickable(onClick = onClick),
+                .clip(shape)
+                .clickable(onClick = onClick)
+                .nuvioDesktopFocusEffect(
+                    enabled = true,
+                    shape = shape,
+                    focusedScale = 1.018f,
+                    focusedShadowElevation = 10.dp,
+                ),
         ) {
             AsyncImage(
                 model = "https://img.youtube.com/vi/${trailer.key}/hqdefault.jpg",

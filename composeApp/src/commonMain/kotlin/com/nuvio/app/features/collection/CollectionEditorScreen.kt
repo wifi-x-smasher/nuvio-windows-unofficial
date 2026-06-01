@@ -65,6 +65,7 @@ import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioSectionLabel
 import com.nuvio.app.core.ui.NuvioSurfaceCard
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
 import com.nuvio.app.core.ui.PlatformBackHandler
 import com.nuvio.app.features.home.PosterShape
@@ -1728,6 +1729,12 @@ private fun PickerOptionRow(
             .clip(rowShape)
             .background(bgColor)
             .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = rowShape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 8.dp,
+            )
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -1993,10 +2000,18 @@ private fun FolderEditorToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    val rowShape = RoundedCornerShape(12.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) },
+            .clip(rowShape)
+            .clickable { onCheckedChange(!checked) }
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = rowShape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 8.dp,
+            ),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -2425,14 +2440,21 @@ private fun GenrePickerOptionRow(
     } else {
         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
     }
+    val shape = RoundedCornerShape(10.dp)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(shape)
             .background(bgColor)
-            .border(1.dp, borderColor, RoundedCornerShape(10.dp))
+            .border(1.dp, borderColor, shape)
             .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 8.dp,
+            )
             .padding(horizontal = 14.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,

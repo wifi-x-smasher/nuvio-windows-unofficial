@@ -11,6 +11,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,12 +42,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
@@ -66,10 +74,85 @@ fun PinEntryDialog(
     var isVerifying by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val pinFocusRequester = remember { FocusRequester() }
+
+    fun verifyEnteredPin(enteredPin: String) {
+        if (isVerifying || enteredPin.length != 4) return
+        isVerifying = true
+        scope.launch {
+            val result = onVerify(enteredPin)
+            if (result.unlocked) {
+                onVerified?.invoke(enteredPin)
+            } else {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                error = result.message ?: if (result.retryAfterSeconds > 0) {
+                    getString(
+                        Res.string.pin_locked_try_again,
+                        result.retryAfterSeconds,
+                    )
+                } else {
+                    getString(Res.string.pin_incorrect)
+                }
+                pin = ""
+            }
+            isVerifying = false
+        }
+    }
+
+    fun appendDigit(digit: String) {
+        if (pin.length >= 4 || isVerifying) return
+        error = null
+        val enteredPin = pin + digit
+        pin = enteredPin
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (enteredPin.length == 4) {
+            verifyEnteredPin(enteredPin)
+        }
+    }
+
+    fun removeDigit() {
+        if (pin.isEmpty() || isVerifying) return
+        pin = pin.dropLast(1)
+        error = null
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    }
+
+    LaunchedEffect(Unit) {
+        runCatching { pinFocusRequester.requestFocus() }
+    }
 
     BasicAlertDialog(onDismissRequest = onDismiss) {
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(pinFocusRequester)
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) {
+                        false
+                    } else {
+                        val digit = pinDigitForKey(event.key)
+                        when {
+                            digit != null -> {
+                                appendDigit(digit)
+                                true
+                            }
+                            isPinBackspaceKey(event.key) -> {
+                                removeDigit()
+                                true
+                            }
+                            isPinCancelKey(event.key) -> {
+                                onDismiss()
+                                true
+                            }
+                            isPinConfirmKey(event.key) -> {
+                                verifyEnteredPin(pin)
+                                true
+                            }
+                            else -> false
+                        }
+                    }
+                }
+                .focusable(),
             color = MaterialTheme.colorScheme.surface,
             shape = RoundedCornerShape(24.dp),
         ) {
@@ -117,41 +200,8 @@ fun PinEntryDialog(
                 Spacer(modifier = Modifier.height(28.dp))
 
                 PinKeypad(
-                    onDigit = { digit ->
-                        if (pin.length < 4 && !isVerifying) {
-                            error = null
-                            pin += digit
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            if (pin.length == 4) {
-                                isVerifying = true
-                                scope.launch {
-                                    val result = onVerify(pin)
-                                    if (result.unlocked) {
-                                        onVerified?.invoke(pin)
-                                    } else {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        error = result.message ?: if (result.retryAfterSeconds > 0) {
-                                            getString(
-                                                Res.string.pin_locked_try_again,
-                                                result.retryAfterSeconds,
-                                            )
-                                        } else {
-                                            getString(Res.string.pin_incorrect)
-                                        }
-                                        pin = ""
-                                    }
-                                    isVerifying = false
-                                }
-                            }
-                        }
-                    },
-                    onBackspace = {
-                        if (pin.isNotEmpty() && !isVerifying) {
-                            pin = pin.dropLast(1)
-                            error = null
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
-                    },
+                    onDigit = ::appendDigit,
+                    onBackspace = ::removeDigit,
                 )
 
                 if (onForgotPin != null) {
@@ -236,7 +286,13 @@ private fun PinKeypad(
                                     .size(64.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .clickable(onClick = onBackspace),
+                                    .clickable(onClick = onBackspace)
+                                    .nuvioDesktopFocusEffect(
+                                        enabled = true,
+                                        shape = CircleShape,
+                                        focusedScale = 1.05f,
+                                        focusedShadowElevation = 8.dp,
+                                    ),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
@@ -253,7 +309,13 @@ private fun PinKeypad(
                                     .size(64.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .clickable { onDigit(key) },
+                                    .clickable { onDigit(key) }
+                                    .nuvioDesktopFocusEffect(
+                                        enabled = true,
+                                        shape = CircleShape,
+                                        focusedScale = 1.05f,
+                                        focusedShadowElevation = 8.dp,
+                                    ),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
