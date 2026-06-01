@@ -1,8 +1,10 @@
 package com.nuvio.app.core.deeplink
 
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class DesktopDeepLinkBridgeTest {
     @Test
@@ -20,5 +22,16 @@ class DesktopDeepLinkBridgeTest {
         assertNull(
             DesktopDeepLinkBridge.extractDeepLinkArg(arrayOf("--debug", "https://trakt.tv/oauth")),
         )
+    }
+
+    @Test
+    fun `registers protocol command with callback argument placeholder`() {
+        val executable = Path.of("C:\\Program Files\\Nuvio\\Nuvio.exe")
+
+        val commandWrite = DesktopDeepLinkBridge
+            .windowsProtocolRegistryWrites(executable)
+            .single { it.label == "open_command" }
+
+        assertTrue(commandWrite.args.contains("\"C:\\Program Files\\Nuvio\\Nuvio.exe\" \"%1\""))
     }
 }

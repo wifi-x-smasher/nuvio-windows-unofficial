@@ -179,6 +179,7 @@ import com.nuvio.app.features.settings.PluginsSettingsScreen
 import com.nuvio.app.features.settings.AccountSettingsScreen
 import com.nuvio.app.features.settings.SupportersContributorsSettingsScreen
 import com.nuvio.app.features.settings.LicensesAttributionsSettingsScreen
+import com.nuvio.app.features.settings.SettingsPage
 import com.nuvio.app.features.settings.ThemeSettingsRepository
 import com.nuvio.app.features.collection.CollectionManagementScreen
 import com.nuvio.app.features.collection.CollectionEditorScreen
@@ -836,6 +837,12 @@ private fun MainAppContent(
                         navController.navigate(DownloadsSettingsRoute) {
                             launchSingleTop = true
                         }
+                        AppDeepLinkRepository.markConsumed(deepLink)
+                    }
+
+                    AppDeepLink.TraktAuth -> {
+                        requestedSettingsPageName = SettingsPage.TraktAuthentication.name
+                        selectedTab = AppScreenTab.Settings
                         AppDeepLinkRepository.markConsumed(deepLink)
                     }
 

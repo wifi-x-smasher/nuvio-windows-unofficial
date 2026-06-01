@@ -455,6 +455,44 @@ compose.desktop {
     }
 }
 
+tasks.matching { it.name == "packageMsi" }.configureEach {
+    inputs.file(project.file("scripts/brand-windows-msi.ps1"))
+    inputs.files(
+        project.file("src/desktopMain/installer/WixUIDialogBmp.bmp"),
+        project.file("src/desktopMain/installer/WixUIBannerBmp.bmp"),
+        project.file("src/desktopMain/resources/app-icon.ico"),
+    )
+
+    doLast {
+        if (!System.getProperty("os.name").contains("Windows", ignoreCase = true)) return@doLast
+
+        val msiPath = layout.buildDirectory
+            .file("compose/binaries/main/msi/Nuvio-$releaseAppVersionName.msi")
+            .get()
+            .asFile
+        val brandScript = project.file("scripts/brand-windows-msi.ps1")
+        val installerAssetsDir = project.file("src/desktopMain/installer")
+        if (!msiPath.isFile || !brandScript.isFile || !installerAssetsDir.isDirectory) return@doLast
+
+        exec {
+            commandLine(
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                brandScript.absolutePath,
+                "-MsiPath",
+                msiPath.absolutePath,
+                "-AssetsDir",
+                installerAssetsDir.absolutePath,
+                "-WixToolsetDir",
+                rootProject.file("build/wix311").absolutePath,
+            )
+        }
+    }
+}
+
 configurations.all {
     exclude(group = "androidx.media3", module = "media3-exoplayer")
     exclude(group = "androidx.media3", module = "media3-ui")

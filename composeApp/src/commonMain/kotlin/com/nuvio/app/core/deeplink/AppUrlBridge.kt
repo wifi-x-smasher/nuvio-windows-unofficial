@@ -14,6 +14,8 @@ sealed interface AppDeepLink {
     ) : AppDeepLink
 
     data object Downloads : AppDeepLink
+
+    data object TraktAuth : AppDeepLink
 }
 
 object AppDeepLinkRepository {
@@ -65,6 +67,11 @@ private fun parseAppDeepLink(url: String): AppDeepLink? {
         }
 
         "downloads" -> AppDeepLink.Downloads
+
+        "auth" -> {
+            val path = parsedUrl.encodedPath.trim('/')
+            if (path.equals("trakt", ignoreCase = true)) AppDeepLink.TraktAuth else null
+        }
 
         else -> null
     }

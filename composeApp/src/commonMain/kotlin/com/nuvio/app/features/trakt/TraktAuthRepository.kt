@@ -1,6 +1,7 @@
 package com.nuvio.app.features.trakt
 
 import co.touchlab.kermit.Logger
+import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.features.addons.httpGetTextWithHeaders
 import com.nuvio.app.features.addons.httpPostJsonWithHeaders
 import io.ktor.http.Url
@@ -115,9 +116,19 @@ object TraktAuthRepository {
         if (!callbackUrl.startsWith("${TraktConfig.REDIRECT_URI}?", ignoreCase = true) &&
             !callbackUrl.equals(TraktConfig.REDIRECT_URI, ignoreCase = true)
         ) {
+            AppDiagnostics.breadcrumb(
+                event = "trakt.auth.callback_ignored",
+                details = traktCallbackDiagnosticDetails(callbackUrl) + mapOf(
+                    "redirectHost" to runCatching { Url(TraktConfig.REDIRECT_URI).host }.getOrNull(),
+                ),
+            )
             return
         }
 
+        AppDiagnostics.breadcrumb(
+            event = "trakt.auth.callback_received",
+            details = traktCallbackDiagnosticDetails(callbackUrl),
+        )
         scope.launch {
             completeAuthorizationFromCallback(callbackUrl)
         }
@@ -229,6 +240,18 @@ object TraktAuthRepository {
         }
 
         exchangeAuthorizationCode(code)
+    }
+
+    private fun traktCallbackDiagnosticDetails(callbackUrl: String): Map<String, String?> {
+        val parsedUrl = runCatching { Url(callbackUrl) }.getOrNull()
+        return mapOf(
+            "scheme" to parsedUrl?.protocol?.name,
+            "host" to parsedUrl?.host,
+            "path" to parsedUrl?.encodedPath,
+            "hasCode" to (parsedUrl?.parameters?.contains("code") == true).toString(),
+            "hasState" to (parsedUrl?.parameters?.contains("state") == true).toString(),
+            "hasError" to (parsedUrl?.parameters?.contains("error") == true).toString(),
+        )
     }
 
     private suspend fun exchangeAuthorizationCode(code: String) {

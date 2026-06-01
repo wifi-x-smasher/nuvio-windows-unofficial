@@ -13,10 +13,13 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.decodeToImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
+import com.nuvio.app.core.diagnostics.AppDiagnostics
+import java.awt.AlphaComposite
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.net.HttpURLConnection
 import java.net.URI
 import javax.imageio.ImageIO
 import javax.imageio.metadata.IIOMetadataNode
@@ -74,6 +77,8 @@ internal actual fun CollectionCardRemoteImage(
             )
             return
         }
+
+        return
     }
 
     AsyncImage(
@@ -87,6 +92,15 @@ internal actual fun CollectionCardRemoteImage(
 private data class DesktopGifAnimation(
     val frames: List<ImageBitmap>,
     val frameDelaysMs: List<Int>,
+)
+
+private data class GifFrameMetadata(
+    val delayMs: Int,
+    val left: Int,
+    val top: Int,
+    val width: Int,
+    val height: Int,
+    val disposalMethod: String,
 )
 
 private fun cachedGifAnimation(imageUrl: String): DesktopGifAnimation? =
@@ -117,6 +131,12 @@ private suspend fun loadGifAnimation(imageUrl: String): DesktopGifAnimation? {
         gifAnimationInFlight[imageUrl] ?: gifDecodeScope.async {
             runCatching {
                 readGifBytes(imageUrl)?.let(::decodeGifAnimation)
+            }.onFailure { throwable ->
+                AppDiagnostics.error(
+                    event = "home.collection.gif_load_failed",
+                    throwable = throwable,
+                    details = mapOf("urlHost" to runCatching { URI.create(imageUrl).host }.getOrNull()),
+                )
             }.getOrNull()
         }.also { gifAnimationInFlight[imageUrl] = it }
     }
@@ -146,12 +166,40 @@ private fun decodeGifAnimation(bytes: ByteArray): DesktopGifAnimation? {
         try {
             val frameCount = reader.getNumImages(true)
             if (frameCount <= 0) return null
+            val canvasSize = reader.gifCanvasSize(frameCount)
+                ?: return null
+            val canvas = BufferedImage(canvasSize.first, canvasSize.second, BufferedImage.TYPE_INT_ARGB)
             val frames = mutableListOf<ImageBitmap>()
             val delays = mutableListOf<Int>()
             for (index in 0 until frameCount) {
-                val bitmap = reader.read(index).toPngImageBitmap() ?: continue
-                frames.add(bitmap)
-                delays.add(reader.getImageMetadata(index).gifFrameDelayMs())
+                val frame = reader.read(index).toArgbImage()
+                val metadata = reader.getImageMetadata(index).gifFrameMetadata(frame)
+                val previousCanvas = if (metadata.disposalMethod.equals("restoreToPrevious", ignoreCase = true)) {
+                    canvas.deepCopy()
+                } else {
+                    null
+                }
+
+                canvas.createGraphics().use { graphics ->
+                    graphics.drawImage(frame, metadata.left, metadata.top, null)
+                }
+
+                canvas.deepCopy().toPngImageBitmap()?.let { bitmap ->
+                    frames.add(bitmap)
+                    delays.add(metadata.delayMs)
+                }
+
+                when {
+                    metadata.disposalMethod.equals("restoreToBackgroundColor", ignoreCase = true) -> {
+                        canvas.createGraphics().use { graphics ->
+                            graphics.composite = AlphaComposite.Clear
+                            graphics.fillRect(metadata.left, metadata.top, metadata.width, metadata.height)
+                        }
+                    }
+                    metadata.disposalMethod.equals("restoreToPrevious", ignoreCase = true) && previousCanvas != null -> {
+                        previousCanvas.copyInto(canvas)
+                    }
+                }
             }
             DesktopGifAnimation(
                 frames = frames,
@@ -163,6 +211,29 @@ private fun decodeGifAnimation(bytes: ByteArray): DesktopGifAnimation? {
     }
 }
 
+private fun javax.imageio.ImageReader.gifCanvasSize(frameCount: Int): Pair<Int, Int>? {
+    streamGifCanvasSize()?.let { return it }
+    var width = 0
+    var height = 0
+    for (index in 0 until frameCount) {
+        val frame = runCatching { read(index) }.getOrNull() ?: continue
+        val metadata = getImageMetadata(index).gifFrameMetadata(frame)
+        width = maxOf(width, metadata.left + metadata.width)
+        height = maxOf(height, metadata.top + metadata.height)
+    }
+    return if (width > 0 && height > 0) width to height else null
+}
+
+private fun javax.imageio.ImageReader.streamGifCanvasSize(): Pair<Int, Int>? {
+    val root = runCatching {
+        streamMetadata?.getAsTree("javax_imageio_gif_stream_1.0")
+    }.getOrNull() as? IIOMetadataNode ?: return null
+    val descriptor = root.findFirst("LogicalScreenDescriptor") ?: return null
+    val width = descriptor.getAttribute("logicalScreenWidth").toIntOrNull() ?: return null
+    val height = descriptor.getAttribute("logicalScreenHeight").toIntOrNull() ?: return null
+    return if (width > 0 && height > 0) width to height else null
+}
+
 private fun BufferedImage.toPngImageBitmap(): ImageBitmap? {
     val output = ByteArrayOutputStream()
     return if (ImageIO.write(this, "png", output)) {
@@ -172,13 +243,55 @@ private fun BufferedImage.toPngImageBitmap(): ImageBitmap? {
     }
 }
 
-private fun javax.imageio.metadata.IIOMetadata.gifFrameDelayMs(): Int {
+private fun javax.imageio.metadata.IIOMetadata.gifFrameMetadata(frame: BufferedImage): GifFrameMetadata {
     val root = runCatching {
         getAsTree("javax_imageio_gif_image_1.0")
-    }.getOrNull() as? IIOMetadataNode ?: return DefaultGifFrameDelayMs
-    val graphicControl = root.findFirst("GraphicControlExtension") ?: return DefaultGifFrameDelayMs
-    val delayHundredths = graphicControl.getAttribute("delayTime").toIntOrNull() ?: return DefaultGifFrameDelayMs
-    return (delayHundredths * 10).takeIf { it > 0 } ?: DefaultGifFrameDelayMs
+    }.getOrNull() as? IIOMetadataNode
+    val descriptor = root?.findFirst("ImageDescriptor")
+    val graphicControl = root?.findFirst("GraphicControlExtension")
+    val delayHundredths = graphicControl
+        ?.getAttribute("delayTime")
+        ?.toIntOrNull()
+    return GifFrameMetadata(
+        delayMs = (delayHundredths?.times(10))?.takeIf { it > 0 } ?: DefaultGifFrameDelayMs,
+        left = descriptor?.getAttribute("imageLeftPosition")?.toIntOrNull() ?: 0,
+        top = descriptor?.getAttribute("imageTopPosition")?.toIntOrNull() ?: 0,
+        width = descriptor?.getAttribute("imageWidth")?.toIntOrNull() ?: frame.width,
+        height = descriptor?.getAttribute("imageHeight")?.toIntOrNull() ?: frame.height,
+        disposalMethod = graphicControl?.getAttribute("disposalMethod").orEmpty(),
+    )
+}
+
+private fun BufferedImage.toArgbImage(): BufferedImage {
+    if (type == BufferedImage.TYPE_INT_ARGB) return this
+    val converted = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+    converted.createGraphics().use { graphics ->
+        graphics.drawImage(this, 0, 0, null)
+    }
+    return converted
+}
+
+private fun BufferedImage.deepCopy(): BufferedImage {
+    val copy = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+    copyInto(copy)
+    return copy
+}
+
+private fun BufferedImage.copyInto(target: BufferedImage) {
+    target.createGraphics().use { graphics ->
+        graphics.composite = AlphaComposite.Clear
+        graphics.fillRect(0, 0, target.width, target.height)
+        graphics.composite = AlphaComposite.SrcOver
+        graphics.drawImage(this, 0, 0, null)
+    }
+}
+
+private inline fun java.awt.Graphics2D.use(block: (java.awt.Graphics2D) -> Unit) {
+    try {
+        block(this)
+    } finally {
+        dispose()
+    }
 }
 
 private fun IIOMetadataNode.findFirst(name: String): IIOMetadataNode? {
@@ -194,6 +307,10 @@ private fun readGifBytes(imageUrl: String): ByteArray? {
     val connection = URI.create(imageUrl).toURL().openConnection().apply {
         connectTimeout = GifConnectTimeoutMs
         readTimeout = GifReadTimeoutMs
+        setRequestProperty("User-Agent", "NuvioWindows")
+    }
+    if (connection is HttpURLConnection) {
+        connection.instanceFollowRedirects = true
     }
     val declaredLength = connection.contentLengthLong
     if (declaredLength > MaxGifBytes) return null
