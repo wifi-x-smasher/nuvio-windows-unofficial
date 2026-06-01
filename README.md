@@ -60,7 +60,13 @@ Public Windows builds are created through GitHub Actions. The release workflow e
 
 For the current public release flow, that file should only include the shared app backend configuration needed for sign-in and sync. Do not include personal account credentials, Trakt tokens, debrid tokens, or local testing values in release builds.
 
-Trakt OAuth credentials are intentionally not bundled in public releases. Self-builders who want Trakt login can create their own Trakt API app and add their private Trakt values to their own local build environment.
+### Trakt
+
+Public Windows installers do not currently include Trakt OAuth app credentials. Normal users do not need to create or place a `local.properties` file anywhere after installing the app; the installed app does not read configuration from the source repository.
+
+For now, Trakt login only works in builds that were compiled with Trakt OAuth configuration already present at build time. Self-builders who want Trakt login can create their own Trakt API app and add the Trakt client ID, client secret, and redirect URI to their private build environment before compiling.
+
+Do not publish public installers built with personal Trakt account tokens, debrid tokens, or other user credentials. A future Windows-safe Trakt flow should avoid shipping a shared client secret in the desktop app.
 
 ## Updates
 
