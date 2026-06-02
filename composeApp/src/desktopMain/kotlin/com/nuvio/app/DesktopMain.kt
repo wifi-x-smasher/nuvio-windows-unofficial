@@ -26,6 +26,7 @@ import nuvio.composeapp.generated.resources.app_logo_mark
 import org.jetbrains.compose.resources.painterResource
 
 fun main(args: Array<String>) {
+    System.setProperty("compose.interop.blending", "true")
     AppDiagnostics.install()
     if (DesktopDeepLinkBridge.forwardToPrimaryInstanceIfNeeded(args)) {
         return

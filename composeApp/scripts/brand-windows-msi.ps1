@@ -144,6 +144,12 @@ function Add-UninstallDataCleanupUi([Microsoft.Deployment.WindowsInstaller.Datab
         "INSERT INTO ``CheckBox`` (``Property``, ``Value``) VALUES ('CLEAR_NUVIO_DATA', '1')"
 
     Execute-MsiSqlIfMissing $Database `
+        "SELECT ``Dialog_`` FROM ``Control`` WHERE ``Dialog_`` = 'MaintenanceTypeDlg' AND ``Control`` = 'ClearNuvioData'" `
+        "INSERT INTO ``Control`` (``Dialog_``, ``Control``, ``Type``, ``X``, ``Y``, ``Width``, ``Height``, ``Attributes``, ``Property``, ``Text``, ``Control_Next``) VALUES ('MaintenanceTypeDlg', 'ClearNuvioData', 'CheckBox', 40, 211, 305, 18, 2, 'CLEAR_NUVIO_DATA', 'Delete local profile data and logs when removing Nuvio', 'Back')"
+    Set-ControlNext $Database "MaintenanceTypeDlg" "RemoveButton" "ClearNuvioData"
+    Set-ControlNext $Database "MaintenanceTypeDlg" "ClearNuvioData" "Back"
+
+    Execute-MsiSqlIfMissing $Database `
         "SELECT ``Dialog_`` FROM ``Control`` WHERE ``Dialog_`` = 'VerifyReadyDlg' AND ``Control`` = 'ClearNuvioData'" `
         "INSERT INTO ``Control`` (``Dialog_``, ``Control``, ``Type``, ``X``, ``Y``, ``Width``, ``Height``, ``Attributes``, ``Property``, ``Text``, ``Control_Next``) VALUES ('VerifyReadyDlg', 'ClearNuvioData', 'CheckBox', 25, 154, 320, 18, 2, 'CLEAR_NUVIO_DATA', 'Delete local Nuvio profile data and logs for this Windows user', 'RemoveNoShield')"
     Set-ControlNext $Database "VerifyReadyDlg" "Remove" "ClearNuvioData"

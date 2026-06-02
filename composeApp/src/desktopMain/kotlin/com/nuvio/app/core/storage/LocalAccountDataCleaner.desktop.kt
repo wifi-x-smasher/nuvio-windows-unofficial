@@ -8,7 +8,11 @@ import kotlin.io.path.exists
 
 internal actual object PlatformLocalAccountDataCleaner {
     actual fun wipe() {
-        val root = DesktopAppPaths.appDataDir
+        wipeDirectoryContents(DesktopAppPaths.appDataDir)
+        wipeDirectoryContents(DesktopAppPaths.localDataDir)
+    }
+
+    private fun wipeDirectoryContents(root: java.nio.file.Path) {
         if (!root.exists()) {
             root.createDirectories()
             return

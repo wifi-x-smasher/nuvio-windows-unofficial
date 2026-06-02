@@ -21,5 +21,16 @@ internal object DesktopAppPaths {
             .also { Files.createDirectories(it) }
     }
 
+    val localDataDir: Path by lazy {
+        val localAppData = System.getenv("LOCALAPPDATA")?.takeIf { it.isNotBlank() }
+        val base = if (localAppData != null) {
+            Path.of(localAppData)
+        } else {
+            Path.of(System.getProperty("java.io.tmpdir"))
+        }
+
+        base.resolve("Nuvio").also { it.createDirectories() }
+    }
+
     fun dataFile(name: String): Path = appDataDir.resolve(name)
 }

@@ -20,27 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.awt.BorderLayout
-import java.awt.Cursor
-import java.awt.FlowLayout
-import java.awt.Font
-import java.awt.GradientPaint
-import java.awt.Graphics
-import java.awt.Graphics2D
-import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
-import java.awt.Insets
-import java.awt.Window
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
-import javax.swing.JButton
-import javax.swing.JLabel
-import javax.swing.JPanel
-import javax.swing.JSlider
-import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
-import javax.swing.Timer
-import javax.swing.JWindow
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
@@ -137,12 +117,6 @@ actual fun PlatformPlayerSurface(
     ) {
         val activeController = controller ?: return@LaunchedEffect
         onControllerReady(activeController)
-        activeController.updateOverlay(
-            title = title,
-            streamTitle = streamTitle,
-            providerName = providerName,
-            onBack = { latestOnBack.value?.invoke() },
-        )
         activeController.load(
             sourceUrl = sourceUrl,
             sourceAudioUrl = sourceAudioUrl,
@@ -154,12 +128,6 @@ actual fun PlatformPlayerSurface(
 
     LaunchedEffect(controller, playWhenReady) {
         val activeController = controller ?: return@LaunchedEffect
-        activeController.updateOverlay(
-            title = title,
-            streamTitle = streamTitle,
-            providerName = providerName,
-            onBack = { latestOnBack.value?.invoke() },
-        )
         if (playWhenReady) {
             activeController.play()
         } else {
@@ -188,14 +156,6 @@ actual fun PlatformPlayerSurface(
         SwingPanel(
             modifier = modifier.background(Color.Black),
             factory = { activeMediaComponent },
-            update = {
-                controller?.updateOverlay(
-                    title = title,
-                    streamTitle = streamTitle,
-                    providerName = providerName,
-                    onBack = { latestOnBack.value?.invoke() },
-                )
-            },
             background = Color.Black,
         )
     } else {
@@ -221,7 +181,6 @@ private class DesktopVlcPlayerController(
     private var playWhenReady: Boolean = true
     @Volatile
     private var released = false
-    private var overlay: DesktopVlcControlsOverlay? = null
     private val listener = object : MediaPlayerEventAdapter() {
         override fun opening(mediaPlayer: MediaPlayer) {
             AppDiagnostics.breadcrumb(
@@ -284,43 +243,6 @@ private class DesktopVlcPlayerController(
 
     init {
         player.events().addMediaPlayerEventListener(listener)
-    }
-
-    fun updateOverlay(
-        title: String,
-        streamTitle: String,
-        providerName: String,
-        onBack: () -> Unit,
-    ) {
-        operationDispatcher.dispatch {
-            if (released) return@dispatch
-            val existingOverlay = overlay
-            if (existingOverlay != null) {
-                existingOverlay.updateMetadata(title, streamTitle, providerName, onBack)
-                return@dispatch
-            }
-
-            val owner = SwingUtilities.getWindowAncestor(component) ?: return@dispatch
-            val newOverlay = DesktopVlcControlsOverlay(
-                owner = owner,
-                controller = this,
-                title = title,
-                streamTitle = streamTitle,
-                providerName = providerName,
-                onBack = onBack,
-            )
-            overlay = newOverlay
-            runCatching {
-                player.overlay().set(newOverlay)
-                player.overlay().enable(true)
-            }.onFailure { throwable ->
-                AppDiagnostics.error(
-                    event = "player.vlc.overlay.failure",
-                    throwable = throwable,
-                    details = playbackDetails(),
-                )
-            }
-        }
     }
 
     fun load(
@@ -528,8 +450,6 @@ private class DesktopVlcPlayerController(
             details = playbackDetails(),
         )
         operationDispatcher.dispatch {
-            overlay?.dispose()
-            overlay = null
             runCatching { player.events().removeMediaPlayerEventListener(listener) }
             runCatching { player.controls().stop() }
             runCatching { component.release() }
@@ -591,219 +511,6 @@ internal class SwingDesktopPlayerOperationDispatcher : DesktopPlayerOperationDis
 
     override fun close() {
         closed.set(true)
-    }
-}
-
-private class DesktopVlcControlsOverlay(
-    owner: Window,
-    private val controller: DesktopVlcPlayerController,
-    title: String,
-    streamTitle: String,
-    providerName: String,
-    onBack: () -> Unit,
-) : JWindow(owner) {
-    private val titleLabel = JLabel()
-    private val subtitleLabel = JLabel()
-    private val playPauseButton = JButton("Pause")
-    private val positionLabel = JLabel("00:00")
-    private val durationLabel = JLabel("00:00")
-    private val slider = JSlider(0, 1000, 0)
-    private var latestOnBack: () -> Unit = onBack
-    private var sliderChanging = false
-    private var lastInteractionMs = System.currentTimeMillis()
-    private val controlsPanel = GradientControlsPanel()
-
-    private val refreshTimer = Timer(500) {
-        refreshState()
-        val idleMs = System.currentTimeMillis() - lastInteractionMs
-        setControlsVisible(idleMs < 4_000L || !controller.snapshot().isPlaying)
-    }
-
-    init {
-        background = java.awt.Color(0, 0, 0, 0)
-        contentPane = controlsPanel
-        controlsPanel.layout = BorderLayout()
-        controlsPanel.isOpaque = false
-        controlsPanel.cursor = Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR)
-
-        val topPanel = JPanel(BorderLayout()).apply {
-            isOpaque = false
-            border = javax.swing.BorderFactory.createEmptyBorder(28, 32, 0, 32)
-        }
-        val backButton = overlayButton("Back").apply {
-            addActionListener { latestOnBack() }
-        }
-        val titlePanel = JPanel(GridBagLayout()).apply { isOpaque = false }
-        val titleConstraints = GridBagConstraints().apply {
-            gridx = 0
-            anchor = GridBagConstraints.WEST
-            weightx = 1.0
-            fill = GridBagConstraints.HORIZONTAL
-        }
-        titleLabel.font = Font("SansSerif", Font.BOLD, 24)
-        titleLabel.foreground = java.awt.Color.WHITE
-        subtitleLabel.font = Font("SansSerif", Font.PLAIN, 14)
-        subtitleLabel.foreground = java.awt.Color(220, 220, 230)
-        titlePanel.add(titleLabel, titleConstraints)
-        titlePanel.add(subtitleLabel, titleConstraints.apply { gridy = 1 })
-        topPanel.add(titlePanel, BorderLayout.WEST)
-        topPanel.add(backButton, BorderLayout.EAST)
-
-        val centerPanel = JPanel(FlowLayout(FlowLayout.CENTER, 20, 0)).apply {
-            isOpaque = false
-        }
-        centerPanel.add(overlayButton("-10").apply { addActionListener { controller.seekBy(-10_000L) } })
-        centerPanel.add(playPauseButton.apply {
-            font = Font("SansSerif", Font.BOLD, 20)
-            isFocusPainted = false
-            addActionListener {
-                val snapshot = controller.snapshot()
-                if (snapshot.isPlaying) controller.pause() else controller.play()
-                markInteraction()
-            }
-        })
-        centerPanel.add(overlayButton("+10").apply { addActionListener { controller.seekBy(10_000L) } })
-
-        val bottomPanel = JPanel(GridBagLayout()).apply {
-            isOpaque = false
-            border = javax.swing.BorderFactory.createEmptyBorder(0, 32, 28, 32)
-        }
-        positionLabel.foreground = java.awt.Color.WHITE
-        durationLabel.foreground = java.awt.Color.WHITE
-        positionLabel.horizontalAlignment = SwingConstants.LEFT
-        durationLabel.horizontalAlignment = SwingConstants.RIGHT
-        slider.isOpaque = false
-        slider.addChangeListener {
-            markInteraction()
-            if (slider.valueIsAdjusting) {
-                sliderChanging = true
-            } else if (sliderChanging) {
-                sliderChanging = false
-                val duration = controller.snapshot().durationMs
-                if (duration > 0L) {
-                    controller.seekTo((duration * (slider.value / 1000f)).toLong())
-                }
-            }
-        }
-        val constraints = GridBagConstraints().apply {
-            gridy = 0
-            insets = Insets(0, 8, 0, 8)
-            fill = GridBagConstraints.HORIZONTAL
-        }
-        bottomPanel.add(positionLabel, constraints.apply { gridx = 0; weightx = 0.0 })
-        bottomPanel.add(slider, constraints.apply { gridx = 1; weightx = 1.0 })
-        bottomPanel.add(durationLabel, constraints.apply { gridx = 2; weightx = 0.0 })
-
-        controlsPanel.add(topPanel, BorderLayout.NORTH)
-        controlsPanel.add(centerPanel, BorderLayout.CENTER)
-        controlsPanel.add(bottomPanel, BorderLayout.SOUTH)
-        controlsPanel.addMouseMotionListener(object : MouseAdapter() {
-            override fun mouseMoved(e: MouseEvent) = markInteraction()
-            override fun mouseDragged(e: MouseEvent) = markInteraction()
-        })
-        controlsPanel.addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(e: MouseEvent) = markInteraction()
-            override fun mousePressed(e: MouseEvent) = markInteraction()
-        })
-
-        updateMetadata(title, streamTitle, providerName, onBack)
-        refreshTimer.start()
-    }
-
-    fun updateMetadata(
-        title: String,
-        streamTitle: String,
-        providerName: String,
-        onBack: () -> Unit,
-    ) {
-        latestOnBack = onBack
-        titleLabel.text = title.takeIf(String::isNotBlank) ?: "Nuvio"
-        subtitleLabel.text = listOf(streamTitle, providerName)
-            .filter(String::isNotBlank)
-            .joinToString("  /  ")
-    }
-
-    override fun dispose() {
-        refreshTimer.stop()
-        super.dispose()
-    }
-
-    private fun refreshState() {
-        val snapshot = controller.snapshot()
-        playPauseButton.text = if (snapshot.isPlaying) "Pause" else "Play"
-        positionLabel.text = formatPlayerTime(snapshot.positionMs)
-        durationLabel.text = formatPlayerTime(snapshot.durationMs)
-        if (!sliderChanging && snapshot.durationMs > 0L) {
-            slider.value = ((snapshot.positionMs.toFloat() / snapshot.durationMs.toFloat()) * 1000f)
-                .toInt()
-                .coerceIn(0, 1000)
-        }
-    }
-
-    private fun markInteraction() {
-        lastInteractionMs = System.currentTimeMillis()
-        setControlsVisible(true)
-    }
-
-    private fun setControlsVisible(visible: Boolean) {
-        if (controlsPanel.isControlsVisible == visible) return
-        controlsPanel.isControlsVisible = visible
-        controlsPanel.components.forEach { it.isVisible = visible }
-        controlsPanel.repaint()
-    }
-
-    private fun overlayButton(text: String): JButton =
-        JButton(text).apply {
-            font = Font("SansSerif", Font.BOLD, 14)
-            foreground = java.awt.Color.WHITE
-            background = java.awt.Color(24, 24, 30, 210)
-            isFocusPainted = false
-            margin = Insets(8, 14, 8, 14)
-            addActionListener { markInteraction() }
-        }
-}
-
-private fun formatPlayerTime(positionMs: Long): String {
-    val totalSeconds = (positionMs / 1000L).coerceAtLeast(0L)
-    val hours = totalSeconds / 3600L
-    val minutes = (totalSeconds % 3600L) / 60L
-    val seconds = totalSeconds % 60L
-    return if (hours > 0L) {
-        "%d:%02d:%02d".format(hours, minutes, seconds)
-    } else {
-        "%02d:%02d".format(minutes, seconds)
-    }
-}
-
-private class GradientControlsPanel : JPanel() {
-    var isControlsVisible: Boolean = true
-
-    override fun paintComponent(g: Graphics) {
-        if (!isControlsVisible) return
-        val g2 = g.create() as Graphics2D
-        try {
-            g2.paint = GradientPaint(
-                0f,
-                0f,
-                java.awt.Color(0, 0, 0, 185),
-                0f,
-                (height * 0.35f),
-                java.awt.Color(0, 0, 0, 0),
-            )
-            g2.fillRect(0, 0, width, (height * 0.35f).toInt())
-            g2.paint = GradientPaint(
-                0f,
-                (height * 0.62f),
-                java.awt.Color(0, 0, 0, 0),
-                0f,
-                height.toFloat(),
-                java.awt.Color(0, 0, 0, 200),
-            )
-            g2.fillRect(0, (height * 0.62f).toInt(), width, height)
-        } finally {
-            g2.dispose()
-        }
-        super.paintComponent(g)
     }
 }
 
