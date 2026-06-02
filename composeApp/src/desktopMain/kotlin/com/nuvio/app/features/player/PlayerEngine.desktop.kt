@@ -15,22 +15,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.Color
 import com.nuvio.app.core.diagnostics.AppDiagnostics
+import com.sun.jna.Native
+import java.awt.Canvas
+import java.awt.Color as AwtColor
+import java.io.File
+import java.io.RandomAccessFile
+import java.nio.charset.StandardCharsets
+import java.nio.file.Path
+import javax.swing.SwingUtilities
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.swing.SwingUtilities
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.RejectedExecutionException
-import java.util.concurrent.atomic.AtomicBoolean
-import uk.co.caprica.vlcj.media.MediaSlaveType
-import uk.co.caprica.vlcj.player.base.MediaPlayer
-import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
-import uk.co.caprica.vlcj.player.base.State
-import uk.co.caprica.vlcj.player.base.TrackDescription
-import uk.co.caprica.vlcj.player.component.EmbeddedMediaPlayerComponent
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 private const val snapshotIntervalMs = 500L
 
@@ -55,55 +66,33 @@ actual fun PlatformPlayerSurface(
 ) {
     val latestOnSnapshot = rememberUpdatedState(onSnapshot)
     val latestOnError = rememberUpdatedState(onError)
-    val latestOnBack = rememberUpdatedState(onBack)
     val uiScope = rememberCoroutineScope()
-    var componentError by remember { mutableStateOf<String?>(null) }
-    var mediaComponent by remember { mutableStateOf<EmbeddedMediaPlayerComponent?>(null) }
+    var canvas by remember { mutableStateOf<Canvas?>(null) }
+    var controller by remember { mutableStateOf<DesktopMpvPlayerController?>(null) }
 
-    LaunchedEffect(Unit) {
-        AppDiagnostics.breadcrumb("player.vlc.component.prepare.start", emptyMap())
-        val componentResult = withContext(Dispatchers.IO) {
-            DesktopVlcRuntime.prepare()
-        }.mapCatching { runtimeDirectory ->
-            onSwingThread {
-                EmbeddedMediaPlayerComponent(
-                    "--no-video-title-show",
-                    "--quiet",
-                    "--plugin-path=${runtimeDirectory.resolve("plugins")}",
-                )
-            }
+    LaunchedEffect(canvas) {
+        val activeCanvas = canvas ?: return@LaunchedEffect
+        AppDiagnostics.breadcrumb("player.mpv.surface.wait", emptyMap())
+        val windowHandle = activeCanvas.awaitNativeHandle()
+        AppDiagnostics.breadcrumb(
+            event = "player.mpv.surface.ready",
+            details = mapOf("windowHandle" to windowHandle.toString()),
+        )
+        if (windowHandle == 0L) {
+            latestOnError.value("Playback failed: MPV video surface was not created.")
+            return@LaunchedEffect
         }
-        componentResult
-            .onSuccess { component ->
-                AppDiagnostics.breadcrumb("player.vlc.component.prepare.success", emptyMap())
-                componentError = null
-                mediaComponent = component
-            }
-            .onFailure { throwable ->
-                AppDiagnostics.error(
-                    event = "player.vlc.component.prepare.failure",
-                    throwable = throwable,
-                    details = emptyMap(),
-                )
-                componentError = throwable.message ?: throwable::class.simpleName ?: "VLCJ initialization failed"
-            }
-    }
-    val controller = remember(mediaComponent) {
-        mediaComponent?.let {
-            DesktopVlcPlayerController(
-                component = it,
-                onSnapshot = { snapshot ->
-                    uiScope.launch { latestOnSnapshot.value(snapshot) }
-                },
-                onError = { message ->
-                    uiScope.launch { latestOnError.value(message) }
-                },
-            )
+        val executable = DesktopMpvRuntime.executablePath()
+        if (executable == null) {
+            latestOnError.value(InternalPlayerPlatform.unavailableMessage())
+            return@LaunchedEffect
         }
-    }
-
-    LaunchedEffect(componentError) {
-        componentError?.let { latestOnError.value("Playback failed: $it") }
+        controller = DesktopMpvPlayerController(
+            executable = executable,
+            windowHandle = windowHandle,
+            onSnapshot = { snapshot -> uiScope.launch { latestOnSnapshot.value(snapshot) } },
+            onError = { message -> uiScope.launch { latestOnError.value(message) } },
+        )
     }
 
     LaunchedEffect(
@@ -121,6 +110,9 @@ actual fun PlatformPlayerSurface(
             sourceUrl = sourceUrl,
             sourceAudioUrl = sourceAudioUrl,
             sourceHeaders = sourceHeaders,
+            title = title,
+            streamTitle = streamTitle,
+            providerName = providerName,
             playWhenReady = playWhenReady,
             resizeMode = resizeMode,
         )
@@ -143,276 +135,178 @@ actual fun PlatformPlayerSurface(
         }
     }
 
-    DisposableEffect(mediaComponent) {
+    DisposableEffect(controller) {
         onDispose {
-            uiScope.launch {
-                controller?.release()
-            }
+            controller?.release()
         }
     }
 
-    val activeMediaComponent = mediaComponent
-    if (activeMediaComponent != null) {
-        SwingPanel(
-            modifier = modifier.background(Color.Black),
-            factory = { activeMediaComponent },
-            background = Color.Black,
-        )
-    } else {
+    SwingPanel(
+        modifier = modifier.background(Color.Black),
+        factory = {
+            Canvas().apply {
+                background = AwtColor.BLACK
+                isFocusable = false
+                canvas = this
+            }
+        },
+        background = Color.Black,
+    )
+
+    if (canvas == null) {
         Box(modifier = modifier.background(Color.Black))
     }
 }
 
-private class DesktopVlcPlayerController(
-    private val component: EmbeddedMediaPlayerComponent,
+private class DesktopMpvPlayerController(
+    private val executable: Path,
+    private val windowHandle: Long,
     private val onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     private val onError: (String?) -> Unit,
     private val operationDispatcher: DesktopPlayerOperationDispatcher =
-        SwingDesktopPlayerOperationDispatcher(),
+        ExecutorDesktopPlayerOperationDispatcher(),
 ) : PlayerEngineController {
-    private val player = component.mediaPlayer()
+    private val requestIds = AtomicLong(1)
+    private val json = Json { ignoreUnknownKeys = true }
+    @Volatile
+    private var process: Process? = null
+    @Volatile
+    private var ipcPath: String = ""
     @Volatile
     private var sourceUrl: String = ""
     @Volatile
-    private var sourceAudioUrl: String? = null
-    @Volatile
     private var sourceHeaders: Map<String, String> = emptyMap()
     @Volatile
-    private var playWhenReady: Boolean = true
+    private var title: String = ""
+    @Volatile
+    private var streamTitle: String = ""
+    @Volatile
+    private var providerName: String = ""
+    @Volatile
+    private var resizeMode: PlayerResizeMode = PlayerResizeMode.Fit
     @Volatile
     private var released = false
-    private val listener = object : MediaPlayerEventAdapter() {
-        override fun opening(mediaPlayer: MediaPlayer) {
-            AppDiagnostics.breadcrumb(
-                event = "player.vlc.event.opening",
-                details = playbackDetails(),
-            )
-            onSnapshot(snapshot())
-        }
-
-        override fun buffering(mediaPlayer: MediaPlayer, newCache: Float) {
-            onSnapshot(snapshot(isLoadingOverride = newCache < 100f))
-        }
-
-        override fun playing(mediaPlayer: MediaPlayer) {
-            AppDiagnostics.breadcrumb(
-                event = "player.vlc.event.playing",
-                details = playbackDetails(),
-            )
-            onError(null)
-            onSnapshot(snapshot())
-        }
-
-        override fun paused(mediaPlayer: MediaPlayer) {
-            onSnapshot(snapshot())
-        }
-
-        override fun stopped(mediaPlayer: MediaPlayer) {
-            AppDiagnostics.breadcrumb(
-                event = "player.vlc.event.stopped",
-                details = playbackDetails(),
-            )
-            onSnapshot(snapshot())
-        }
-
-        override fun finished(mediaPlayer: MediaPlayer) {
-            AppDiagnostics.breadcrumb(
-                event = "player.vlc.event.finished",
-                details = playbackDetails(),
-            )
-            onSnapshot(snapshot())
-        }
-
-        override fun error(mediaPlayer: MediaPlayer) {
-            AppDiagnostics.error(
-                event = "player.vlc.event.error",
-                details = playbackDetails() + mapOf("state" to mediaPlayer.status().state().toString()),
-            )
-            onError("Playback failed: ${mediaPlayer.status().state()}")
-            onSnapshot(snapshot())
-        }
-
-        override fun lengthChanged(mediaPlayer: MediaPlayer, newLength: Long) {
-            onSnapshot(snapshot())
-        }
-
-        override fun timeChanged(mediaPlayer: MediaPlayer, newTime: Long) {
-            onSnapshot(snapshot())
-        }
-    }
-
-    init {
-        player.events().addMediaPlayerEventListener(listener)
-    }
 
     fun load(
         sourceUrl: String,
         sourceAudioUrl: String?,
         sourceHeaders: Map<String, String>,
+        title: String,
+        streamTitle: String,
+        providerName: String,
         playWhenReady: Boolean,
         resizeMode: PlayerResizeMode,
     ) {
         this.sourceUrl = sourceUrl
-        this.sourceAudioUrl = sourceAudioUrl
-        this.sourceHeaders = sanitizePlaybackHeaders(sourceHeaders)
-        this.playWhenReady = playWhenReady
-
-        AppDiagnostics.breadcrumb(
-            event = "player.vlc.load.start",
-            details = playbackDetails() + mapOf(
-                "sourceKind" to sourceUrl.diagnosticSourceKind(),
-                "hasSourceAudio" to (!sourceAudioUrl.isNullOrBlank()).toString(),
-                "headerCount" to this.sourceHeaders.size.toString(),
-                "playWhenReady" to playWhenReady.toString(),
-                "resizeMode" to resizeMode.name,
-            ),
-        )
-        if (sourceUrl.isBlank()) {
-            AppDiagnostics.error(
-                event = "player.vlc.load.missing_source",
-                details = playbackDetails(),
-            )
-            onSnapshot(PlayerPlaybackSnapshot(isLoading = false))
-            onError("Missing playback source")
-            return
-        }
-
-        onSnapshot(PlayerPlaybackSnapshot(isLoading = true))
+        this.sourceHeaders = sourceHeaders
+        this.title = title
+        this.streamTitle = streamTitle
+        this.providerName = providerName
+        this.resizeMode = resizeMode
         operationDispatcher.dispatch {
             if (released) return@dispatch
             runCatching {
+                startProcess(sourceUrl, sourceHeaders, playWhenReady)
+                sourceAudioUrl?.takeIf(String::isNotBlank)?.let {
+                    runCommand("audio-add", JsonPrimitive(it), JsonPrimitive("auto"))
+                }
                 applyResizeMode(resizeMode)
-                val options = mediaOptions(this.sourceHeaders)
-                val started = if (playWhenReady) {
-                    player.media().play(sourceUrl, *options)
-                } else {
-                    player.media().startPaused(sourceUrl, *options)
-                }
-                if (!started) {
-                    AppDiagnostics.error(
-                        event = "player.vlc.load.not_started",
-                        details = playbackDetails() + mapOf("state" to player.status().state().toString()),
-                    )
-                    onError("Playback failed: ${player.status().state()}")
-                } else {
-                    sourceAudioUrl
-                        ?.takeIf(String::isNotBlank)
-                        ?.let { player.media().addSlave(MediaSlaveType.AUDIO, it, true) }
-                    AppDiagnostics.breadcrumb(
-                        event = "player.vlc.load.started",
-                        details = playbackDetails() + mapOf("state" to player.status().state().toString()),
-                    )
-                    onError(null)
-                    onSnapshot(snapshot())
-                }
             }.onFailure { throwable ->
                 AppDiagnostics.error(
-                    event = "player.vlc.load.failure",
+                    event = "player.mpv.load.failure",
                     throwable = throwable,
-                    details = playbackDetails(),
+                    details = mapOf("sourceHost" to sourceUrl.substringBefore('?').take(120)),
                 )
-                onError("Playback failed: ${throwable.message ?: throwable::class.simpleName}")
+                onError("Playback failed: ${throwable.message ?: "MPV could not start."}")
             }
         }
     }
 
     override fun play() {
-        playWhenReady = true
-        operationDispatcher.dispatch {
-            if (!released) runCatching { player.controls().play() }
-        }
+        operationDispatcher.dispatch { runCommand("set_property", JsonPrimitive("pause"), JsonPrimitive(false)) }
     }
 
     override fun pause() {
-        playWhenReady = false
-        operationDispatcher.dispatch {
-            if (!released) runCatching { player.controls().pause() }
-        }
+        operationDispatcher.dispatch { runCommand("set_property", JsonPrimitive("pause"), JsonPrimitive(true)) }
     }
 
     override fun seekTo(positionMs: Long) {
         operationDispatcher.dispatch {
-            if (!released) runCatching { player.controls().setTime(positionMs.coerceAtLeast(0L)) }
+            runCommand(
+                "seek",
+                JsonPrimitive((positionMs.coerceAtLeast(0L) / 1000.0)),
+                JsonPrimitive("absolute"),
+            )
         }
     }
 
     override fun seekBy(offsetMs: Long) {
         operationDispatcher.dispatch {
-            if (!released) {
-                val nextPosition = (player.status().time() + offsetMs).coerceAtLeast(0L)
-                runCatching { player.controls().setTime(nextPosition) }
-            }
+            runCommand(
+                "seek",
+                JsonPrimitive(offsetMs / 1000.0),
+                JsonPrimitive("relative"),
+            )
         }
     }
 
     override fun retry() {
-        load(
-            sourceUrl = sourceUrl,
-            sourceAudioUrl = sourceAudioUrl,
-            sourceHeaders = sourceHeaders,
-            playWhenReady = true,
-            resizeMode = PlayerResizeMode.Fit,
-        )
+        operationDispatcher.dispatch {
+            startProcess(sourceUrl, sourceHeaders, playWhenReady = true)
+            applyResizeMode(resizeMode)
+        }
     }
 
     override fun setPlaybackSpeed(speed: Float) {
         operationDispatcher.dispatch {
-            if (!released) runCatching { player.controls().setRate(speed.coerceIn(0.25f, 4f)) }
+            runCommand("set_property", JsonPrimitive("speed"), JsonPrimitive(speed.coerceIn(0.25f, 3f).toDouble()))
         }
     }
 
     override fun getAudioTracks(): List<AudioTrack> =
-        audioTrackDescriptions().mapIndexed { index, track ->
+        trackList("audio").mapIndexed { index, track ->
             AudioTrack(
                 index = index,
-                id = track.id().toString(),
-                label = track.description().orTrackLabel(index),
-                isSelected = track.id() == player.audio().track(),
+                id = track.id,
+                label = track.title ?: track.language ?: "Track ${index + 1}",
+                language = track.language,
+                isSelected = track.selected,
             )
         }
 
     override fun getSubtitleTracks(): List<SubtitleTrack> =
-        subtitleTrackDescriptions().mapIndexed { index, track ->
+        trackList("sub").mapIndexed { index, track ->
             SubtitleTrack(
                 index = index,
-                id = track.id().toString(),
-                label = track.description().orTrackLabel(index),
-                isSelected = track.id() == player.subpictures().track(),
-                isForced = inferForcedSubtitleTrack(
-                    label = track.description(),
-                    language = null,
-                    trackId = track.id().toString(),
-                    hasForcedSelectionFlag = false,
-                ),
+                id = track.id,
+                label = track.title ?: track.language ?: "Track ${index + 1}",
+                language = track.language,
+                isSelected = track.selected,
+                isForced = track.forced,
             )
         }
 
     override fun selectAudioTrack(index: Int) {
-        val trackId = audioTrackDescriptions().getOrNull(index)?.id() ?: return
         operationDispatcher.dispatch {
-            if (!released) runCatching { player.audio().setTrack(trackId) }
+            getAudioTracks().getOrNull(index)?.let { runCommand("set_property", JsonPrimitive("aid"), JsonPrimitive(it.id)) }
         }
     }
 
     override fun selectSubtitleTrack(index: Int) {
-        val trackId = if (index < 0) -1 else subtitleTrackDescriptions().getOrNull(index)?.id() ?: return
         operationDispatcher.dispatch {
-            if (!released) runCatching { player.subpictures().setTrack(trackId) }
+            getSubtitleTracks().getOrNull(index)?.let { runCommand("set_property", JsonPrimitive("sid"), JsonPrimitive(it.id)) }
         }
     }
 
     override fun setSubtitleUri(url: String) {
         operationDispatcher.dispatch {
-            if (!released) {
-                runCatching { player.subpictures().setSubTitleUri(url) }
-                    .onFailure { onError("Playback failed: ${it.message ?: it::class.simpleName}") }
-            }
+            runCommand("sub-add", JsonPrimitive(url), JsonPrimitive("select"))
         }
     }
 
     override fun clearExternalSubtitle() {
         operationDispatcher.dispatch {
-            if (!released) runCatching { player.subpictures().setTrack(-1) }
+            runCommand("set_property", JsonPrimitive("sid"), JsonPrimitive("no"))
         }
     }
 
@@ -421,164 +315,269 @@ private class DesktopVlcPlayerController(
         selectSubtitleTrack(trackIndex)
     }
 
-    override fun applySubtitleStyle(style: SubtitleStyleState) {
-        // VLC subtitle styling is renderer-dependent. The common state is still persisted.
-    }
-
-    fun snapshot(isLoadingOverride: Boolean? = null): PlayerPlaybackSnapshot {
-        val status = player.status()
-        val state = runCatching { status.state() }.getOrDefault(State.NOTHING_SPECIAL)
-        val durationMs = runCatching { status.length().coerceAtLeast(0L) }.getOrDefault(0L)
-        val positionMs = runCatching { status.time().coerceAtLeast(0L) }.getOrDefault(0L)
-        val playbackSpeed = runCatching { status.rate().takeIf { it > 0f } ?: 1f }.getOrDefault(1f)
+    fun snapshot(): PlayerPlaybackSnapshot {
+        val durationMs = propertyDouble("duration").secondsToMs()
+        val positionMs = propertyDouble("time-pos").secondsToMs()
+        val paused = propertyBoolean("pause") ?: true
+        val speed = propertyDouble("speed").takeIf { it > 0.0 }?.toFloat() ?: 1f
+        val eof = propertyBoolean("eof-reached") ?: false
         return PlayerPlaybackSnapshot(
-            isLoading = isLoadingOverride ?: (state == State.OPENING || state == State.BUFFERING),
-            isPlaying = runCatching { status.isPlaying }.getOrDefault(false),
-            isEnded = state == State.ENDED,
+            isLoading = durationMs <= 0L && !eof,
+            isPlaying = !paused && !eof,
+            isEnded = eof || (durationMs > 0L && positionMs >= durationMs - 500L),
             durationMs = durationMs,
-            positionMs = positionMs,
-            bufferedPositionMs = positionMs,
-            playbackSpeed = playbackSpeed,
+            positionMs = positionMs.coerceAtLeast(0L),
+            bufferedPositionMs = durationMs,
+            playbackSpeed = speed,
         )
     }
 
     fun release() {
-        if (released) return
         released = true
-        AppDiagnostics.breadcrumb(
-            event = "player.vlc.release",
-            details = playbackDetails(),
-        )
         operationDispatcher.dispatch {
-            runCatching { player.events().removeMediaPlayerEventListener(listener) }
-            runCatching { player.controls().stop() }
-            runCatching { component.release() }
-            operationDispatcher.close()
+            runCommand("quit")
+            process?.destroy()
+            process = null
         }
+        operationDispatcher.close()
     }
 
-    private fun audioTrackDescriptions(): List<TrackDescription> =
-        runCatching { player.audio().trackDescriptions().filter { it.id() >= 0 } }
-            .getOrDefault(emptyList())
-
-    private fun subtitleTrackDescriptions(): List<TrackDescription> =
-        runCatching { player.subpictures().trackDescriptions().filter { it.id() >= 0 } }
-            .getOrDefault(emptyList())
-
-    private fun applyResizeMode(resizeMode: PlayerResizeMode) {
-        runCatching {
-            when (resizeMode) {
-                PlayerResizeMode.Fit -> {
-                    player.video().setScale(0f)
-                    player.video().setAspectRatio(null)
-                }
-                PlayerResizeMode.Fill -> {
-                    player.video().setScale(0f)
-                    player.video().setAspectRatio(null)
-                }
-                PlayerResizeMode.Zoom -> player.video().setScale(1.25f)
-            }
-        }
-    }
-
-    private fun playbackDetails(): Map<String, String?> =
-        mapOf(
-            "sourceKind" to sourceUrl.diagnosticSourceKind(),
-            "hasSourceAudio" to (!sourceAudioUrl.isNullOrBlank()).toString(),
-            "headerCount" to sourceHeaders.size.toString(),
-            "released" to released.toString(),
+    private fun startProcess(
+        url: String,
+        headers: Map<String, String>,
+        playWhenReady: Boolean,
+    ) {
+        process?.destroy()
+        val pipeName = "\\\\.\\pipe\\nuvio-mpv-${ProcessHandle.current().pid()}-${requestIds.getAndIncrement()}"
+        ipcPath = pipeName
+        val sanitizedHeaders = sanitizePlaybackHeaders(headers)
+        val args = buildMpvArgs(
+            url = url,
+            headers = sanitizedHeaders,
+            pipeName = pipeName,
+            playWhenReady = playWhenReady,
         )
-}
-
-internal interface DesktopPlayerOperationDispatcher {
-    fun dispatch(operation: () -> Unit)
-    fun close()
-}
-
-internal class SwingDesktopPlayerOperationDispatcher : DesktopPlayerOperationDispatcher {
-    private val closed = AtomicBoolean(false)
-
-    override fun dispatch(operation: () -> Unit) {
-        if (closed.get()) return
-        if (SwingUtilities.isEventDispatchThread()) {
-            if (!closed.get()) operation()
-        } else {
-            SwingUtilities.invokeLater {
-                if (!closed.get()) operation()
-            }
+        AppDiagnostics.breadcrumb(
+            event = "player.mpv.launch.start",
+            details = mapOf(
+                "executable" to executable.toString(),
+                "windowHandle" to windowHandle.toString(),
+                "sourceHost" to url.substringBefore('?').take(120),
+            ),
+        )
+        process = ProcessBuilder(args)
+            .redirectErrorStream(true)
+            .start()
+        startProcessLogPump(process)
+        if (!waitForIpc()) {
+            val exit = process?.takeIf { !it.isAlive }?.exitValue()
+            throw IllegalStateException(
+                if (exit != null) {
+                    "MPV exited before IPC became available (exit code $exit)."
+                } else {
+                    "MPV IPC did not become available."
+                },
+            )
         }
+        onError(null)
+        onSnapshot(snapshot())
+        AppDiagnostics.breadcrumb("player.mpv.launch.success", emptyMap())
     }
 
-    override fun close() {
-        closed.set(true)
-    }
-}
-
-internal class ExecutorDesktopPlayerOperationDispatcher(
-    threadName: String = "Nuvio-VLC-Player",
-) : DesktopPlayerOperationDispatcher {
-    private val closed = AtomicBoolean(false)
-    private val executor: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, threadName).apply { isDaemon = true }
-    }
-
-    override fun dispatch(operation: () -> Unit) {
-        if (closed.get()) return
-        try {
-            executor.execute {
-                if (!closed.get()) {
-                    operation()
+    private fun buildMpvArgs(
+        url: String,
+        headers: Map<String, String>,
+        pipeName: String,
+        playWhenReady: Boolean,
+    ): List<String> =
+        buildList {
+            add(executable.toString())
+            add("--wid=$windowHandle")
+            add("--input-ipc-server=$pipeName")
+            add("--force-window=yes")
+            add("--keep-open=yes")
+            add("--vo=gpu")
+            add("--gpu-context=auto")
+            add("--no-terminal")
+            add("--no-border")
+            add("--no-window-dragging")
+            add("--no-osc")
+            add("--no-input-default-bindings")
+            add("--no-osd-bar")
+            add("--geometry=100%x100%")
+            add("--autofit=100%x100%")
+            add("--cache=yes")
+            add("--cache-secs=120")
+            add("--demuxer-max-bytes=150M")
+            add("--demuxer-readahead-secs=10")
+            add("--network-timeout=30")
+            add("--hwdec=no")
+            add("--pause=${if (playWhenReady) "no" else "yes"}")
+            mediaTitle()?.let { add("--force-media-title=$it") }
+            headers.findHeader("User-Agent")?.let { add("--user-agent=$it") }
+            headers.findHeader("Referer", "Referrer")?.let { add("--referrer=$it") }
+            headers.forEach { (key, value) ->
+                if (!key.equals("User-Agent", ignoreCase = true) &&
+                    !key.equals("Referer", ignoreCase = true) &&
+                    !key.equals("Referrer", ignoreCase = true)
+                ) {
+                    add("--http-header-fields=$key: $value")
                 }
             }
-        } catch (_: RejectedExecutionException) {
+            if (!url.startsWith("magnet:", ignoreCase = true)) {
+                add("--ytdl=no")
+            }
+            add(url)
+        }
+
+    private fun applyResizeMode(mode: PlayerResizeMode) {
+        when (mode) {
+            PlayerResizeMode.Fit -> {
+                runCommand("set_property", JsonPrimitive("panscan"), JsonPrimitive(0))
+                runCommand("set_property", JsonPrimitive("video-zoom"), JsonPrimitive(0))
+            }
+
+            PlayerResizeMode.Fill -> {
+                runCommand("set_property", JsonPrimitive("panscan"), JsonPrimitive(1))
+                runCommand("set_property", JsonPrimitive("video-zoom"), JsonPrimitive(0))
+            }
+
+            PlayerResizeMode.Zoom -> {
+                runCommand("set_property", JsonPrimitive("panscan"), JsonPrimitive(0))
+                runCommand("set_property", JsonPrimitive("video-zoom"), JsonPrimitive(0.25))
+            }
         }
     }
 
-    override fun close() {
-        if (closed.compareAndSet(false, true)) {
-            executor.shutdownNow()
+    private fun trackList(type: String): List<MpvTrack> =
+        property("track-list")
+            ?.jsonArrayOrNull()
+            ?.mapNotNull { element ->
+                val obj = element.jsonObjectOrNull() ?: return@mapNotNull null
+                val itemType = obj.stringValue("type")
+                if (itemType != type) return@mapNotNull null
+                MpvTrack(
+                    id = obj["id"]?.jsonPrimitiveOrNull()?.contentOrNull ?: return@mapNotNull null,
+                    title = obj.stringValue("title"),
+                    language = obj.stringValue("lang"),
+                    selected = obj.booleanValue("selected") ?: false,
+                    forced = obj.booleanValue("forced") ?: false,
+                )
+            }
+            ?: emptyList()
+
+    private fun propertyDouble(name: String): Double =
+        property(name)?.jsonPrimitiveOrNull()?.doubleOrNull ?: 0.0
+
+    private fun propertyBoolean(name: String): Boolean? =
+        property(name)?.jsonPrimitiveOrNull()?.booleanOrNull
+
+    private fun property(name: String): JsonElement? =
+        runCommand("get_property", JsonPrimitive(name))?.jsonObjectOrNull()?.get("data")
+
+    private fun runCommand(command: String, vararg args: JsonElement): JsonObject? {
+        if (ipcPath.isBlank()) return null
+        return runCatching {
+            val payload = buildJsonObject {
+                put("command", buildJsonArray {
+                    add(JsonPrimitive(command))
+                    args.forEach(::add)
+                })
+                put("request_id", requestIds.getAndIncrement())
+            }
+            RandomAccessFile(File(ipcPath), "rw").use { pipe ->
+                pipe.write((payload.toString() + "\n").toByteArray(StandardCharsets.UTF_8))
+                pipe.readLine()
+                    ?.let { json.parseToJsonElement(it).jsonObjectOrNull() }
+            }
+        }.onFailure { throwable ->
+            AppDiagnostics.error(
+                event = "player.mpv.ipc.failure",
+                throwable = throwable,
+                details = mapOf("command" to command),
+            )
+        }.getOrNull()
+    }
+
+    private fun waitForIpc(): Boolean {
+        repeat(50) {
+            if (runCatching { RandomAccessFile(File(ipcPath), "rw").use { } }.isSuccess) return true
+            Thread.sleep(100)
+        }
+        return false
+    }
+
+    private fun startProcessLogPump(process: Process?) {
+        val activeProcess = process ?: return
+        Thread {
+            runCatching {
+                activeProcess.inputStream.bufferedReader().useLines { lines ->
+                    lines.take(80).forEach { line ->
+                        AppDiagnostics.breadcrumb(
+                            event = "player.mpv.output",
+                            details = mapOf("line" to line.take(220)),
+                        )
+                    }
+                }
+            }
+        }.apply {
+            name = "nuvio-mpv-output"
+            isDaemon = true
+            start()
         }
     }
+
+    private fun mediaTitle(): String? =
+        listOf(title, streamTitle, providerName)
+            .mapNotNull { it.takeIf(String::isNotBlank) }
+            .joinToString(" - ")
+            .takeIf(String::isNotBlank)
 }
 
-private fun String?.orTrackLabel(index: Int): String =
-    this?.takeIf(String::isNotBlank) ?: "Track ${index + 1}"
+private data class MpvTrack(
+    val id: String,
+    val title: String?,
+    val language: String?,
+    val selected: Boolean,
+    val forced: Boolean,
+)
 
-private fun mediaOptions(headers: Map<String, String>): Array<String> {
-    val options = mutableListOf(
-        ":network-caching=1500",
-        ":file-caching=1000",
-    )
-    headers.entries.firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }
-        ?.value
-        ?.let { options += ":http-user-agent=$it" }
-    headers.entries.firstOrNull {
-        it.key.equals("Referer", ignoreCase = true) || it.key.equals("Referrer", ignoreCase = true)
-    }?.value?.let { options += ":http-referrer=$it" }
-    headers.forEach { (key, value) ->
-        if (!key.equals("User-Agent", ignoreCase = true) && !key.equals("Referer", ignoreCase = true)) {
-            options += ":http-header=$key: $value"
-        }
+private fun Canvas.awaitNativeHandle(): Long {
+    repeat(40) {
+        if (!isDisplayable) runOnSwingThread { addNotify() }
+        val pointer = runOnSwingThread { runCatching { Native.getComponentPointer(this@awaitNativeHandle) }.getOrNull() }
+        val value = pointer?.let { com.sun.jna.Pointer.nativeValue(it) } ?: 0L
+        if (value != 0L) return value
+        Thread.sleep(50)
     }
-    return options.toTypedArray()
+    return 0L
 }
 
-private fun <T> onSwingThread(block: () -> T): T {
+private fun Double.secondsToMs(): Long =
+    if (this <= 0.0) 0L else (this * 1000.0).toLong()
+
+private fun <T> runOnSwingThread(block: () -> T): T {
     if (SwingUtilities.isEventDispatchThread()) return block()
     var result: Result<T>? = null
     SwingUtilities.invokeAndWait {
         result = runCatching(block)
     }
-    return result!!.getOrThrow()
+    return result?.getOrThrow() ?: error("Swing operation did not complete")
 }
 
-private fun String?.diagnosticSourceKind(): String =
-    when {
-        isNullOrBlank() -> "none"
-        startsWith("magnet:", ignoreCase = true) -> "magnet"
-        startsWith("file:", ignoreCase = true) -> "file"
-        startsWith("http://", ignoreCase = true) -> "http"
-        startsWith("https://", ignoreCase = true) -> "https"
-        contains(':') -> substringBefore(':').take(24)
-        else -> "unknown"
-    }
+private fun Map<String, String>.findHeader(vararg names: String): String? =
+    entries.firstOrNull { (key, _) ->
+        names.any { name -> key.equals(name, ignoreCase = true) }
+    }?.value
+
+private fun JsonElement.jsonObjectOrNull(): JsonObject? = this as? JsonObject
+
+private fun JsonElement.jsonArrayOrNull(): JsonArray? = this as? JsonArray
+
+private fun JsonElement.jsonPrimitiveOrNull(): JsonPrimitive? = this as? JsonPrimitive
+
+private fun JsonObject.stringValue(key: String): String? =
+    this[key]?.jsonPrimitiveOrNull()?.contentOrNull
+
+private fun JsonObject.booleanValue(key: String): Boolean? =
+    this[key]?.jsonPrimitiveOrNull()?.booleanOrNull

@@ -27,6 +27,8 @@ import org.jetbrains.compose.resources.painterResource
 
 fun main(args: Array<String>) {
     System.setProperty("compose.interop.blending", "true")
+    System.setProperty("compose.swing.render.on.graphics", "true")
+    System.setProperty("compose.layers.type", "COMPONENT")
     AppDiagnostics.install()
     if (DesktopDeepLinkBridge.forwardToPrimaryInstanceIfNeeded(args)) {
         return

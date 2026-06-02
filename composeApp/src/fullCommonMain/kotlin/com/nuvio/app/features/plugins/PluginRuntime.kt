@@ -45,19 +45,22 @@ internal object PluginRuntime {
         episode: Int?,
         scraperId: String,
         scraperSettings: Map<String, Any> = emptyMap(),
-    ): List<PluginRuntimeResult> = withContext(Dispatchers.Default) {
-        withTimeout(PLUGIN_TIMEOUT_MS) {
-            executePluginInternal(
-                code = code,
-                tmdbId = tmdbId,
-                mediaType = mediaType,
-                season = season,
-                episode = episode,
-                scraperId = scraperId,
-                scraperSettings = scraperSettings,
-            )
+    ): List<PluginRuntimeResult> =
+        PluginExecutionGate.runQuickJs {
+            withContext(Dispatchers.Default) {
+                withTimeout(PLUGIN_TIMEOUT_MS) {
+                    executePluginInternal(
+                        code = code,
+                        tmdbId = tmdbId,
+                        mediaType = mediaType,
+                        season = season,
+                        episode = episode,
+                        scraperId = scraperId,
+                        scraperSettings = scraperSettings,
+                    )
+                }
+            }
         }
-    }
 
     private suspend fun executePluginInternal(
         code: String,

@@ -36,6 +36,11 @@ val bundledVlcDownloadUrl = "https://get.videolan.org/vlc/$bundledVlcVersion/win
 val bundledVlcZipSha256 = "a0b7ec02b50adf6417eed014fb8df50af39690505a4225b85b3dc2ed17d14843"
 val bundledVlcZip = layout.buildDirectory.file("downloads/vlc/vlc-$bundledVlcVersion-win64.zip")
 val bundledVlcResourcesDir = layout.buildDirectory.dir("desktop-runtime-resources/vlc")
+val bundledMpvVersion = "0.41.0"
+val bundledMpvDownloadUrl = "https://github.com/mpv-player/mpv/releases/download/v$bundledMpvVersion/mpv-v$bundledMpvVersion-x86_64-pc-windows-msvc.zip"
+val bundledMpvZipSha256 = "4e197f729f5071c6772f35fffd96e0f36e3e8a044bd9479b136bb09b7c6a80ff"
+val bundledMpvZip = layout.buildDirectory.file("downloads/mpv/mpv-v$bundledMpvVersion-x86_64-pc-windows-msvc.zip")
+val bundledMpvResourcesDir = layout.buildDirectory.dir("desktop-runtime-resources/mpv")
 
 fun sha256Hex(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -481,6 +486,30 @@ val downloadVlcRuntime by tasks.registering {
     }
 }
 
+val downloadMpvRuntime by tasks.registering {
+    group = "distribution"
+    description = "Downloads the 64-bit MPV runtime used by the Windows internal player."
+    outputs.file(bundledMpvZip)
+
+    doLast {
+        if (!System.getProperty("os.name").contains("Windows", ignoreCase = true)) return@doLast
+
+        val destination = bundledMpvZip.get().asFile
+        destination.parentFile.mkdirs()
+        if (!destination.isFile || sha256Hex(destination) != bundledMpvZipSha256) {
+            logger.lifecycle("Downloading MPV runtime $bundledMpvVersion")
+            URI.create(bundledMpvDownloadUrl).toURL().openStream().use { input ->
+                destination.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+
+        val actualSha256 = sha256Hex(destination)
+        check(actualSha256 == bundledMpvZipSha256) {
+            "MPV runtime checksum mismatch. Expected $bundledMpvZipSha256 but got $actualSha256"
+        }
+    }
+}
+
 val prepareDesktopRuntimeResources by tasks.registering(Copy::class) {
     group = "distribution"
     description = "Prepares bundled desktop player runtimes for native Windows packages."
@@ -496,6 +525,22 @@ val prepareDesktopRuntimeResources by tasks.registering(Copy::class) {
         includeEmptyDirs = false
     }
     into(bundledVlcResourcesDir)
+}
+
+val prepareMpvRuntimeResources by tasks.registering(Copy::class) {
+    group = "distribution"
+    description = "Prepares bundled MPV runtime for the Windows internal player."
+    dependsOn(downloadMpvRuntime)
+    from(zipTree(bundledMpvZip)) {
+        include("mpv.exe", "vulkan-1.dll")
+    }
+    into(bundledMpvResourcesDir)
+}
+
+val prepareAllDesktopRuntimeResources by tasks.registering {
+    group = "distribution"
+    description = "Prepares all bundled desktop player runtimes for native Windows packages."
+    dependsOn(prepareDesktopRuntimeResources, prepareMpvRuntimeResources)
 }
 
 compose.desktop {
@@ -520,9 +565,10 @@ compose.desktop {
 }
 
 tasks.matching { it.name == "packageMsi" }.configureEach {
-    dependsOn(prepareDesktopRuntimeResources)
+    dependsOn(prepareAllDesktopRuntimeResources)
     inputs.file(project.file("scripts/brand-windows-msi.ps1"))
     inputs.dir(bundledVlcResourcesDir)
+    inputs.dir(bundledMpvResourcesDir)
     inputs.files(
         project.file("src/desktopMain/installer/WixUIDialogBmp.bmp"),
         project.file("src/desktopMain/installer/WixUIBannerBmp.bmp"),
@@ -560,13 +606,15 @@ tasks.matching { it.name == "packageMsi" }.configureEach {
 }
 
 tasks.matching { it.name == "prepareAppResources" }.configureEach {
-    dependsOn(prepareDesktopRuntimeResources)
+    dependsOn(prepareAllDesktopRuntimeResources)
     (this as Sync).from(bundledVlcResourcesDir)
+    (this as Sync).from(bundledMpvResourcesDir)
 }
 
 tasks.matching { it.name == "packageExe" || it.name == "createDistributable" }.configureEach {
-    dependsOn(prepareDesktopRuntimeResources)
+    dependsOn(prepareAllDesktopRuntimeResources)
     inputs.dir(bundledVlcResourcesDir)
+    inputs.dir(bundledMpvResourcesDir)
 }
 
 configurations.all {

@@ -6,18 +6,6 @@ import java.nio.file.Path
 import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
 
-internal actual object InternalPlayerPlatform {
-    actual fun isAvailable(): Boolean =
-        DesktopVlcRuntime.compatibleRuntimeDirectory() != null
-
-    actual fun unavailableMessage(): String? =
-        if (isAvailable()) {
-            null
-        } else {
-            "Internal player is unavailable because a compatible 64-bit VLC runtime was not found."
-        }
-}
-
 internal object DesktopVlcRuntime {
     private const val jnaLibraryPathProperty = "jna.library.path"
     private const val jnaNoSysProperty = "jna.nosys"
