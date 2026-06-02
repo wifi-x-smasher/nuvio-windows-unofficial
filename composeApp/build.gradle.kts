@@ -564,6 +564,19 @@ compose.desktop {
     }
 }
 
+tasks.register<JavaExec>("runPlayerRenderProof") {
+    group = "verification"
+    description = "Runs a local proof window for Compose-owned desktop video rendering."
+    dependsOn("compileKotlinDesktop", "desktopProcessResources")
+    mainClass.set("com.nuvio.app.dev.PlayerRenderProofMainKt")
+    val desktopCompilation = kotlin.targets.getByName("desktop").compilations.getByName("main")
+    classpath = desktopCompilation.output.allOutputs + configurations.getByName("desktopRuntimeClasspath")
+    systemProperty(
+        "compose.application.resources.dir",
+        layout.buildDirectory.dir("desktop-runtime-resources").get().asFile.absolutePath,
+    )
+}
+
 tasks.matching { it.name == "packageMsi" }.configureEach {
     dependsOn(prepareAllDesktopRuntimeResources)
     inputs.file(project.file("scripts/brand-windows-msi.ps1"))
