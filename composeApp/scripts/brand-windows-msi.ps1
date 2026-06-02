@@ -93,6 +93,18 @@ function Execute-MsiSqlIfMissing(
     }
 }
 
+function Set-ControlNext(
+    [Microsoft.Deployment.WindowsInstaller.Database] $Database,
+    [string] $Dialog,
+    [string] $Control,
+    [string] $NextControl
+) {
+    $dialogValue = Escape-MsiSqlString $Dialog
+    $controlValue = Escape-MsiSqlString $Control
+    $nextControlValue = Escape-MsiSqlString $NextControl
+    $Database.Execute("UPDATE ``Control`` SET ``Control_Next`` = '$nextControlValue' WHERE ``Dialog_`` = '$dialogValue' AND ``Control`` = '$controlValue'")
+}
+
 function Set-MsiProperty(
     [Microsoft.Deployment.WindowsInstaller.Database] $Database,
     [string] $Property,
@@ -133,7 +145,10 @@ function Add-UninstallDataCleanupUi([Microsoft.Deployment.WindowsInstaller.Datab
 
     Execute-MsiSqlIfMissing $Database `
         "SELECT ``Dialog_`` FROM ``Control`` WHERE ``Dialog_`` = 'VerifyReadyDlg' AND ``Control`` = 'ClearNuvioData'" `
-        "INSERT INTO ``Control`` (``Dialog_``, ``Control``, ``Type``, ``X``, ``Y``, ``Width``, ``Height``, ``Attributes``, ``Property``, ``Text``, ``Control_Next``) VALUES ('VerifyReadyDlg', 'ClearNuvioData', 'CheckBox', 25, 154, 320, 18, 2, 'CLEAR_NUVIO_DATA', 'Delete local Nuvio profile data and logs for this Windows user', 'Remove')"
+        "INSERT INTO ``Control`` (``Dialog_``, ``Control``, ``Type``, ``X``, ``Y``, ``Width``, ``Height``, ``Attributes``, ``Property``, ``Text``, ``Control_Next``) VALUES ('VerifyReadyDlg', 'ClearNuvioData', 'CheckBox', 25, 154, 320, 18, 2, 'CLEAR_NUVIO_DATA', 'Delete local Nuvio profile data and logs for this Windows user', 'RemoveNoShield')"
+    Set-ControlNext $Database "VerifyReadyDlg" "Remove" "ClearNuvioData"
+    Set-ControlNext $Database "VerifyReadyDlg" "ClearNuvioData" "RemoveNoShield"
+
     Execute-MsiSqlIfMissing $Database `
         "SELECT ``Dialog_`` FROM ``Control`` WHERE ``Dialog_`` = 'VerifyReadyDlg' AND ``Control`` = 'ClearNuvioDataNote'" `
         "INSERT INTO ``Control`` (``Dialog_``, ``Control``, ``Type``, ``X``, ``Y``, ``Width``, ``Height``, ``Attributes``, ``Text``) VALUES ('VerifyReadyDlg', 'ClearNuvioDataNote', 'Text', 43, 176, 305, 34, 2, 'This removes data under %APPDATA%\Nuvio and %LOCALAPPDATA%\Nuvio, including profiles, logs, saved add-ons, and connected-service credentials.')"
