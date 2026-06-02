@@ -8,6 +8,7 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.TaskAction
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
@@ -506,8 +507,8 @@ compose.desktop {
             appResourcesRootDir.set(layout.buildDirectory.dir("desktop-runtime-resources"))
             packageName = "Nuvio"
             packageVersion = releaseAppVersionName
-            description = "Nuvio media hub for Windows"
-            vendor = "NuvioMedia"
+            description = "Unofficial Nuvio media hub for Windows"
+            vendor = "wifi-x-smasher"
             modules("java.instrument", "java.management", "java.naming", "jdk.unsupported")
             windows {
                 menuGroup = "Nuvio"
@@ -556,6 +557,11 @@ tasks.matching { it.name == "packageMsi" }.configureEach {
             )
         }
     }
+}
+
+tasks.matching { it.name == "prepareAppResources" }.configureEach {
+    dependsOn(prepareDesktopRuntimeResources)
+    (this as Sync).from(bundledVlcResourcesDir)
 }
 
 tasks.matching { it.name == "packageExe" || it.name == "createDistributable" }.configureEach {

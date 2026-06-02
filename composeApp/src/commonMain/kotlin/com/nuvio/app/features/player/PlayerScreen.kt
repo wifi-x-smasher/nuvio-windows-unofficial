@@ -1995,6 +1995,10 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxSize(),
                 playWhenReady = shouldPlay,
                 resizeMode = resizeMode,
+                title = title,
+                streamTitle = activeStreamTitle,
+                providerName = activeProviderName,
+                onBack = onBackWithProgress,
                 onControllerReady = { controller ->
                     playerController = controller
                     playerControllerSourceUrl = activeSourceUrl

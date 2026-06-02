@@ -62,11 +62,35 @@ For the current public release flow, that file should only include the shared ap
 
 ### Trakt
 
-Public Windows installers do not currently include Trakt OAuth app credentials. Normal users do not need to create or place a `local.properties` file anywhere after installing the app; the installed app does not read configuration from the source repository.
+Public Windows installers do not include a shared Trakt OAuth secret. Each user who wants Trakt sync should configure their own Trakt API app.
 
-For now, Trakt login only works in builds that were compiled with Trakt OAuth configuration already present at build time. Self-builders who want Trakt login can create their own Trakt API app and add the Trakt client ID, client secret, and redirect URI to their private build environment before compiling.
+Normal installed-app setup:
 
-Do not publish public installers built with personal Trakt account tokens, debrid tokens, or other user credentials. A future Windows-safe Trakt flow should avoid shipping a shared client secret in the desktop app.
+1. Create a Trakt API app from your Trakt account settings.
+2. Use this redirect URI: `nuvio://auth/trakt`
+3. Open Nuvio Windows, go to Settings -> Account -> Trakt.
+4. Choose "Configure Trakt OAuth" and paste your Trakt client ID and client secret.
+5. Connect Trakt normally.
+
+Those Trakt OAuth app credentials are stored only on your Windows user profile. They are not read from the source repository after install and are not included in public release builds.
+
+Advanced self-build setup:
+
+Self-builders can also put Trakt OAuth values in their private `local.properties` file before compiling:
+
+```properties
+TRAKT_CLIENT_ID=your_trakt_client_id
+TRAKT_CLIENT_SECRET=your_trakt_client_secret
+TRAKT_REDIRECT_URI=nuvio://auth/trakt
+```
+
+Do not publish public installers built with personal Trakt account tokens, debrid tokens, or other user credentials.
+
+### Connected Services Sync
+
+Connected services added in Nuvio may sync through your Nuvio account, matching the mobile and TV apps. This lets integrations follow the same signed-in user across Android, Android TV, and Windows.
+
+Only connect services you trust and only use your own accounts. The Windows-only Trakt OAuth app credentials described above stay local to the Windows user profile and are not synced.
 
 ## Updates
 

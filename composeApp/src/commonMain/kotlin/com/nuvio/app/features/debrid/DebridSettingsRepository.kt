@@ -44,6 +44,26 @@ object DebridSettingsRepository {
         loadFromDisk()
     }
 
+    fun clearLocalState() {
+        hasLoaded = true
+        enabled = false
+        cloudLibraryEnabled = true
+        providerApiKeys = emptyMap()
+        preferredResolverProviderId = ""
+        instantPlaybackPreparationLimit = 0
+        streamMaxResults = 0
+        streamSortMode = DebridStreamSortMode.DEFAULT
+        streamMinimumQuality = DebridStreamMinimumQuality.ANY
+        streamDolbyVisionFilter = DebridStreamFeatureFilter.ANY
+        streamHdrFilter = DebridStreamFeatureFilter.ANY
+        streamCodecFilter = DebridStreamCodecFilter.ANY
+        streamPreferences = DebridStreamPreferences()
+        streamNameTemplate = DebridStreamFormatterDefaults.NAME_TEMPLATE
+        streamDescriptionTemplate = DebridStreamFormatterDefaults.DESCRIPTION_TEMPLATE
+        DebridSettingsStorage.clearLocalState()
+        publish()
+    }
+
     fun snapshot(): DebridSettings {
         ensureLoaded()
         return _uiState.value

@@ -1,14 +1,17 @@
 package com.nuvio.app.features.debrid
 
+import com.nuvio.app.core.auth.AuthRepository
+import com.nuvio.app.core.auth.AuthState
+import com.nuvio.app.core.desktop.DesktopAccountScopedKey
 import com.nuvio.app.core.desktop.DesktopPreferences
 import com.nuvio.app.core.desktop.DesktopSecureStore
-import com.nuvio.app.core.storage.ProfileScopedKey
 import com.nuvio.app.core.sync.decodeSyncBoolean
 import com.nuvio.app.core.sync.decodeSyncInt
 import com.nuvio.app.core.sync.decodeSyncString
 import com.nuvio.app.core.sync.encodeSyncBoolean
 import com.nuvio.app.core.sync.encodeSyncInt
 import com.nuvio.app.core.sync.encodeSyncString
+import com.nuvio.app.features.profiles.ProfileRepository
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -42,14 +45,19 @@ internal actual object DebridSettingsStorage {
 
     actual fun loadProviderApiKey(providerId: String): String? {
         val key = providerApiKeyKey(providerId)
-        return DesktopSecureStore.readString(ProfileScopedKey.of(key))
-            ?: preferences.getString(ProfileScopedKey.of(key))
+        return DesktopSecureStore.readString(scopedKey(key))
+            ?: preferences.getString(scopedKey(key))
     }
 
     actual fun saveProviderApiKey(providerId: String, apiKey: String) {
         val key = providerApiKeyKey(providerId)
-        DesktopSecureStore.writeString(ProfileScopedKey.of(key), apiKey)
-        preferences.remove(ProfileScopedKey.of(key))
+        val scopedKey = scopedKey(key)
+        if (apiKey.isBlank()) {
+            DesktopSecureStore.remove(scopedKey)
+        } else {
+            DesktopSecureStore.writeString(scopedKey, apiKey)
+        }
+        preferences.remove(scopedKey)
     }
 
     actual fun loadTorboxApiKey(): String? = loadProviderApiKey(DebridProviders.TORBOX_ID)
@@ -111,8 +119,8 @@ internal actual object DebridSettingsStorage {
 
     actual fun replaceFromSyncPayload(payload: JsonObject) {
         syncKeys().forEach {
-            preferences.remove(ProfileScopedKey.of(it))
-            DesktopSecureStore.remove(ProfileScopedKey.of(it))
+            preferences.remove(scopedKey(it))
+            DesktopSecureStore.remove(scopedKey(it))
         }
 
         payload.decodeSyncBoolean(enabledKey)?.let(::saveEnabled)
@@ -135,6 +143,13 @@ internal actual object DebridSettingsStorage {
         payload.decodeSyncString(streamDescriptionTemplateKey)?.let(::saveStreamDescriptionTemplate)
     }
 
+    actual fun clearLocalState() {
+        syncKeys().forEach {
+            preferences.remove(scopedKey(it))
+            DesktopSecureStore.remove(scopedKey(it))
+        }
+    }
+
     private fun syncKeys(): List<String> =
         listOf(
             enabledKey,
@@ -153,25 +168,37 @@ internal actual object DebridSettingsStorage {
         ) + DebridProviders.all().map { providerApiKeyKey(it.id) }
 
     private fun loadBoolean(key: String): Boolean? =
-        preferences.getBoolean(ProfileScopedKey.of(key))
+        preferences.getBoolean(scopedKey(key))
 
     private fun saveBoolean(key: String, enabled: Boolean) {
-        preferences.putBoolean(ProfileScopedKey.of(key), enabled)
+        preferences.putBoolean(scopedKey(key), enabled)
     }
 
     private fun loadInt(key: String): Int? =
-        preferences.getInt(ProfileScopedKey.of(key))
+        preferences.getInt(scopedKey(key))
 
     private fun saveInt(key: String, value: Int) {
-        preferences.putInt(ProfileScopedKey.of(key), value)
+        preferences.putInt(scopedKey(key), value)
     }
 
     private fun loadString(key: String): String? =
-        preferences.getString(ProfileScopedKey.of(key))
+        preferences.getString(scopedKey(key))
 
     private fun saveString(key: String, value: String) {
-        preferences.putString(ProfileScopedKey.of(key), value)
+        preferences.putString(scopedKey(key), value)
     }
+
+    private fun scopedKey(baseKey: String): String =
+        DesktopAccountScopedKey.of(
+            baseKey = baseKey,
+            accountId = currentAccountId(),
+            profileId = ProfileRepository.activeProfileId,
+        )
+
+    private fun currentAccountId(): String =
+        (AuthRepository.state.value as? AuthState.Authenticated)
+            ?.userId
+            .orEmpty()
 
     private fun providerApiKeyKey(providerId: String): String {
         val normalized = DebridProviders.byId(providerId)?.id

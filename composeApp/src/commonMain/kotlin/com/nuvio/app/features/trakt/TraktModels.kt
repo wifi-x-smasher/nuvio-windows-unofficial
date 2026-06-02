@@ -27,6 +27,8 @@ enum class TraktConnectionMode {
 data class TraktAuthUiState(
     val mode: TraktConnectionMode = TraktConnectionMode.DISCONNECTED,
     val credentialsConfigured: Boolean = true,
+    val runtimeCredentialsConfigurable: Boolean = false,
+    val runtimeCredentialsConfigured: Boolean = false,
     val isLoading: Boolean = false,
     val username: String? = null,
     val tokenExpiresAtMillis: Long? = null,

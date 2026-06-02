@@ -616,6 +616,8 @@
     <string name="settings_content_discovery_meta_screen_description">Settings for the detail and episode screens.</string>
     <string name="settings_content_discovery_collections_description">Create custom catalog groupings with folders shown on Home.</string>
     <string name="settings_integrations_section_title">Integrations</string>
+    <string name="settings_integrations_sync_notice_title">Synced with your Nuvio account</string>
+    <string name="settings_integrations_sync_notice_description">Connected services can sync across your mobile, TV, and Windows devices when you use the same Nuvio account. Only connect services you trust and only use your own accounts.</string>
     <string name="settings_integrations_tmdb_description">Metadata enrichment controls</string>
     <string name="settings_integrations_mdblist_description">External ratings providers</string>
     <string name="settings_integrations_debrid_description">Connect accounts for links and library access</string>
@@ -925,8 +927,17 @@
     <string name="settings_trakt_features">FEATURES</string>
     <string name="settings_trakt_finish_sign_in">Finish Trakt sign in in your browser</string>
     <string name="settings_trakt_intro_description">Sync your watchlist, watch progress, continue watching, scrobbles, and personal lists with Trakt.</string>
-    <string name="settings_trakt_missing_credentials">Missing Trakt credentials in this Windows build (TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET). Add them through local.properties or the build environment, then rebuild the installer.</string>
+    <string name="settings_trakt_missing_credentials">Missing Trakt credentials. Configure Trakt OAuth in this app, or build with TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET.</string>
     <string name="settings_trakt_open_login">Open Trakt Login</string>
+    <string name="settings_trakt_oauth_clear">Clear local OAuth config</string>
+    <string name="settings_trakt_oauth_client_id">Client ID</string>
+    <string name="settings_trakt_oauth_client_secret">Client secret</string>
+    <string name="settings_trakt_oauth_configured">Local Trakt OAuth configuration is saved on this Windows user profile.</string>
+    <string name="settings_trakt_oauth_configure">Configure Trakt OAuth</string>
+    <string name="settings_trakt_oauth_description">Create a Trakt API app, use nuvio://auth/trakt as the redirect URI, then paste the app credentials here.</string>
+    <string name="settings_trakt_oauth_redirect_uri">Redirect URI</string>
+    <string name="settings_trakt_oauth_save">Save OAuth config</string>
+    <string name="settings_trakt_oauth_title">Trakt OAuth Configuration</string>
     <string name="settings_trakt_save_actions_description">Your Save actions can now target Trakt watchlist and personal lists.</string>
     <string name="settings_trakt_sign_in_description">Sign in with Trakt to enable list-based saving and Trakt library mode.</string>
     <string name="trakt_library_source_title">Library Source</string>

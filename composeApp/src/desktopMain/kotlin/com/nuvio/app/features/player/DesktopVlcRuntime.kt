@@ -20,6 +20,7 @@ internal actual object InternalPlayerPlatform {
 
 internal object DesktopVlcRuntime {
     private const val jnaLibraryPathProperty = "jna.library.path"
+    private const val jnaNoSysProperty = "jna.nosys"
     private const val composeResourcesDirProperty = "compose.application.resources.dir"
 
     fun compatibleRuntimeDirectory(): Path? =
@@ -68,6 +69,7 @@ internal object DesktopVlcRuntime {
                 (listOf(runtimePath) + paths).joinToString(File.pathSeparator),
             )
         }
+        System.setProperty(jnaNoSysProperty, "true")
         AppDiagnostics.breadcrumb(
             event = "player.vlc.runtime.prepare.success",
             details = mapOf("runtimeDirectory" to runtimePath),

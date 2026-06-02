@@ -22,7 +22,7 @@ actual object AppUpdaterPlatform {
 
     actual fun getSupportedAbis(): List<String> = listOf("windows", "win", "x64", "desktop")
 
-    actual fun getSupportedAssetExtensions(): List<String> = listOf("msi", "exe")
+    actual fun getSupportedAssetExtensions(): List<String> = listOf("msi")
 
     actual fun getIgnoredTag(): String? =
         preferences.getString(ignoredTagKey)
@@ -91,10 +91,13 @@ actual object AppUpdaterPlatform {
 
     private fun windowsElevatedInstallerCommand(installer: Path): List<String> {
         val installerPath = installer.toString().powershellSingleQuoted()
+        val currentProcessId = ProcessHandle.current().pid()
         val command = if (installer.fileName.toString().endsWith(".msi", ignoreCase = true)) {
-            "Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', '$installerPath') -Verb RunAs"
+            "Wait-Process -Id $currentProcessId -ErrorAction SilentlyContinue; " +
+                "Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', '$installerPath') -Verb RunAs"
         } else {
-            "Start-Process -FilePath '$installerPath' -Verb RunAs"
+            "Wait-Process -Id $currentProcessId -ErrorAction SilentlyContinue; " +
+                "Start-Process -FilePath '$installerPath' -Verb RunAs"
         }
         return listOf(
             "powershell.exe",

@@ -143,9 +143,8 @@ object TraktPublicListSourceResolver {
         endpoint: String,
         query: Map<String, String> = emptyMap(),
     ): RawHttpResponse {
-        if (TraktConfig.CLIENT_ID.isBlank()) {
-            error("Missing Trakt credentials in local.properties (TRAKT_CLIENT_ID).")
-        }
+        val clientId = TraktCredentialsProvider.current()?.clientId
+            ?: error("Missing Trakt credentials. Configure Trakt OAuth in settings or build with TRAKT_CLIENT_ID.")
         val url = buildTraktUrl(endpoint, query)
         return httpRequestRaw(
             method = "GET",
@@ -153,7 +152,7 @@ object TraktPublicListSourceResolver {
             headers = mapOf(
                 "Accept" to "application/json",
                 "trakt-api-version" to API_VERSION,
-                "trakt-api-key" to TraktConfig.CLIENT_ID,
+                "trakt-api-key" to clientId,
             ),
             body = "",
         )

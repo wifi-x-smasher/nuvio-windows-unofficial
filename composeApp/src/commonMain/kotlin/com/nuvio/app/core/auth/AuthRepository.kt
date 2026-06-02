@@ -129,8 +129,8 @@ object AuthRepository {
             }
         }
 
-        _state.value = AuthState.Unauthenticated
         LocalAccountDataCleaner.wipe()
+        _state.value = AuthState.Unauthenticated
     }.onFailure { e ->
         log.e(e) { "Local sign-out cleanup failed" }
         _error.value = e.message ?: getString(Res.string.auth_sign_out_failed)
@@ -142,6 +142,7 @@ object AuthRepository {
         SupabaseProvider.client.functions.invoke("delete-account")
         SupabaseProvider.client.auth.signOut()
         LocalAccountDataCleaner.wipe()
+        _state.value = AuthState.Unauthenticated
     }.onFailure { e ->
         log.e(e) { "Account deletion failed" }
         _error.value = e.message ?: getString(Res.string.auth_account_deletion_failed)

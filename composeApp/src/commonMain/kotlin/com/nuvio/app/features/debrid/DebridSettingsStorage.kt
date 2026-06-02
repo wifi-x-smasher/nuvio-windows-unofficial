@@ -37,4 +37,5 @@ internal expect object DebridSettingsStorage {
     fun saveStreamDescriptionTemplate(template: String)
     fun exportToSyncPayload(): JsonObject
     fun replaceFromSyncPayload(payload: JsonObject)
+    fun clearLocalState()
 }

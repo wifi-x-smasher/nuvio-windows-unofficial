@@ -22,8 +22,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -65,6 +68,15 @@ import nuvio.composeapp.generated.resources.settings_trakt_features
 import nuvio.composeapp.generated.resources.settings_trakt_finish_sign_in
 import nuvio.composeapp.generated.resources.settings_trakt_intro_description
 import nuvio.composeapp.generated.resources.settings_trakt_missing_credentials
+import nuvio.composeapp.generated.resources.settings_trakt_oauth_clear
+import nuvio.composeapp.generated.resources.settings_trakt_oauth_client_id
+import nuvio.composeapp.generated.resources.settings_trakt_oauth_client_secret
+import nuvio.composeapp.generated.resources.settings_trakt_oauth_configured
+import nuvio.composeapp.generated.resources.settings_trakt_oauth_configure
+import nuvio.composeapp.generated.resources.settings_trakt_oauth_description
+import nuvio.composeapp.generated.resources.settings_trakt_oauth_redirect_uri
+import nuvio.composeapp.generated.resources.settings_trakt_oauth_save
+import nuvio.composeapp.generated.resources.settings_trakt_oauth_title
 import nuvio.composeapp.generated.resources.settings_trakt_open_login
 import nuvio.composeapp.generated.resources.settings_trakt_save_actions_description
 import nuvio.composeapp.generated.resources.settings_trakt_sign_in_description
@@ -584,6 +596,7 @@ private fun TraktConnectionCard(
     val horizontalPadding = if (isTablet) 20.dp else 16.dp
     val verticalPadding = if (isTablet) 18.dp else 16.dp
     val failedOpenBrowserMessage = stringResource(Res.string.settings_trakt_failed_open_browser)
+    var showOauthDialog by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -702,6 +715,34 @@ private fun TraktConnectionCard(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
+                if (uiState.runtimeCredentialsConfigurable) {
+                    if (uiState.runtimeCredentialsConfigured) {
+                        Text(
+                            text = stringResource(Res.string.settings_trakt_oauth_configured),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedButton(
+                            onClick = { showOauthDialog = true },
+                            enabled = !uiState.isLoading,
+                        ) {
+                            Text(stringResource(Res.string.settings_trakt_oauth_configure))
+                        }
+                        if (uiState.runtimeCredentialsConfigured) {
+                            OutlinedButton(
+                                onClick = TraktAuthRepository::clearRuntimeCredentials,
+                                enabled = !uiState.isLoading,
+                            ) {
+                                Text(stringResource(Res.string.settings_trakt_oauth_clear))
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -718,6 +759,91 @@ private fun TraktConnectionCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
+        }
+    }
+
+    if (showOauthDialog) {
+        TraktOAuthConfigDialog(
+            onDismiss = { showOauthDialog = false },
+            onSave = { clientId, clientSecret, redirectUri ->
+                if (TraktAuthRepository.saveRuntimeCredentials(clientId, clientSecret, redirectUri)) {
+                    showOauthDialog = false
+                }
+            },
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun TraktOAuthConfigDialog(
+    onDismiss: () -> Unit,
+    onSave: (clientId: String, clientSecret: String, redirectUri: String) -> Unit,
+) {
+    var clientId by rememberSaveable { mutableStateOf("") }
+    var clientSecret by rememberSaveable { mutableStateOf("") }
+    var redirectUri by rememberSaveable { mutableStateOf("nuvio://auth/trakt") }
+    val canSave = clientId.isNotBlank() && clientSecret.isNotBlank() && redirectUri.isNotBlank()
+
+    BasicAlertDialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = stringResource(Res.string.settings_trakt_oauth_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(Res.string.settings_trakt_oauth_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextField(
+                    value = clientId,
+                    onValueChange = { clientId = it },
+                    label = { Text(stringResource(Res.string.settings_trakt_oauth_client_id)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                TextField(
+                    value = clientSecret,
+                    onValueChange = { clientSecret = it },
+                    label = { Text(stringResource(Res.string.settings_trakt_oauth_client_secret)) },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                TextField(
+                    value = redirectUri,
+                    onValueChange = { redirectUri = it },
+                    label = { Text(stringResource(Res.string.settings_trakt_oauth_redirect_uri)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(onClick = onDismiss) {
+                        Text(stringResource(Res.string.action_cancel))
+                    }
+                    Button(
+                        onClick = { onSave(clientId, clientSecret, redirectUri) },
+                        enabled = canSave,
+                    ) {
+                        Text(stringResource(Res.string.settings_trakt_oauth_save))
+                    }
+                }
+            }
         }
     }
 }

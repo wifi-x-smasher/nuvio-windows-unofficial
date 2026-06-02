@@ -223,6 +223,12 @@ actual object DebridSettingsStorage {
         payload.decodeSyncString(streamDescriptionTemplateKey)?.let(::saveStreamDescriptionTemplate)
     }
 
+    actual fun clearLocalState() {
+        syncKeys().forEach { key ->
+            NSUserDefaults.standardUserDefaults.removeObjectForKey(ProfileScopedKey.of(key))
+        }
+    }
+
     private fun providerApiKeyKey(providerId: String): String {
         val normalized = DebridProviders.byId(providerId)?.id
             ?: providerId.trim().lowercase().replace(Regex("[^a-z0-9_]+"), "_")

@@ -67,7 +67,29 @@ object TraktAuthRepository {
     }
 
     fun hasRequiredCredentials(): Boolean =
-        TraktConfig.CLIENT_ID.isNotBlank() && TraktConfig.CLIENT_SECRET.isNotBlank()
+        TraktCredentialsProvider.current() != null
+
+    fun saveRuntimeCredentials(
+        clientId: String,
+        clientSecret: String,
+        redirectUri: String,
+    ): Boolean {
+        val saved = TraktCredentialsProvider.saveRuntimeCredentials(
+            clientId = clientId,
+            clientSecret = clientSecret,
+            redirectUri = redirectUri,
+        )
+        publish(
+            statusMessage = if (saved) "Trakt OAuth configuration saved" else null,
+            errorMessage = if (saved) null else localizedString(Res.string.trakt_missing_credentials),
+        )
+        return saved
+    }
+
+    fun clearRuntimeCredentials() {
+        TraktCredentialsProvider.clearRuntimeCredentials()
+        publish(statusMessage = "Trakt OAuth configuration cleared", errorMessage = null)
+    }
 
     fun onConnectRequested(): String? {
         ensureLoaded()
@@ -113,13 +135,16 @@ object TraktAuthRepository {
 
     fun onAuthCallbackReceived(callbackUrl: String) {
         ensureLoaded()
-        if (!callbackUrl.startsWith("${TraktConfig.REDIRECT_URI}?", ignoreCase = true) &&
-            !callbackUrl.equals(TraktConfig.REDIRECT_URI, ignoreCase = true)
+        val credentials = TraktCredentialsProvider.current()
+        val redirectUri = credentials?.redirectUri.orEmpty()
+        if (credentials == null ||
+            !callbackUrl.startsWith("$redirectUri?", ignoreCase = true) &&
+            !callbackUrl.equals(redirectUri, ignoreCase = true)
         ) {
             AppDiagnostics.breadcrumb(
                 event = "trakt.auth.callback_ignored",
                 details = traktCallbackDiagnosticDetails(callbackUrl) + mapOf(
-                    "redirectHost" to runCatching { Url(TraktConfig.REDIRECT_URI).host }.getOrNull(),
+                    "redirectHost" to runCatching { Url(redirectUri) }.getOrNull()?.host,
                 ),
             )
             return
@@ -146,7 +171,7 @@ object TraktAuthRepository {
 
         return mapOf(
             "trakt-api-version" to API_VERSION,
-            "trakt-api-key" to TraktConfig.CLIENT_ID,
+            "trakt-api-key" to (TraktCredentialsProvider.current()?.clientId ?: return null),
             "Authorization" to "Bearer $accessToken",
         )
     }
@@ -255,12 +280,20 @@ object TraktAuthRepository {
     }
 
     private suspend fun exchangeAuthorizationCode(code: String) {
+        val credentials = TraktCredentialsProvider.current()
+        if (credentials == null) {
+            clearPendingAuthorization()
+            persist()
+            publish(isLoading = false, errorMessage = localizedString(Res.string.trakt_missing_credentials))
+            return
+        }
+
         val body = json.encodeToString(
             TraktAuthorizationCodeRequest(
                 code = code,
-                clientId = TraktConfig.CLIENT_ID,
-                clientSecret = TraktConfig.CLIENT_SECRET,
-                redirectUri = TraktConfig.REDIRECT_URI,
+                clientId = credentials.clientId,
+                clientSecret = credentials.clientSecret,
+                redirectUri = credentials.redirectUri,
             ),
         )
 
@@ -315,12 +348,13 @@ object TraktAuthRepository {
         publish(isLoading = true, errorMessage = null)
 
         val token = authState.accessToken?.takeIf { it.isNotBlank() }
-        if (!token.isNullOrBlank() && hasRequiredCredentials()) {
+        val credentials = TraktCredentialsProvider.current()
+        if (!token.isNullOrBlank() && credentials != null) {
             val body = json.encodeToString(
                 TraktRevokeRequest(
                     token = token,
-                    clientId = TraktConfig.CLIENT_ID,
-                    clientSecret = TraktConfig.CLIENT_SECRET,
+                    clientId = credentials.clientId,
+                    clientSecret = credentials.clientSecret,
                 ),
             )
             runCatching {
@@ -345,7 +379,7 @@ object TraktAuthRepository {
     }
 
     private suspend fun refreshTokenIfNeeded(force: Boolean): Boolean {
-        if (!hasRequiredCredentials()) return false
+        val credentials = TraktCredentialsProvider.current() ?: return false
         val refreshToken = authState.refreshToken?.takeIf { it.isNotBlank() } ?: return false
 
         if (!force && !isTokenExpiredOrExpiring(authState)) {
@@ -355,9 +389,9 @@ object TraktAuthRepository {
         val body = json.encodeToString(
             TraktRefreshTokenRequest(
                 refreshToken = refreshToken,
-                clientId = TraktConfig.CLIENT_ID,
-                clientSecret = TraktConfig.CLIENT_SECRET,
-                redirectUri = TraktConfig.REDIRECT_URI,
+                clientId = credentials.clientId,
+                clientSecret = credentials.clientSecret,
+                redirectUri = credentials.redirectUri,
             ),
         )
 
@@ -432,6 +466,8 @@ object TraktAuthRepository {
         _uiState.value = TraktAuthUiState(
             mode = mode,
             credentialsConfigured = hasRequiredCredentials(),
+            runtimeCredentialsConfigurable = TraktCredentialsProvider.isRuntimeConfigurable,
+            runtimeCredentialsConfigured = TraktCredentialsProvider.runtimeCredentials() != null,
             isLoading = isLoading,
             username = authState.username,
             tokenExpiresAtMillis = tokenExpiresAtMillis,
@@ -445,10 +481,11 @@ object TraktAuthRepository {
         TraktAuthStorage.savePayload(json.encodeToString(authState))
     }
 
-    private fun buildAuthorizationUrl(state: String): String {
+    private fun buildAuthorizationUrl(state: String): String? {
+        val credentials = TraktCredentialsProvider.current() ?: return null
         val responseType = "code"
-        val encodedClientId = TraktConfig.CLIENT_ID.encodeURLParameter()
-        val encodedRedirectUri = TraktConfig.REDIRECT_URI.encodeURLParameter()
+        val encodedClientId = credentials.clientId.encodeURLParameter()
+        val encodedRedirectUri = credentials.redirectUri.encodeURLParameter()
         val encodedState = state.encodeURLParameter()
         return "$AUTHORIZE_URL?response_type=$responseType&client_id=$encodedClientId&redirect_uri=$encodedRedirectUri&state=$encodedState"
     }
