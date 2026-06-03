@@ -9,7 +9,7 @@
   <p>
     An unofficial Windows desktop port of Nuvio.
     <br />
-    Stremio addon ecosystem • Windows desktop • TV-style experience
+    Nuvio add-on ecosystem • Windows desktop • TV-style experience
   </p>
 
 </div>
@@ -21,6 +21,16 @@ Nuvio Windows Unofficial is a community-maintained Windows desktop port of Nuvio
 This project is not affiliated with, sponsored by, or endorsed by the official Nuvio developers. Nuvio trademarks, branding, upstream code, and related assets belong to their respective owners.
 
 The app works as a client-side interface for Nuvio accounts, profiles, add-ons, catalogs, collections, watch progress, stream badges, and playback. It does not host or provide media content.
+
+## Screenshots
+
+Screenshots are illustrative UI captures from a locally configured Nuvio Windows setup. Nuvio Windows Unofficial does not host, provide, or bundle media content.
+
+<img src="assets/screenshots/home-tv-layout.png" alt="Nuvio Windows home screen with TV-style layout" width="900" />
+
+<img src="assets/screenshots/stream-badges.png" alt="Nuvio Windows stream selection screen with badges" width="900" />
+
+<img src="assets/screenshots/desktop-player.png" alt="Nuvio Windows desktop player controls" width="900" />
 
 ## Installation
 
