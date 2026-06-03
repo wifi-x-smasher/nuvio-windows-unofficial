@@ -42,9 +42,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.nuvio.app.core.ui.nuvioDesktopUiScale
 import com.nuvio.app.core.ui.NuvioProgressBar
 import com.nuvio.app.core.ui.NuvioShelfSection
 import com.nuvio.app.core.ui.posterCardClickable
+import com.nuvio.app.core.ui.scaledByDesktop
 import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.cloudLibraryDisplayArtworkUrl
 import com.nuvio.app.features.home.HomeCatalogSettingsRepository
@@ -713,7 +715,72 @@ internal data class ContinueWatchingLayout(
     val posterBadgeTextSize: androidx.compose.ui.unit.TextUnit,
 )
 
-internal fun rememberContinueWatchingLayout(maxWidthDp: Float): ContinueWatchingLayout =
+@Composable
+internal fun rememberContinueWatchingLayout(maxWidthDp: Float): ContinueWatchingLayout {
+    val desktopScale = nuvioDesktopUiScale
+    return when {
+        maxWidthDp >= 3200f -> ContinueWatchingLayout(
+            itemGap = 24.dp.scaledByDesktop(desktopScale),
+            wideCardWidth = 460.dp.scaledByDesktop(desktopScale.coerceAtMost(1.18f)),
+            wideCardHeight = 184.dp.scaledByDesktop(desktopScale.coerceAtMost(1.18f)),
+            widePosterStripWidth = 116.dp.scaledByDesktop(desktopScale.coerceAtMost(1.18f)),
+            wideContentPadding = 18.dp.scaledByDesktop(desktopScale),
+            posterCardWidth = 208.dp.scaledByDesktop(desktopScale.coerceAtMost(1.14f)),
+            posterCardHeight = 312.dp.scaledByDesktop(desktopScale.coerceAtMost(1.14f)),
+            cardRadius = 20.dp.scaledByDesktop(desktopScale),
+            progressHeight = 7.dp.scaledByDesktop(desktopScale),
+            wideTitleSize = 22.sp * desktopScale,
+            wideMetaSize = 18.sp * desktopScale,
+            posterTitleSize = 17.sp * desktopScale,
+            posterTitleBlockHeight = 46.dp.scaledByDesktop(desktopScale),
+            posterMetaSize = 15.sp * desktopScale,
+            progressLabelSize = 15.sp * desktopScale,
+            wideBadgeTextSize = 15.sp * desktopScale,
+            posterBadgeTextSize = 13.sp * desktopScale,
+        )
+        maxWidthDp >= 2600f -> ContinueWatchingLayout(
+            itemGap = 22.dp.scaledByDesktop(desktopScale),
+            wideCardWidth = 430.dp.scaledByDesktop(desktopScale.coerceAtMost(1.12f)),
+            wideCardHeight = 172.dp.scaledByDesktop(desktopScale.coerceAtMost(1.12f)),
+            widePosterStripWidth = 108.dp.scaledByDesktop(desktopScale.coerceAtMost(1.12f)),
+            wideContentPadding = 17.dp.scaledByDesktop(desktopScale),
+            posterCardWidth = 194.dp.scaledByDesktop(desktopScale.coerceAtMost(1.1f)),
+            posterCardHeight = 291.dp.scaledByDesktop(desktopScale.coerceAtMost(1.1f)),
+            cardRadius = 19.dp.scaledByDesktop(desktopScale),
+            progressHeight = 6.dp.scaledByDesktop(desktopScale),
+            wideTitleSize = 21.sp * desktopScale,
+            wideMetaSize = 17.sp * desktopScale,
+            posterTitleSize = 17.sp * desktopScale,
+            posterTitleBlockHeight = 44.dp.scaledByDesktop(desktopScale),
+            posterMetaSize = 15.sp * desktopScale,
+            progressLabelSize = 14.sp * desktopScale,
+            wideBadgeTextSize = 14.sp * desktopScale,
+            posterBadgeTextSize = 12.sp * desktopScale,
+        )
+        maxWidthDp >= 2100f -> ContinueWatchingLayout(
+            itemGap = 21.dp.scaledByDesktop(desktopScale),
+            wideCardWidth = 410.dp.scaledByDesktop(desktopScale.coerceAtMost(1.08f)),
+            wideCardHeight = 164.dp.scaledByDesktop(desktopScale.coerceAtMost(1.08f)),
+            widePosterStripWidth = 104.dp.scaledByDesktop(desktopScale.coerceAtMost(1.08f)),
+            wideContentPadding = 16.dp.scaledByDesktop(desktopScale),
+            posterCardWidth = 186.dp.scaledByDesktop(desktopScale.coerceAtMost(1.06f)),
+            posterCardHeight = 279.dp.scaledByDesktop(desktopScale.coerceAtMost(1.06f)),
+            cardRadius = 18.dp.scaledByDesktop(desktopScale),
+            progressHeight = 6.dp.scaledByDesktop(desktopScale),
+            wideTitleSize = 20.sp * desktopScale,
+            wideMetaSize = 16.sp * desktopScale,
+            posterTitleSize = 16.sp * desktopScale,
+            posterTitleBlockHeight = 42.dp.scaledByDesktop(desktopScale),
+            posterMetaSize = 14.sp * desktopScale,
+            progressLabelSize = 14.sp * desktopScale,
+            wideBadgeTextSize = 14.sp * desktopScale,
+            posterBadgeTextSize = 12.sp * desktopScale,
+        )
+        else -> rememberContinueWatchingLayoutBase(maxWidthDp)
+    }
+}
+
+internal fun rememberContinueWatchingLayoutBase(maxWidthDp: Float): ContinueWatchingLayout =
     when {
         maxWidthDp >= 1440f -> ContinueWatchingLayout(
             itemGap = 20.dp,

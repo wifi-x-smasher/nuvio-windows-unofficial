@@ -59,6 +59,8 @@ import com.nuvio.app.core.ui.NuvioDesktopSettingsRailWidth
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.PlatformBackHandler
+import com.nuvio.app.core.ui.nuvioDesktopUiScale
+import com.nuvio.app.core.ui.scaledByDesktop
 import com.nuvio.app.core.ui.isLiquidGlassNativeTabBarSupported
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.details.MetaScreenSettingsRepository
@@ -729,13 +731,23 @@ private fun TabletSettingsScreen(
 ) {
     var selectedCategory by rememberSaveable { mutableStateOf(SettingsCategory.General.name) }
     val activeCategory = SettingsCategory.valueOf(selectedCategory)
+    val desktopScale = if (isDesktopWorkspace) nuvioDesktopUiScale else 1f
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val topOffset = if (isDesktopWorkspace) {
-        max(statusBarPadding + 16.dp, 40.dp)
+        max(statusBarPadding + 16.dp.scaledByDesktop(desktopScale), 40.dp.scaledByDesktop(desktopScale))
     } else {
         max(statusBarPadding + 24.dp, 48.dp) + 64.dp
     }
-    val sideRailWidth = if (isDesktopWorkspace) NuvioDesktopSettingsRailWidth else 280.dp
+    val sideRailWidth = if (isDesktopWorkspace) {
+        NuvioDesktopSettingsRailWidth.scaledByDesktop(desktopScale.coerceAtMost(1.16f))
+    } else {
+        280.dp
+    }
+    val contentMaxWidth = if (isDesktopWorkspace) {
+        NuvioDesktopContentMaxWidth.scaledByDesktop(desktopScale.coerceAtMost(1.24f))
+    } else {
+        Dp.Unspecified
+    }
 
     LaunchedEffect(page) {
         if (page.opensInlineOnTablet) {
@@ -767,10 +779,10 @@ private fun TabletSettingsScreen(
                     text = stringResource(Res.string.compose_settings_page_root),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .padding(bottom = 20.dp),
+                        .padding(horizontal = 24.dp.scaledByDesktop(desktopScale))
+                        .padding(bottom = 20.dp.scaledByDesktop(desktopScale)),
                     style = if (isDesktopWorkspace) {
-                        MaterialTheme.typography.headlineMedium
+                        MaterialTheme.typography.headlineMedium.scaledByDesktop(desktopScale)
                     } else {
                         MaterialTheme.typography.displayLarge
                     },
@@ -779,7 +791,7 @@ private fun TabletSettingsScreen(
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(10.dp.scaledByDesktop(desktopScale)))
                 SettingsCategory.entries.forEach { category ->
                     SettingsSidebarItem(
                         label = stringResource(category.labelRes),
@@ -861,15 +873,15 @@ private fun TabletSettingsScreen(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth()
-                    .widthIn(max = if (isDesktopWorkspace) NuvioDesktopContentMaxWidth else Dp.Unspecified)
+                    .widthIn(max = contentMaxWidth)
                     .nestedScroll(rootSearchRevealConnection),
                 contentPadding = PaddingValues(
-                    start = if (isDesktopWorkspace) 32.dp else 40.dp,
+                    start = if (isDesktopWorkspace) 32.dp.scaledByDesktop(desktopScale) else 40.dp,
                     top = topOffset,
-                    end = if (isDesktopWorkspace) 32.dp else 40.dp,
-                    bottom = 40.dp + bottomOverlayPadding,
+                    end = if (isDesktopWorkspace) 32.dp.scaledByDesktop(desktopScale) else 40.dp,
+                    bottom = 40.dp.scaledByDesktop(desktopScale) + bottomOverlayPadding,
                 ),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp.scaledByDesktop(desktopScale)),
             ) {
                 item {
                     val previousPage = page.previousPage()

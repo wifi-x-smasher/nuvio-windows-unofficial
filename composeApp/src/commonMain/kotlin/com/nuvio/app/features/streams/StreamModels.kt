@@ -22,10 +22,10 @@ data class StreamItem(
     val badges: List<StreamBadge> = emptyList(),
 ) {
     val streamLabel: String
-        get() = name ?: runBlocking { getString(Res.string.stream_default_name) }
+        get() = (name ?: runBlocking { getString(Res.string.stream_default_name) }).repairMojibake()
 
     val streamSubtitle: String?
-        get() = description
+        get() = description?.repairMojibake()
 
     val directPlaybackUrl: String?
         get() = url ?: externalUrl

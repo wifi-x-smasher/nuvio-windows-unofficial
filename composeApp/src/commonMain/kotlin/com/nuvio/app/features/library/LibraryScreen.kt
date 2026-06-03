@@ -65,8 +65,10 @@ import com.nuvio.app.core.ui.NuvioNetworkOfflineCard
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioViewAllPillSize
 import com.nuvio.app.core.ui.NuvioShelfSection
+import com.nuvio.app.core.ui.nuvioDesktopUiScale
 import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.core.ui.nuvioBlockPointerPassthrough
+import com.nuvio.app.core.ui.scaledByDesktop
 import com.nuvio.app.features.cloud.CloudLibraryFile
 import com.nuvio.app.features.cloud.CloudLibraryItem
 import com.nuvio.app.features.cloud.CloudLibraryItemType
@@ -127,6 +129,7 @@ fun LibraryScreen(
     var selectedCloudItemKey by rememberSaveable { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val sectionPadding = 16.dp.scaledByDesktop(nuvioDesktopUiScale)
     val isTraktSource = uiState.sourceMode == LibrarySourceMode.TRAKT
     val retryLibraryLoad: () -> Unit = {
         NetworkStatusRepository.requestRefresh(force = true)
@@ -192,22 +195,23 @@ fun LibraryScreen(
                     } else {
                         stringResource(Res.string.library_title)
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = sectionPadding),
                 )
                 LibrarySourceSwitch(
                     selectedMode = sourceMode,
                     onModeSelected = { mode ->
                         sourceModeName = mode.name
                     },
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = sectionPadding),
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(6.dp.scaledByDesktop(nuvioDesktopUiScale)))
             }
         }
 
         if (sourceMode == LibraryViewMode.Cloud) {
             cloudLibraryContent(
                 uiState = cloudUiState,
+                sectionPadding = sectionPadding,
                 selectedProviderId = selectedProviderId,
                 selectedType = selectedType,
                 selectedCloudItemKey = selectedCloudItemKey,
@@ -237,7 +241,7 @@ fun LibraryScreen(
                 !uiState.isLoaded || (uiState.isLoading && uiState.sections.isEmpty()) -> {
                     items(3) {
                         HomeSkeletonRow(
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = sectionPadding),
                             showHeaderAccent = !homeCatalogSettingsUiState.hideCatalogUnderline,
                         )
                     }
@@ -248,12 +252,12 @@ fun LibraryScreen(
                         if (networkStatusUiState.isOfflineLike) {
                             NuvioNetworkOfflineCard(
                                 condition = networkStatusUiState.condition,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = sectionPadding),
                                 onRetry = retryLibraryLoad,
                             )
                         } else {
                             HomeEmptyStateCard(
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = sectionPadding),
                                 title = if (isTraktSource) {
                                     stringResource(Res.string.library_trakt_load_failed)
                                 } else {
@@ -272,12 +276,12 @@ fun LibraryScreen(
                         if (networkStatusUiState.isOfflineLike && isTraktSource) {
                             NuvioNetworkOfflineCard(
                                 condition = networkStatusUiState.condition,
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = sectionPadding),
                                 onRetry = retryLibraryLoad,
                             )
                         } else {
                             HomeEmptyStateCard(
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = sectionPadding),
                                 title = if (isTraktSource) {
                                     stringResource(Res.string.library_trakt_empty_title)
                                 } else {
@@ -298,6 +302,7 @@ fun LibraryScreen(
                         sections = uiState.sections,
                         watchedKeys = watchedUiState.watchedKeys,
                         showHeaderAccent = !homeCatalogSettingsUiState.hideCatalogUnderline,
+                        sectionPadding = sectionPadding,
                         onPosterClick = onPosterClick,
                         onSectionViewAllClick = onSectionViewAllClick,
                         onPosterLongClick = onPosterLongClick,
@@ -310,6 +315,7 @@ fun LibraryScreen(
 
 private fun LazyListScope.cloudLibraryContent(
     uiState: CloudLibraryUiState,
+    sectionPadding: Dp,
     selectedProviderId: String?,
     selectedType: CloudLibraryItemType?,
     selectedCloudItemKey: String?,
@@ -323,13 +329,13 @@ private fun LazyListScope.cloudLibraryContent(
 ) {
     when {
         !uiState.isLoaded -> {
-            cloudLibrarySkeletonItems()
+            cloudLibrarySkeletonItems(sectionPadding)
         }
 
         !uiState.isEnabled -> {
             item {
                 HomeEmptyStateCard(
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = sectionPadding),
                     title = stringResource(Res.string.cloud_library_disabled_title),
                     message = stringResource(Res.string.cloud_library_disabled_message),
                     actionLabel = stringResource(Res.string.cloud_library_disabled_action),
@@ -341,7 +347,7 @@ private fun LazyListScope.cloudLibraryContent(
         !uiState.hasConnectedProvider -> {
             item {
                 HomeEmptyStateCard(
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = sectionPadding),
                     title = stringResource(Res.string.cloud_library_connect_title),
                     message = stringResource(Res.string.cloud_library_connect_message),
                     actionLabel = stringResource(Res.string.cloud_library_connect_action),
@@ -380,7 +386,7 @@ private fun LazyListScope.cloudLibraryContent(
                         onProviderSelected = onProviderSelected,
                         onTypeSelected = onTypeSelected,
                         onRefresh = onRefresh,
-                        modifier = Modifier.padding(horizontal = 16.dp),
+                        modifier = Modifier.padding(horizontal = sectionPadding),
                     )
                 }
 
@@ -390,7 +396,7 @@ private fun LazyListScope.cloudLibraryContent(
                     .forEach { providerState ->
                         item(key = "cloud-error-${providerState.providerId}") {
                             HomeEmptyStateCard(
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = sectionPadding),
                                 title = stringResource(Res.string.cloud_library_load_failed, providerState.providerName),
                                 message = providerState.errorMessage.orEmpty(),
                                 actionLabel = stringResource(Res.string.action_retry),
@@ -400,11 +406,11 @@ private fun LazyListScope.cloudLibraryContent(
                     }
 
                 if (uiState.isRefreshing && filteredItems.isEmpty()) {
-                    cloudLibrarySkeletonItems()
+                    cloudLibrarySkeletonItems(sectionPadding)
                 } else if (filteredItems.isEmpty()) {
                     item {
                         HomeEmptyStateCard(
-                            modifier = Modifier.padding(horizontal = 16.dp),
+                            modifier = Modifier.padding(horizontal = sectionPadding),
                             title = stringResource(Res.string.cloud_library_empty_title),
                             message = stringResource(Res.string.cloud_library_empty_message),
                             actionLabel = stringResource(Res.string.action_retry),
@@ -427,10 +433,10 @@ private fun LazyListScope.cloudLibraryContent(
     }
 }
 
-private fun LazyListScope.cloudLibrarySkeletonItems() {
+private fun LazyListScope.cloudLibrarySkeletonItems(sectionPadding: Dp = 16.dp) {
     item(key = "cloud-library-skeleton-toolbar") {
         CloudLibrarySkeletonToolbar(
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = sectionPadding),
         )
     }
     items(3) {
@@ -1006,6 +1012,7 @@ private fun LazyListScope.librarySections(
     sections: List<LibrarySection>,
     watchedKeys: Set<String>,
     showHeaderAccent: Boolean,
+    sectionPadding: Dp,
     onPosterClick: ((LibraryItem) -> Unit)?,
     onSectionViewAllClick: ((LibrarySection) -> Unit)?,
     onPosterLongClick: ((LibraryItem, LibrarySection) -> Unit)?,
@@ -1018,8 +1025,8 @@ private fun LazyListScope.librarySections(
         NuvioShelfSection(
             title = section.displayTitle,
             entries = previewItems,
-            headerHorizontalPadding = 16.dp,
-            rowContentPadding = PaddingValues(horizontal = 16.dp),
+            headerHorizontalPadding = sectionPadding,
+            rowContentPadding = PaddingValues(horizontal = sectionPadding),
             showHeaderAccent = showHeaderAccent,
             onViewAllClick = if (section.items.size > LIBRARY_SECTION_PREVIEW_LIMIT) {
                 onSectionViewAllClick?.let { { it(section) } }

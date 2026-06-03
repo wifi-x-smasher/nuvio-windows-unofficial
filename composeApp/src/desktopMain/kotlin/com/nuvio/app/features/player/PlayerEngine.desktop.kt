@@ -297,8 +297,12 @@ internal class DesktopVlcPlayerController(
             ?: emptyList()
 
     override fun selectAudioTrack(index: Int) {
-        val trackId = mediaPlayer?.audio()?.trackDescriptions()?.getOrNull(index)?.id() ?: return
+        val trackId = selectableVlcTrackIdForUiIndex(
+            mediaPlayer?.audio()?.trackDescriptions()?.map { it.id() } ?: emptyList(),
+            index,
+        ) ?: return
         mediaPlayer?.audio()?.setTrack(trackId)
+        onSnapshot(snapshot())
     }
 
     override fun selectSubtitleTrack(index: Int) {
@@ -495,6 +499,11 @@ internal class DesktopVlcPlayerController(
         return currentVolume()
     }
 }
+
+internal fun selectableVlcTrackIdForUiIndex(trackIds: List<Int>, uiIndex: Int): Int? =
+    trackIds
+        .filter { it >= 0 }
+        .getOrNull(uiIndex)
 
 internal object DesktopVlcPlayerBridge {
     @Volatile

@@ -117,4 +117,25 @@ class StreamDisplayMetadataTest {
         assertEquals("The Movie", stream.title)
         assertEquals("9.6 GB • EN • S:42 • P:7", stream.description)
     }
+
+    @Test
+    fun `stream labels repair common windows mojibake without touching valid emoji`() {
+        val broken = StreamItem(
+            name = "ðŸ”¥ Cached 4K",
+            description = "ðŸŽ¬ WEB-DL",
+            addonName = "Comet",
+            addonId = "addon:comet",
+        )
+        val valid = StreamItem(
+            name = "🔥 Cached 4K",
+            description = "🎬 WEB-DL",
+            addonName = "Comet",
+            addonId = "addon:comet",
+        )
+
+        assertEquals("🔥 Cached 4K", broken.streamLabel)
+        assertEquals("🎬 WEB-DL", broken.streamSubtitle)
+        assertEquals("🔥 Cached 4K", valid.streamLabel)
+        assertEquals("🎬 WEB-DL", valid.streamSubtitle)
+    }
 }

@@ -108,6 +108,7 @@ import com.nuvio.app.core.ui.NuvioFloatingPrompt
 import com.nuvio.app.core.ui.TraktListPickerDialog
 import com.nuvio.app.core.ui.NuvioTheme
 import com.nuvio.app.core.ui.LocalNuvioBottomNavigationOverlayPadding
+import com.nuvio.app.core.ui.LocalNuvioDesktopUiScale
 import com.nuvio.app.core.ui.NativeNavigationTab
 import com.nuvio.app.core.ui.NativeTabBridge
 import com.nuvio.app.core.ui.NuvioDesktopTvMetrics
@@ -115,6 +116,8 @@ import com.nuvio.app.core.ui.isLiquidGlassNativeTabBarSupported
 import com.nuvio.app.core.ui.localizedContinueWatchingSubtitle
 import com.nuvio.app.core.ui.nuvioDesktopTvMetrics
 import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
+import com.nuvio.app.core.ui.nuvioDesktopUiScale
+import com.nuvio.app.core.ui.scaledByDesktop
 import com.nuvio.app.features.auth.AuthScreen
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.enabledAddons
@@ -1264,6 +1267,7 @@ private fun MainAppContent(
                             Box(modifier = Modifier.fillMaxSize()) {
                                 CompositionLocalProvider(
                                     LocalNuvioBottomNavigationOverlayPadding provides if (useNativeBottomTabs) 49.dp else 0.dp,
+                                    LocalNuvioDesktopUiScale provides if (useDesktopSidebar) desktopTvMetrics.uiScale else 1f,
                                 ) {
                                     val tabHost: @Composable (Modifier) -> Unit = { modifier ->
                                         AppTabHost(
@@ -2710,10 +2714,17 @@ private fun DesktopRootSidebar(
     expanded: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val panelShape = RoundedCornerShape(8.dp)
+    val desktopScale = nuvioDesktopUiScale
+    val desktopChromeScale = desktopScale.coerceAtMost(1.18f)
+    val panelShape = RoundedCornerShape(8.dp.scaledByDesktop(desktopChromeScale))
     Surface(
         modifier = modifier
-            .padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 8.dp)
+            .padding(
+                start = 12.dp.scaledByDesktop(desktopChromeScale),
+                top = 12.dp.scaledByDesktop(desktopChromeScale),
+                bottom = 12.dp.scaledByDesktop(desktopChromeScale),
+                end = 8.dp.scaledByDesktop(desktopChromeScale),
+            )
             .border(
                 width = 1.dp,
                 color = Color.White.copy(alpha = 0.10f),
@@ -2727,7 +2738,10 @@ private fun DesktopRootSidebar(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = if (expanded) 14.dp else 10.dp, vertical = 16.dp),
+                .padding(
+                    horizontal = (if (expanded) 14.dp else 10.dp).scaledByDesktop(desktopChromeScale),
+                    vertical = 16.dp.scaledByDesktop(desktopChromeScale),
+                ),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Image(
@@ -2740,14 +2754,14 @@ private fun DesktopRootSidebar(
                         if (expanded) {
                             Modifier
                                 .fillMaxWidth(0.78f)
-                                .height(38.dp)
+                                .height(38.dp.scaledByDesktop(desktopChromeScale))
                         } else {
-                            Modifier.size(44.dp)
+                            Modifier.size(44.dp.scaledByDesktop(desktopChromeScale))
                         },
                     ),
                 contentScale = ContentScale.Fit,
             )
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(18.dp.scaledByDesktop(desktopChromeScale)))
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2764,12 +2778,12 @@ private fun DesktopRootSidebar(
                         Icon(
                             imageVector = Icons.Filled.Home,
                             contentDescription = stringResource(Res.string.compose_nav_home),
-                            modifier = Modifier.size(22.dp),
+                            modifier = Modifier.size(22.dp.scaledByDesktop(desktopChromeScale)),
                             tint = tint,
                         )
                     },
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp.scaledByDesktop(desktopChromeScale)))
                 DesktopSidebarItem(
                     label = stringResource(Res.string.compose_nav_search),
                     selected = selectedTab == AppScreenTab.Search,
@@ -2779,12 +2793,12 @@ private fun DesktopRootSidebar(
                         Icon(
                             painter = painterResource(Res.drawable.sidebar_search),
                             contentDescription = stringResource(Res.string.compose_nav_search),
-                            modifier = Modifier.size(22.dp),
+                            modifier = Modifier.size(22.dp.scaledByDesktop(desktopChromeScale)),
                             tint = tint,
                         )
                     },
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp.scaledByDesktop(desktopChromeScale)))
                 DesktopSidebarItem(
                     label = stringResource(Res.string.compose_nav_library),
                     selected = selectedTab == AppScreenTab.Library,
@@ -2794,12 +2808,12 @@ private fun DesktopRootSidebar(
                         Icon(
                             painter = painterResource(Res.drawable.sidebar_library),
                             contentDescription = stringResource(Res.string.compose_nav_library),
-                            modifier = Modifier.size(22.dp),
+                            modifier = Modifier.size(22.dp.scaledByDesktop(desktopChromeScale)),
                             tint = tint,
                         )
                     },
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp.scaledByDesktop(desktopChromeScale)))
                 DesktopSidebarItem(
                     label = stringResource(Res.string.compose_settings_page_root),
                     selected = selectedTab == AppScreenTab.Settings,
@@ -2809,13 +2823,13 @@ private fun DesktopRootSidebar(
                         Icon(
                             imageVector = Icons.Rounded.Settings,
                             contentDescription = stringResource(Res.string.compose_settings_page_root),
-                            modifier = Modifier.size(22.dp),
+                            modifier = Modifier.size(22.dp.scaledByDesktop(desktopChromeScale)),
                             tint = tint,
                         )
                     },
                 )
             }
-            val navItemShape = RoundedCornerShape(14.dp)
+            val navItemShape = RoundedCornerShape(14.dp.scaledByDesktop(desktopChromeScale))
             ProfileSwitcherTab(
                 selected = false,
                 onClick = { onTabSelected(AppScreenTab.Settings) },
@@ -2824,7 +2838,7 @@ private fun DesktopRootSidebar(
                 openProfileMenuOnClick = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .height(56.dp.scaledByDesktop(desktopChromeScale))
                     .nuvioDesktopFocusEffect(
                         enabled = true,
                         shape = navItemShape,
@@ -2851,8 +2865,9 @@ private fun DesktopSidebarItem(
     icon: @Composable (Color) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val desktopScale = nuvioDesktopUiScale.coerceAtMost(1.18f)
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(14.dp.scaledByDesktop(desktopScale))
     val colorScheme = MaterialTheme.colorScheme
     val containerColor = when {
         selected -> colorScheme.primaryContainer.copy(alpha = 0.88f)
@@ -2873,7 +2888,7 @@ private fun DesktopSidebarItem(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(56.dp.scaledByDesktop(desktopScale))
             .clip(shape)
             .onFocusChanged { focused = it.isFocused || it.hasFocus }
             .clickable(onClick = onClick)
@@ -2892,22 +2907,22 @@ private fun DesktopSidebarItem(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 12.dp.scaledByDesktop(desktopScale)),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .size(32.dp.scaledByDesktop(desktopScale))
+                        .clip(RoundedCornerShape(10.dp.scaledByDesktop(desktopScale)))
                         .background(iconCircleColor),
                     contentAlignment = Alignment.Center,
                 ) {
                     icon(contentColor)
                 }
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(14.dp.scaledByDesktop(desktopScale)))
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium.scaledByDesktop(desktopScale),
                     color = contentColor,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
                     maxLines = 1,
@@ -2919,13 +2934,13 @@ private fun DesktopSidebarItem(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(10.dp),
+                    .padding(10.dp.scaledByDesktop(desktopScale)),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .size(34.dp.scaledByDesktop(desktopScale))
+                        .clip(RoundedCornerShape(10.dp.scaledByDesktop(desktopScale)))
                         .background(iconCircleColor),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -2942,9 +2957,10 @@ private fun DesktopSidebarProfileTrigger(
     expanded: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val desktopScale = nuvioDesktopUiScale.coerceAtMost(1.18f)
     val profileState by ProfileRepository.state.collectAsStateWithLifecycle()
     val avatars by AvatarRepository.avatars.collectAsStateWithLifecycle()
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(14.dp.scaledByDesktop(desktopScale))
     val colorScheme = MaterialTheme.colorScheme
     val contentColor = if (selected) {
         colorScheme.onPrimaryContainer
@@ -2959,7 +2975,7 @@ private fun DesktopSidebarProfileTrigger(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(56.dp.scaledByDesktop(desktopScale))
             .clip(shape),
         color = containerColor,
         contentColor = contentColor,
@@ -2970,19 +2986,19 @@ private fun DesktopSidebarProfileTrigger(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 12.dp.scaledByDesktop(desktopScale)),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ActiveProfileMiniAvatar(
                     profile = profileState.activeProfile,
                     avatars = avatars,
                     selected = selected,
-                    size = 34,
+                    size = (34 * desktopScale).toInt(),
                 )
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(14.dp.scaledByDesktop(desktopScale)))
                 Text(
                     text = profileLabel,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium.scaledByDesktop(desktopScale),
                     color = contentColor,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
                     maxLines = 1,
@@ -2994,14 +3010,14 @@ private fun DesktopSidebarProfileTrigger(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(10.dp),
+                    .padding(10.dp.scaledByDesktop(desktopScale)),
                 contentAlignment = Alignment.Center,
             ) {
                 ActiveProfileMiniAvatar(
                     profile = profileState.activeProfile,
                     avatars = avatars,
                     selected = selected,
-                    size = 34,
+                    size = (34 * desktopScale).toInt(),
                 )
             }
         }

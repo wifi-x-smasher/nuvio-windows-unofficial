@@ -251,10 +251,10 @@ fun SearchScreen(
             ) {
                 NuvioScreenHeader(
                     title = headerTitle,
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = homeSectionPadding),
                 )
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(6.dp))
-                androidx.compose.foundation.layout.Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                androidx.compose.foundation.layout.Box(modifier = Modifier.padding(horizontal = homeSectionPadding)) {
                     NuvioInputField(
                         value = query,
                         onValueChange = { query = it },
@@ -377,7 +377,10 @@ fun SearchScreen(
 
 private fun discoverColumnCountForWidth(screenWidth: Dp): Int =
     when {
-        screenWidth >= 1400.dp -> 7
+        screenWidth >= 3200.dp -> 8
+        screenWidth >= 2600.dp -> 7
+        screenWidth >= 2100.dp -> 6
+        screenWidth >= 1400.dp -> 6
         screenWidth >= 1200.dp -> 6
         screenWidth >= 1000.dp -> 5
         screenWidth >= 840.dp -> 4

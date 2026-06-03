@@ -679,6 +679,7 @@ internal fun ProviderFilterRow(
     selectedFilter: String?,
     onFilterSelected: (String?) -> Unit,
     modifier: Modifier = Modifier,
+    desktopScale: Float = 1f,
 ) {
     val addonGroups = groups.filter { it.streams.isNotEmpty() || it.isLoading }
     if (addonGroups.isEmpty()) return
@@ -695,12 +696,14 @@ internal fun ProviderFilterRow(
             label = stringResource(Res.string.collections_tab_all),
             isSelected = selectedFilter == null,
             onClick = { onFilterSelected(null) },
+            desktopScale = desktopScale,
         )
         addonGroups.forEach { group ->
             FilterChip(
                 label = group.addonName,
                 isSelected = selectedFilter == group.addonId,
                 onClick = { onFilterSelected(group.addonId) },
+                desktopScale = desktopScale,
             )
         }
     }
@@ -711,6 +714,7 @@ private fun FilterChip(
     label: String,
     isSelected: Boolean,
     onClick: () -> Unit,
+    desktopScale: Float = 1f,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -750,12 +754,12 @@ private fun FilterChip(
                 indication = null,
                 onClick = onClick,
             )
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 14.dp * desktopScale, vertical = 8.dp * desktopScale),
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium.copy(
-                fontSize = 14.sp,
+                fontSize = (14f * desktopScale).sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                 letterSpacing = 0.1.sp,
             ),
@@ -779,6 +783,7 @@ internal fun StreamList(
     resumePositionMs: Long?,
     resumeProgressFraction: Float?,
     modifier: Modifier = Modifier,
+    desktopScale: Float = 1f,
 ) {
     val filteredGroups = uiState.filteredGroups
     val hasGroups = filteredGroups.isNotEmpty()
@@ -788,8 +793,8 @@ internal fun StreamList(
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(
-            horizontal = if (isDesktop) 8.dp else 12.dp,
-            vertical = if (isDesktop) 8.dp else 12.dp,
+            horizontal = if (isDesktop) 8.dp * desktopScale else 12.dp,
+            vertical = if (isDesktop) 8.dp * desktopScale else 12.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
@@ -818,6 +823,7 @@ internal fun StreamList(
                         onStreamLongPress = onStreamLongPress,
                         resumePositionMs = resumePositionMs,
                         resumeProgressFraction = resumeProgressFraction,
+                        desktopScale = desktopScale,
                     )
                 }
                 if (anyLoading) {
@@ -843,6 +849,7 @@ private fun LazyListScope.streamSection(
     onStreamLongPress: (StreamItem) -> Unit,
     resumePositionMs: Long?,
     resumeProgressFraction: Float?,
+    desktopScale: Float = 1f,
 ) {
     if (group.streams.isEmpty() && !group.isLoading) return
 
@@ -851,15 +858,16 @@ private fun LazyListScope.streamSection(
             StreamSectionHeader(
                 addonName = group.addonName,
                 isLoading = group.isLoading,
+                desktopScale = desktopScale,
             )
         }
     }
 
     val streamsBySource = group.streams.groupBy { stream ->
-        stream.sourceName?.takeIf { it.isNotBlank() } ?: stream.addonName
+        stream.sourceName?.takeIf { it.isNotBlank() }?.repairMojibake() ?: stream.addonName.repairMojibake()
     }
     val sourceNames = group.streams
-        .map { stream -> stream.sourceName?.takeIf { it.isNotBlank() } ?: stream.addonName }
+        .map { stream -> stream.sourceName?.takeIf { it.isNotBlank() }?.repairMojibake() ?: stream.addonName.repairMojibake() }
         .distinct()
     val showSourceHeaders = sourceNames.size > 1
 
@@ -867,7 +875,7 @@ private fun LazyListScope.streamSection(
         val sourceStreams = streamsBySource[sourceName].orEmpty()
         if (showSourceHeaders) {
             item(key = "source_${sectionKey}_$sourceIndex") {
-                StreamSourceHeader(sourceName = sourceName)
+                StreamSourceHeader(sourceName = sourceName, desktopScale = desktopScale)
             }
         }
 
@@ -886,6 +894,7 @@ private fun LazyListScope.streamSection(
                 stream = stream,
                 enabled = stream.isSelectableForPlayback(debridEnabled),
                 appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
+                desktopScale = desktopScale,
                 onClick = {
                     if (stream.isSelectableForPlayback(debridEnabled)) {
                         onStreamSelected(stream, resumePositionMs, resumeProgressFraction)
@@ -897,7 +906,7 @@ private fun LazyListScope.streamSection(
                     }
                 },
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(10.dp * desktopScale))
         }
     }
 }
@@ -931,18 +940,19 @@ private fun StreamSectionHeader(
     addonName: String,
     isLoading: Boolean,
     modifier: Modifier = Modifier,
+    desktopScale: Float = 1f,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp * desktopScale, vertical = 8.dp * desktopScale),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
             text = addonName,
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 14.sp,
+                fontSize = (14f * desktopScale).sp,
                 fontWeight = FontWeight.Bold,
             ),
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.9f),
@@ -950,14 +960,14 @@ private fun StreamSectionHeader(
         AnimatedVisibility(visible = isLoading, enter = fadeIn(), exit = fadeOut()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.5.dp,
+                    modifier = Modifier.size(12.dp * desktopScale),
+                    strokeWidth = 1.5.dp * desktopScale,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(6.dp * desktopScale))
                 Text(
                     text = stringResource(Res.string.streams_fetching),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = (12f * desktopScale).sp),
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
@@ -969,12 +979,13 @@ private fun StreamSectionHeader(
 private fun StreamSourceHeader(
     sourceName: String,
     modifier: Modifier = Modifier,
+    desktopScale: Float = 1f,
 ) {
     Text(
         text = sourceName,
-        modifier = modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier = modifier.padding(horizontal = 12.dp * desktopScale, vertical = 6.dp * desktopScale),
         style = MaterialTheme.typography.labelLarge.copy(
-            fontSize = 12.sp,
+            fontSize = (12f * desktopScale).sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.2.sp,
         ),
@@ -991,6 +1002,7 @@ private fun StreamCard(
     stream: StreamItem,
     enabled: Boolean,
     appendInstantServiceToDefaultName: Boolean,
+    desktopScale: Float = 1f,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -1004,7 +1016,7 @@ private fun StreamCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = if (isDesktop) 82.dp else 68.dp)
+            .heightIn(min = if (isDesktop) 82.dp * desktopScale else 68.dp)
             .shadow(
                 elevation = if (isDesktop) 4.dp else 2.dp,
                 shape = cardShape,
@@ -1018,23 +1030,24 @@ private fun StreamCard(
                 onClick = onClick,
                 onLongClick = onLongClick,
             )
-            .padding(if (isDesktop) 16.dp else 14.dp),
+            .padding(if (isDesktop) 16.dp * desktopScale else 14.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             StreamNameWithInstantService(
                 stream = stream,
                 appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
+                desktopScale = desktopScale,
             )
 
             val subtitle = stream.streamDisplayDescription()
             if (!subtitle.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(2.dp * desktopScale))
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = if (isDesktop) 13.sp else 12.sp,
-                        lineHeight = if (isDesktop) 19.sp else 18.sp,
+                        fontSize = if (isDesktop) (13f * desktopScale).sp else 12.sp,
+                        lineHeight = if (isDesktop) (19f * desktopScale).sp else 18.sp,
                     ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = if (isDesktop) 6 else Int.MAX_VALUE,
@@ -1044,7 +1057,7 @@ private fun StreamCard(
 
             val badgeImages = stream.badges.filter { it.imageURL.isNotBlank() }
             if (badgeImages.isNotEmpty() || stream.streamSizeBytes() != null) {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(6.dp * desktopScale))
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     verticalAlignment = Alignment.CenterVertically,
@@ -1064,11 +1077,12 @@ private fun StreamCard(
 private fun StreamNameWithInstantService(
     stream: StreamItem,
     appendInstantServiceToDefaultName: Boolean,
+    desktopScale: Float = 1f,
 ) {
     val nameStyle = MaterialTheme.typography.bodyMedium.copy(
-        fontSize = if (isDesktop) 16.sp else 14.sp,
+        fontSize = if (isDesktop) (16f * desktopScale).sp else 14.sp,
         fontWeight = FontWeight.Bold,
-        lineHeight = if (isDesktop) 22.sp else 20.sp,
+        lineHeight = if (isDesktop) (22f * desktopScale).sp else 20.sp,
         letterSpacing = 0.sp,
     )
     val instantLabel = if (appendInstantServiceToDefaultName) {

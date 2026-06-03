@@ -5,6 +5,9 @@ import androidx.compose.ui.unit.dp
 
 internal fun homeSectionHorizontalPaddingForWidth(maxWidthDp: Float): Dp =
     when {
+        maxWidthDp >= 3200f -> 64.dp
+        maxWidthDp >= 2600f -> 56.dp
+        maxWidthDp >= 2100f -> 44.dp
         maxWidthDp >= 1440f -> 32.dp
         maxWidthDp >= 1024f -> 28.dp
         maxWidthDp >= 768f -> 24.dp

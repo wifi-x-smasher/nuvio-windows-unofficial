@@ -15,8 +15,9 @@ class NuvioDesktopTvLayoutTest {
         assertTrue(metrics.useExpandedSidebar)
         assertEquals(260.dp, metrics.sidebarWidth)
         assertEquals(1040.dp, metrics.contentMaxWidth)
-        assertEquals(600.dp, metrics.streamPanelWidth)
+        assertEquals(680.dp, metrics.streamPanelWidth)
         assertEquals(560.dp, metrics.dialogMaxWidth)
+        assertEquals(1f, metrics.uiScale)
     }
 
     @Test
@@ -44,9 +45,12 @@ class NuvioDesktopTvLayoutTest {
     fun streamPanelNeverConsumesTooMuchHorizontalSpace() {
         val medium = nuvioDesktopTvMetrics(900.dp)
         val wide = nuvioDesktopTvMetrics(2560.dp)
+        val ultraWide = nuvioDesktopTvMetrics(3840.dp)
 
         assertTrue(medium.streamPanelWidth <= 520.dp)
         assertTrue(medium.streamPanelWidth <= 900.dp * 0.62f)
-        assertTrue(wide.streamPanelWidth <= 640.dp)
+        assertEquals(820.dp, wide.streamPanelWidth)
+        assertEquals(1120.dp, ultraWide.streamPanelWidth)
+        assertEquals(1.42f, ultraWide.uiScale)
     }
 }

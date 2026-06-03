@@ -161,6 +161,7 @@ internal fun TabletStreamsLayout(
         }
 
         Row(modifier = Modifier.fillMaxSize()) {
+            val desktopScale = if (isDesktopLayout) desktopMetrics.uiScale else 1f
             val artworkPanelModifier = if (isDesktopLayout) {
                 Modifier
                     .weight(1f)
@@ -247,10 +248,15 @@ internal fun TabletStreamsLayout(
                 Box(
                     modifier = panelModifier,
                 ) {
+                    val contentPadding = if (isDesktopLayout) {
+                        20.dp * desktopScale
+                    } else {
+                        16.dp
+                    }
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(if (isDesktopLayout) 20.dp else 16.dp),
+                            .padding(contentPadding),
                     ) {
                         if ((resumePositionMs != null && resumePositionMs > 0L) || (resumeProgressFraction != null && resumeProgressFraction > 0f)) {
                             ResumeBanner(
@@ -264,6 +270,7 @@ internal fun TabletStreamsLayout(
                             groups = uiState.groups,
                             selectedFilter = uiState.selectedFilter,
                             onFilterSelected = { addonId -> StreamsRepository.selectFilter(addonId) },
+                            desktopScale = desktopScale,
                         )
 
                         ActiveScrapersStatusBlock(
@@ -279,6 +286,7 @@ internal fun TabletStreamsLayout(
                             onStreamLongPress = onStreamLongPress,
                             resumePositionMs = resumePositionMs,
                             resumeProgressFraction = resumeProgressFraction,
+                            desktopScale = desktopScale,
                             modifier = Modifier.weight(1f),
                         )
                     }

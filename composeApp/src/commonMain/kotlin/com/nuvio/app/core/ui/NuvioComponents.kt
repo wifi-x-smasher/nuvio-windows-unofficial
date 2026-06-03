@@ -84,6 +84,7 @@ fun NuvioScreen(
     listState: LazyListState = rememberLazyListState(),
     content: LazyListScope.() -> Unit,
 ) {
+    val desktopScale = nuvioDesktopUiScale
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     LazyColumn(
         state = listState,
@@ -91,12 +92,12 @@ fun NuvioScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(
-            start = horizontalPadding,
-            top = topPadding ?: 10.dp + statusBarTop + nuvioPlatformExtraTopPadding,
-            end = horizontalPadding,
-            bottom = nuvioSafeBottomPadding(18.dp),
+            start = horizontalPadding.scaledByDesktop(desktopScale),
+            top = topPadding ?: 10.dp.scaledByDesktop(desktopScale) + statusBarTop + nuvioPlatformExtraTopPadding,
+            end = horizontalPadding.scaledByDesktop(desktopScale),
+            bottom = nuvioSafeBottomPadding(18.dp.scaledByDesktop(desktopScale)),
         ),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp.scaledByDesktop(desktopScale)),
         content = content,
     )
 }
@@ -119,9 +120,10 @@ fun NuvioSurfaceCard(
     maxWidth: Dp? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val desktopScale = nuvioDesktopUiScale
     val surfaceModifier = if (maxWidth != null) {
         modifier
-            .widthIn(max = maxWidth)
+            .widthIn(max = maxWidth.scaledByDesktop(desktopScale))
             .fillMaxWidth()
     } else {
         modifier.fillMaxWidth()
@@ -129,12 +131,15 @@ fun NuvioSurfaceCard(
     Surface(
         modifier = surfaceModifier,
         color = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(24.dp.scaledByDesktop(desktopScale)),
         tonalElevation = tonalElevation.dp,
         shadowElevation = 0.dp,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp),
+            modifier = Modifier.padding(
+                horizontal = 18.dp.scaledByDesktop(desktopScale),
+                vertical = 18.dp.scaledByDesktop(desktopScale),
+            ),
             content = content,
         )
     }
@@ -149,6 +154,7 @@ fun NuvioScreenHeader(
     onBack: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
+    val desktopScale = nuvioDesktopUiScale
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val resolvedTopPadding = topPadding ?: if (includeStatusBarPadding) statusBarTop else 0.dp
     Row(
@@ -156,20 +162,24 @@ fun NuvioScreenHeader(
             .fillMaxWidth()
             .nuvioBlockPointerPassthrough()
             .background(MaterialTheme.colorScheme.background)
-            .padding(top = resolvedTopPadding, bottom = 4.dp),
+            .padding(top = resolvedTopPadding, bottom = 4.dp.scaledByDesktop(desktopScale)),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Bottom,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp.scaledByDesktop(desktopScale)),
         ) {
             if (onBack != null) {
-                IconButton(onClick = onBack) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(48.dp.scaledByDesktop(desktopScale)),
+                ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = stringResource(Res.string.action_back),
                         tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(24.dp.scaledByDesktop(desktopScale)),
                     )
                 }
             }
@@ -180,13 +190,13 @@ fun NuvioScreenHeader(
             ) { currentTitle ->
                 Text(
                     text = currentTitle,
-                    style = MaterialTheme.typography.displayLarge,
+                    style = MaterialTheme.typography.displayLarge.scaledByDesktop(desktopScale),
                     color = MaterialTheme.colorScheme.onBackground,
                 )
             }
         }
         Row(
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp.scaledByDesktop(desktopScale)),
             verticalAlignment = Alignment.CenterVertically,
             content = actions,
         )
@@ -198,10 +208,11 @@ fun NuvioSectionLabel(
     text: String,
     modifier: Modifier = Modifier,
 ) {
+    val desktopScale = nuvioDesktopUiScale
     Text(
         text = text,
         modifier = modifier,
-        style = MaterialTheme.typography.labelMedium,
+        style = MaterialTheme.typography.labelMedium.scaledByDesktop(desktopScale),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontWeight = FontWeight.Bold,
     )
@@ -213,6 +224,7 @@ fun NuvioActionLabel(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
 ) {
+    val desktopScale = nuvioDesktopUiScale
     Text(
         text = text,
         modifier = modifier.then(
@@ -222,7 +234,7 @@ fun NuvioActionLabel(
                 Modifier
             }
         ),
-        style = MaterialTheme.typography.titleMedium,
+        style = MaterialTheme.typography.titleMedium.scaledByDesktop(desktopScale),
         color = MaterialTheme.colorScheme.primary,
     )
 }
@@ -286,13 +298,14 @@ fun NuvioPrimaryButton(
     enabled: Boolean = true,
     onClick: () -> Unit = {},
 ) {
+    val desktopScale = nuvioDesktopUiScale
     Button(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp),
+            .height(52.dp.scaledByDesktop(desktopScale)),
         enabled = enabled,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(16.dp.scaledByDesktop(desktopScale)),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -307,7 +320,7 @@ fun NuvioPrimaryButton(
         ) { animatedText ->
             Text(
                 text = animatedText,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleMedium.scaledByDesktop(desktopScale),
                 textAlign = TextAlign.Center,
             )
         }
@@ -322,20 +335,23 @@ fun NuvioInputField(
     modifier: Modifier = Modifier,
     trailingContent: (@Composable (() -> Unit))? = null,
 ) {
+    val desktopScale = nuvioDesktopUiScale
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
         singleLine = true,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(14.dp.scaledByDesktop(desktopScale)),
         placeholder = {
             Text(
                 text = placeholder,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyLarge.scaledByDesktop(desktopScale),
             )
         },
-        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        textStyle = MaterialTheme.typography.bodyLarge
+            .scaledByDesktop(desktopScale)
+            .copy(color = MaterialTheme.colorScheme.onSurface),
         trailingIcon = trailingContent,
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MaterialTheme.colorScheme.outline,
@@ -352,17 +368,21 @@ fun NuvioInfoBadge(
     text: String,
     modifier: Modifier = Modifier,
 ) {
+    val desktopScale = nuvioDesktopUiScale
     Box(
         modifier = modifier
             .background(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(999.dp),
             )
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(
+                horizontal = 10.dp.scaledByDesktop(desktopScale),
+                vertical = 6.dp.scaledByDesktop(desktopScale),
+            ),
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelMedium.scaledByDesktop(desktopScale),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -376,19 +396,20 @@ fun NuvioInlineMetadata(
     value: String,
     modifier: Modifier = Modifier,
 ) {
+    val desktopScale = nuvioDesktopUiScale
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.scaledByDesktop(desktopScale),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(modifier = Modifier.width(6.dp))
+        Spacer(modifier = Modifier.width(6.dp.scaledByDesktop(desktopScale)))
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.scaledByDesktop(desktopScale),
             color = MaterialTheme.colorScheme.onSurface,
         )
     }

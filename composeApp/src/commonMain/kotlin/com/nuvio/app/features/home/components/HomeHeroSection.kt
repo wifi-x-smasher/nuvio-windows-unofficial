@@ -49,7 +49,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
+import com.nuvio.app.core.ui.nuvioDesktopUiScale
 import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
+import com.nuvio.app.core.ui.scaledByDesktop
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.isDesktop
 import kotlinx.coroutines.CoroutineScope
@@ -110,6 +112,7 @@ fun HomeHeroSection(
             maxWidthDp = maxWidth.value,
             viewportHeightDp = viewportHeight?.value,
             mobileBelowSectionHeightHintDp = mobileBelowSectionHeightHint?.value,
+            desktopScale = nuvioDesktopUiScale,
         )
         val heroWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
         val heroHeightPx = with(LocalDensity.current) { layout.heroHeight.toPx() }
@@ -249,7 +252,7 @@ fun HomeHeroSection(
                     }
 
                     if (!layout.isTablet) {
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(14.dp.scaledByDesktop(nuvioDesktopUiScale)))
                         Surface(
                             modifier = Modifier
                                 .clickable(enabled = onItemClick != null) {
@@ -257,21 +260,24 @@ fun HomeHeroSection(
                                 },
                             color = MaterialTheme.colorScheme.onBackground,
                             contentColor = MaterialTheme.colorScheme.background,
-                            shape = RoundedCornerShape(40.dp),
+                            shape = RoundedCornerShape(40.dp.scaledByDesktop(nuvioDesktopUiScale)),
                         ) {
                             Text(
                                 text = stringResource(Res.string.home_view_details),
-                                modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
-                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(
+                                    horizontal = 28.dp.scaledByDesktop(nuvioDesktopUiScale),
+                                    vertical = 12.dp.scaledByDesktop(nuvioDesktopUiScale),
+                                ),
+                                style = MaterialTheme.typography.titleMedium.scaledByDesktop(nuvioDesktopUiScale),
                                 fontWeight = FontWeight.Bold,
                             )
                         }
                     }
 
                     if (items.size > 1) {
-                        Spacer(modifier = Modifier.height(if (layout.isTablet) 14.dp else 12.dp))
+                        Spacer(modifier = Modifier.height((if (layout.isTablet) 14.dp else 12.dp).scaledByDesktop(nuvioDesktopUiScale)))
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp.scaledByDesktop(nuvioDesktopUiScale)),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             items.forEachIndexed { index, _ ->
@@ -288,8 +294,8 @@ fun HomeHeroSection(
                                         .graphicsLayer {
                                             alpha = 0.35f + (0.57f * activeFraction)
                                         }
-                                        .width(8.dp + (24.dp * activeFraction))
-                                        .height(8.dp),
+                                        .width(8.dp.scaledByDesktop(nuvioDesktopUiScale) + (24.dp.scaledByDesktop(nuvioDesktopUiScale) * activeFraction))
+                                        .height(8.dp.scaledByDesktop(nuvioDesktopUiScale)),
                                 )
                             }
                         }
@@ -333,6 +339,7 @@ fun HomeHeroReservedSpace(
             maxWidthDp = maxWidth.value,
             viewportHeightDp = viewportHeight?.value,
             mobileBelowSectionHeightHintDp = mobileBelowSectionHeightHint?.value,
+            desktopScale = nuvioDesktopUiScale,
         )
 
         Spacer(
@@ -349,6 +356,7 @@ private fun HeroContentBlock(
     layout: HomeHeroLayout,
     onItemClick: ((MetaPreview) -> Unit)?,
 ) {
+    val desktopScale = nuvioDesktopUiScale
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (layout.isTablet) Alignment.Start else Alignment.CenterHorizontally,
@@ -387,13 +395,13 @@ private fun HeroContentBlock(
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp.scaledByDesktop(desktopScale)))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = if (layout.isTablet) {
-                Arrangement.spacedBy(8.dp, Alignment.Start)
+                Arrangement.spacedBy(8.dp.scaledByDesktop(desktopScale), Alignment.Start)
             } else {
-                Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                Arrangement.spacedBy(8.dp.scaledByDesktop(desktopScale), Alignment.CenterHorizontally)
             },
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -409,8 +417,8 @@ private fun HeroContentBlock(
         }
 
         if (isDesktop && layout.isTablet && onItemClick != null) {
-            Spacer(modifier = Modifier.height(18.dp))
-            val detailsShape = RoundedCornerShape(40.dp)
+            Spacer(modifier = Modifier.height(18.dp.scaledByDesktop(desktopScale)))
+            val detailsShape = RoundedCornerShape(40.dp.scaledByDesktop(desktopScale))
             Surface(
                 modifier = Modifier
                     .clickable { onItemClick(item) }
@@ -426,8 +434,11 @@ private fun HeroContentBlock(
             ) {
                 Text(
                     text = stringResource(Res.string.home_view_details),
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
-                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(
+                        horizontal = 28.dp.scaledByDesktop(desktopScale),
+                        vertical = 12.dp.scaledByDesktop(desktopScale),
+                    ),
+                    style = MaterialTheme.typography.titleMedium.scaledByDesktop(desktopScale),
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -437,9 +448,10 @@ private fun HeroContentBlock(
 
 @Composable
 private fun HeroMetaText(text: String) {
+    val desktopScale = nuvioDesktopUiScale
     Text(
         text = text,
-        style = MaterialTheme.typography.labelLarge,
+        style = MaterialTheme.typography.labelLarge.scaledByDesktop(desktopScale),
         color = MaterialTheme.colorScheme.onBackground,
         fontWeight = FontWeight.SemiBold,
         maxLines = 1,
@@ -451,8 +463,39 @@ internal fun homeHeroLayout(
     maxWidthDp: Float,
     viewportHeightDp: Float? = null,
     mobileBelowSectionHeightHintDp: Float? = null,
+    desktopScale: Float = 1f,
 ): HomeHeroLayout =
     when {
+        maxWidthDp >= 3200f -> HomeHeroLayout(
+            isTablet = true,
+            heroHeight = (maxWidthDp * 0.23f).dp.coerceIn(620.dp, 760.dp),
+            contentMaxWidth = 760.dp.scaledByDesktop(desktopScale.coerceAtMost(1.18f)),
+            contentWidthFraction = 0.48f,
+            contentHorizontalPadding = 72.dp.scaledByDesktop(desktopScale.coerceAtMost(1.18f)),
+            contentVerticalPadding = 28.dp.scaledByDesktop(desktopScale.coerceAtMost(1.12f)),
+            bottomFadeHeight = 260.dp.scaledByDesktop(desktopScale.coerceAtMost(1.12f)),
+            logoWidthFraction = 0.52f,
+        )
+        maxWidthDp >= 2600f -> HomeHeroLayout(
+            isTablet = true,
+            heroHeight = (maxWidthDp * 0.24f).dp.coerceIn(560.dp, 660.dp),
+            contentMaxWidth = 720.dp.scaledByDesktop(desktopScale.coerceAtMost(1.14f)),
+            contentWidthFraction = 0.5f,
+            contentHorizontalPadding = 64.dp.scaledByDesktop(desktopScale.coerceAtMost(1.14f)),
+            contentVerticalPadding = 26.dp.scaledByDesktop(desktopScale.coerceAtMost(1.1f)),
+            bottomFadeHeight = 240.dp.scaledByDesktop(desktopScale.coerceAtMost(1.1f)),
+            logoWidthFraction = 0.54f,
+        )
+        maxWidthDp >= 2100f -> HomeHeroLayout(
+            isTablet = true,
+            heroHeight = (maxWidthDp * 0.25f).dp.coerceIn(500.dp, 580.dp),
+            contentMaxWidth = 680.dp.scaledByDesktop(desktopScale.coerceAtMost(1.1f)),
+            contentWidthFraction = 0.52f,
+            contentHorizontalPadding = 60.dp.scaledByDesktop(desktopScale.coerceAtMost(1.1f)),
+            contentVerticalPadding = 24.dp.scaledByDesktop(desktopScale.coerceAtMost(1.08f)),
+            bottomFadeHeight = 220.dp.scaledByDesktop(desktopScale.coerceAtMost(1.08f)),
+            logoWidthFraction = 0.56f,
+        )
         maxWidthDp >= 1200f -> HomeHeroLayout(
             isTablet = true,
             heroHeight = (maxWidthDp * 0.42f).dp.coerceIn(360.dp, 440.dp),

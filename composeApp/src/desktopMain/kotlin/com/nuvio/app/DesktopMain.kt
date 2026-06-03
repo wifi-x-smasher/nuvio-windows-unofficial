@@ -1,16 +1,31 @@
 package com.nuvio.app
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.ui.zIndex
 import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.core.deeplink.DesktopDeepLinkBridge
 import java.awt.Color
@@ -100,8 +115,42 @@ fun main(args: Array<String>) {
                 }
             }
 
-            App()
+            Box(modifier = Modifier.fillMaxSize()) {
+                App()
+
+                if (windowState.placement != WindowPlacement.Fullscreen) {
+                    DesktopFullscreenButton(
+                        onClick = currentToggleFullscreen,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 14.dp, end = 18.dp)
+                            .zIndex(20f),
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun DesktopFullscreenButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.42f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Fullscreen,
+            contentDescription = "Enter fullscreen (F11)",
+            tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f),
+            modifier = Modifier.size(24.dp),
+        )
     }
 }
 
