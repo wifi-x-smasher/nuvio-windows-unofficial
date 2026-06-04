@@ -9,18 +9,18 @@ import kotlin.test.assertTrue
 
 class DesktopWindowModeTest {
     @Test
-    fun togglesIntoFullscreenFromNormalPlacements() {
+    fun togglesIntoDesktopFullscreenFromNormalPlacements() {
         assertEquals(
             WindowPlacement.Fullscreen,
             nextDesktopWindowPlacement(
-                current = WindowPlacement.Floating,
+                isFullscreen = true,
                 previousNonFullscreen = WindowPlacement.Floating,
             ),
         )
         assertEquals(
             WindowPlacement.Fullscreen,
             nextDesktopWindowPlacement(
-                current = WindowPlacement.Maximized,
+                isFullscreen = true,
                 previousNonFullscreen = WindowPlacement.Floating,
             ),
         )
@@ -31,7 +31,7 @@ class DesktopWindowModeTest {
         assertEquals(
             WindowPlacement.Maximized,
             nextDesktopWindowPlacement(
-                current = WindowPlacement.Fullscreen,
+                isFullscreen = false,
                 previousNonFullscreen = WindowPlacement.Maximized,
             ),
         )

@@ -54,8 +54,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.i18n.localizedByteUnit
+import com.nuvio.app.core.ui.NuvioHorizontalScrollControls
 import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.features.debrid.DebridSettingsRepository
+import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsUiState
 import com.nuvio.app.features.streams.isSelectableForPlayback
@@ -79,6 +81,10 @@ fun PlayerSourcesPanel(
     val debridSettings by remember {
         DebridSettingsRepository.ensureLoaded()
         DebridSettingsRepository.uiState
+    }.collectAsStateWithLifecycle()
+    val streamBadgeSettings by remember {
+        StreamBadgeSettingsRepository.ensureLoaded()
+        StreamBadgeSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
 
     AnimatedVisibility(
@@ -168,29 +174,33 @@ fun PlayerSourcesPanel(
                             streamsUiState.groups.map { it.addonName }.distinct()
                         }
                         if (addonNames.size > 1) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState())
-                                    .padding(horizontal = 20.dp)
-                                    .padding(bottom = 12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                AddonFilterChip(
-                                    label = stringResource(Res.string.collections_tab_all),
-                                    isSelected = streamsUiState.selectedFilter == null,
-                                    onClick = { onFilterSelected(null) },
-                                )
-                                addonNames.forEach { addon ->
-                                    val group = streamsUiState.groups.firstOrNull { it.addonName == addon }
+                            val filterScrollState = rememberScrollState()
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(filterScrollState)
+                                        .padding(horizontal = 20.dp)
+                                        .padding(end = 56.dp, bottom = 12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
                                     AddonFilterChip(
-                                        label = addon,
-                                        isSelected = streamsUiState.selectedFilter == group?.addonId,
-                                        isLoading = group?.isLoading == true,
-                                        hasError = group?.error != null,
-                                        onClick = { onFilterSelected(group?.addonId) },
+                                        label = stringResource(Res.string.collections_tab_all),
+                                        isSelected = streamsUiState.selectedFilter == null,
+                                        onClick = { onFilterSelected(null) },
                                     )
+                                    addonNames.forEach { addon ->
+                                        val group = streamsUiState.groups.firstOrNull { it.addonName == addon }
+                                        AddonFilterChip(
+                                            label = addon,
+                                            isSelected = streamsUiState.selectedFilter == group?.addonId,
+                                            isLoading = group?.isLoading == true,
+                                            hasError = group?.error != null,
+                                            onClick = { onFilterSelected(group?.addonId) },
+                                        )
+                                    }
                                 }
+                                NuvioHorizontalScrollControls(scrollState = filterScrollState)
                             }
                         }
 
@@ -246,6 +256,7 @@ fun PlayerSourcesPanel(
                                             stream = stream,
                                             isCurrent = isCurrent,
                                             enabled = stream.isSelectableForPlayback(debridSettings.canResolvePlayableLinks),
+                                            showFileSizeBadges = streamBadgeSettings.showFileSizeBadges,
                                             onClick = { onStreamSelected(stream) },
                                         )
                                     }
@@ -264,6 +275,7 @@ private fun SourceStreamRow(
     stream: StreamItem,
     isCurrent: Boolean,
     enabled: Boolean,
+    showFileSizeBadges: Boolean,
     onClick: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -352,7 +364,9 @@ private fun SourceStreamRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                PlayerStreamFileSizeBadge(stream = stream)
+                if (showFileSizeBadges) {
+                    PlayerStreamFileSizeBadge(stream = stream)
+                }
                 Text(
                     text = stream.addonName,
                     color = colorScheme.onSurfaceVariant,

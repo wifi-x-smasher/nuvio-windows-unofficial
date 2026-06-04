@@ -41,6 +41,10 @@ val bundledMpvDownloadUrl = "https://github.com/mpv-player/mpv/releases/download
 val bundledMpvZipSha256 = "4e197f729f5071c6772f35fffd96e0f36e3e8a044bd9479b136bb09b7c6a80ff"
 val bundledMpvZip = layout.buildDirectory.file("downloads/mpv/mpv-v$bundledMpvVersion-x86_64-pc-windows-msvc.zip")
 val bundledMpvResourcesDir = layout.buildDirectory.dir("desktop-runtime-resources/mpv")
+val bundledMpvNativeResourcesDir = layout.buildDirectory.dir("desktop-runtime-resources/native")
+val mediampRootDir = rootProject.file("vendor/mediamp-nuvio")
+val mediampNativeBuildDir = mediampRootDir.resolve("mediamp-mpv/build-ci")
+val mediampNativeReleaseDir = mediampNativeBuildDir.resolve("Release")
 
 fun sha256Hex(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -442,6 +446,8 @@ kotlin {
                 implementation(libs.slf4j.simple)
                 implementation(libs.quickjs.kt)
                 implementation(libs.ksoup)
+                implementation("org.openani.mediamp:mediamp-api:0.1.0-dev-1")
+                implementation("org.openani.mediamp:mediamp-mpv:0.1.0-dev-1")
             }
         }
         commonTest.dependencies {
@@ -529,7 +535,7 @@ val prepareDesktopRuntimeResources by tasks.registering(Copy::class) {
 
 val prepareMpvRuntimeResources by tasks.registering(Copy::class) {
     group = "distribution"
-    description = "Prepares bundled MPV runtime for the Windows internal player."
+    description = "Prepares bundled standalone MPV runtime for the Windows external/fallback path."
     dependsOn(downloadMpvRuntime)
     from(zipTree(bundledMpvZip)) {
         include("mpv.exe", "vulkan-1.dll")
@@ -537,16 +543,68 @@ val prepareMpvRuntimeResources by tasks.registering(Copy::class) {
     into(bundledMpvResourcesDir)
 }
 
+val buildMediampMpvRuntime by tasks.registering(Exec::class) {
+    group = "distribution"
+    description = "Builds the MediaMP/libmpv JNI runtime used by the Windows internal player."
+    inputs.dir(mediampRootDir.resolve("mediamp-mpv/src/cpp"))
+    inputs.file(mediampRootDir.resolve("mediamp-mpv/CMakeLists.txt"))
+    outputs.file(mediampNativeReleaseDir.resolve("mediampv.dll"))
+    onlyIf {
+        System.getProperty("os.name").contains("Windows", ignoreCase = true) &&
+            mediampRootDir.resolve("gradlew.bat").isFile
+    }
+    workingDir = mediampRootDir
+    val taskJavaHome = desktopJavaHomeOverride
+        ?: System.getenv("JAVA_HOME")
+        ?: System.getProperty("java.home")
+    val localAndroidSdk = System.getenv("ANDROID_HOME")
+        ?: System.getenv("ANDROID_SDK_ROOT")
+        ?: File(System.getProperty("user.home"), "AppData/Local/Android/Sdk").absolutePath
+    val portableCmakeBin = rootProject.file("../.tmp/tools/cmake-4.3.3-windows-x86_64/bin")
+        .takeIf { it.isDirectory }
+        ?.absolutePath
+    environment("JAVA_HOME", taskJavaHome)
+    environment("ANDROID_HOME", localAndroidSdk)
+    environment("ANDROID_SDK_ROOT", localAndroidSdk)
+    environment(
+        "PATH",
+        listOfNotNull(
+            File(taskJavaHome, "bin").absolutePath,
+            portableCmakeBin,
+            System.getenv("PATH"),
+        ).joinToString(File.pathSeparator),
+    )
+    commandLine(
+        "cmd.exe",
+        "/c",
+        "gradlew.bat",
+        ":mediamp-mpv:buildCMakeDesktop",
+        "--no-daemon",
+        "--no-configuration-cache",
+    )
+}
+
+val prepareMediampMpvRuntimeResources by tasks.registering(Copy::class) {
+    group = "distribution"
+    description = "Prepares bundled MediaMP/libmpv native runtime for the Windows internal player."
+    dependsOn(buildMediampMpvRuntime)
+    from(mediampNativeReleaseDir) {
+        include("*.dll", "*.exe", "*.com")
+    }
+    into(bundledMpvNativeResourcesDir)
+}
+
 val prepareAllDesktopRuntimeResources by tasks.registering {
     group = "distribution"
     description = "Prepares all bundled desktop player runtimes for native Windows packages."
-    dependsOn(prepareDesktopRuntimeResources, prepareMpvRuntimeResources)
+    dependsOn(prepareDesktopRuntimeResources, prepareMpvRuntimeResources, prepareMediampMpvRuntimeResources)
 }
 
 compose.desktop {
     application {
         mainClass = "com.nuvio.app.DesktopMainKt"
         desktopJavaHomeOverride?.let { javaHome = it }
+        jvmArgs("-Dskiko.renderApi=OPENGL")
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             appResourcesRootDir.set(layout.buildDirectory.dir("desktop-runtime-resources"))
@@ -582,6 +640,7 @@ tasks.matching { it.name == "packageMsi" }.configureEach {
     inputs.file(project.file("scripts/brand-windows-msi.ps1"))
     inputs.dir(bundledVlcResourcesDir)
     inputs.dir(bundledMpvResourcesDir)
+    inputs.dir(bundledMpvNativeResourcesDir)
     inputs.files(
         project.file("src/desktopMain/installer/WixUIDialogBmp.bmp"),
         project.file("src/desktopMain/installer/WixUIBannerBmp.bmp"),
@@ -622,12 +681,16 @@ tasks.matching { it.name == "prepareAppResources" }.configureEach {
     dependsOn(prepareAllDesktopRuntimeResources)
     (this as Sync).from(bundledVlcResourcesDir)
     (this as Sync).from(bundledMpvResourcesDir)
+    (this as Sync).from(bundledMpvNativeResourcesDir) {
+        into("native")
+    }
 }
 
 tasks.matching { it.name == "packageExe" || it.name == "createDistributable" }.configureEach {
     dependsOn(prepareAllDesktopRuntimeResources)
     inputs.dir(bundledVlcResourcesDir)
     inputs.dir(bundledMpvResourcesDir)
+    inputs.dir(bundledMpvNativeResourcesDir)
 }
 
 configurations.all {

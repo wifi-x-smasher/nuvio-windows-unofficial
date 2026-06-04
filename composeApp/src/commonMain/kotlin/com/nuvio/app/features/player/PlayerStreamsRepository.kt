@@ -2,6 +2,7 @@ package com.nuvio.app.features.player
 
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.build.AppFeaturePolicy
+import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.buildAddonResourceUrl
 import com.nuvio.app.features.addons.enabledAddons
@@ -23,10 +24,13 @@ import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamParser
 import com.nuvio.app.features.streams.StreamsUiState
+import com.nuvio.app.features.streams.epochMs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,12 +38,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 /**
  * Dedicated stream fetcher for use inside the player (sources & episodes panels).
  * Uses its own state so it doesn't interfere with the main [StreamsRepository].
  */
 object PlayerStreamsRepository {
+    private const val PLUGIN_SOURCE_SCRAPER_TIMEOUT_MS = 20_000L
+
     private val log = Logger.withTag("PlayerStreamsRepo")
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -339,18 +346,45 @@ object PlayerStreamsRepository {
 
             val pluginJobs = pluginScrapers.map { scraper ->
                 async {
-                    PluginRepository.executeScraper(
-                        scraper = scraper,
-                        tmdbId = pluginContentId(
-                            videoId = videoId,
-                            season = season,
-                            episode = episode,
-                        ),
-                        mediaType = type,
+                    val pluginId = pluginContentId(
+                        videoId = videoId,
                         season = season,
                         episode = episode,
-                    ).fold(
+                    )
+                    AppDiagnostics.breadcrumb(
+                        event = "player.sources.plugin.start",
+                        details = playerStreamRequestDetails(type, videoId, season, episode) +
+                            mapOf(
+                                "scraperName" to scraper.name,
+                                "scraperId" to scraper.id.safePlayerDiagnosticId(),
+                                "pluginContentId" to pluginId.safePlayerDiagnosticContentId(),
+                            ),
+                    )
+                    val startedAtMs = epochMs()
+                    val scraperResult = runCatchingUnlessCancelled {
+                        withTimeout(PLUGIN_SOURCE_SCRAPER_TIMEOUT_MS) {
+                            PluginRepository.executeScraper(
+                                scraper = scraper,
+                                tmdbId = pluginId,
+                                mediaType = type,
+                                season = season,
+                                episode = episode,
+                            ).getOrThrow()
+                        }
+                    }
+                    val elapsedMs = (epochMs() - startedAtMs).coerceAtLeast(0L)
+                    scraperResult.fold(
                         onSuccess = { results ->
+                            AppDiagnostics.breadcrumb(
+                                event = "player.sources.plugin.success",
+                                details = playerStreamRequestDetails(type, videoId, season, episode) +
+                                    mapOf(
+                                        "scraperName" to scraper.name,
+                                        "scraperId" to scraper.id.safePlayerDiagnosticId(),
+                                        "streamCount" to results.size.toString(),
+                                        "elapsedMs" to elapsedMs.toString(),
+                                    ),
+                            )
                             AddonStreamGroup(
                                 addonName = scraper.name,
                                 addonId = "plugin:${scraper.id}",
@@ -359,6 +393,16 @@ object PlayerStreamsRepository {
                             )
                         },
                         onFailure = { err ->
+                            AppDiagnostics.error(
+                                event = "player.sources.plugin.failure",
+                                throwable = err,
+                                details = playerStreamRequestDetails(type, videoId, season, episode) +
+                                    mapOf(
+                                        "scraperName" to scraper.name,
+                                        "scraperId" to scraper.id.safePlayerDiagnosticId(),
+                                        "elapsedMs" to elapsedMs.toString(),
+                                    ),
+                            )
                             log.w(err) { "Plugin scraper failed: ${scraper.name}" }
                             AddonStreamGroup(
                                 addonName = scraper.name,
@@ -423,6 +467,40 @@ private data class PlayerInstalledStreamAddonTarget(
 
 private fun com.nuvio.app.features.addons.ManagedAddon.streamAddonInstanceId(manifestId: String): String =
     "addon:$manifestId:$manifestUrl"
+
+private suspend fun <T> runCatchingUnlessCancelled(block: suspend () -> T): Result<T> =
+    try {
+        Result.success(block())
+    } catch (error: TimeoutCancellationException) {
+        Result.failure(error)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Throwable) {
+        Result.failure(error)
+    }
+
+private fun playerStreamRequestDetails(
+    type: String,
+    videoId: String,
+    season: Int?,
+    episode: Int?,
+): Map<String, String?> =
+    mapOf(
+        "type" to type,
+        "videoId" to videoId.take(96),
+        "season" to season?.toString(),
+        "episode" to episode?.toString(),
+    )
+
+private fun String.safePlayerDiagnosticId(): String =
+    trim()
+        .takeLast(80)
+        .ifBlank { "unknown" }
+
+private fun String.safePlayerDiagnosticContentId(): String =
+    trim()
+        .take(64)
+        .ifBlank { "unknown" }
 
 private fun PluginRuntimeResult.toStreamItem(scraper: PluginScraper): StreamItem {
     val baseTitle = title.takeIf { it.isNotBlank() }

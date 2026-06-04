@@ -3,6 +3,7 @@ package com.nuvio.app.features.addons
 import com.nuvio.app.core.desktop.DesktopPreferences
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.header
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
@@ -45,6 +46,11 @@ internal actual object AddonStorage {
 private val addonHttpClient = HttpClient(CIO) {
     followRedirects = true
     expectSuccess = false
+    install(HttpTimeout) {
+        requestTimeoutMillis = 30_000
+        connectTimeoutMillis = 15_000
+        socketTimeoutMillis = 30_000
+    }
 }
 
 actual suspend fun httpGetText(url: String): String =

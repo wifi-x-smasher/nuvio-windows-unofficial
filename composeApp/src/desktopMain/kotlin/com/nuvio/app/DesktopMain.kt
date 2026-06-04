@@ -26,6 +26,9 @@ import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.zIndex
+import com.nuvio.app.desktop.DesktopPlayerRegistry
+import com.nuvio.app.desktop.DesktopRuntimeLog
+import com.nuvio.app.desktop.DesktopWindowChrome
 import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.core.deeplink.DesktopDeepLinkBridge
 import java.awt.Color
@@ -44,7 +47,10 @@ fun main(args: Array<String>) {
     System.setProperty("compose.interop.blending", "true")
     System.setProperty("compose.swing.render.on.graphics", "true")
     System.setProperty("compose.layers.type", "COMPONENT")
+    System.setProperty("skiko.renderApi", "OPENGL")
     AppDiagnostics.install()
+    DesktopRuntimeLog.initialize()
+    DesktopRuntimeLog.installGlobalExceptionHandlers()
     if (DesktopDeepLinkBridge.forwardToPrimaryInstanceIfNeeded(args)) {
         return
     }
@@ -53,13 +59,15 @@ fun main(args: Array<String>) {
     application {
         val windowState = rememberWindowState(width = 1280.dp, height = 720.dp)
         var previousNonFullscreenPlacement by remember { mutableStateOf(WindowPlacement.Floating) }
+        var desktopFullscreen by remember { mutableStateOf(false) }
 
         val toggleFullscreen = {
-            if (windowState.placement != WindowPlacement.Fullscreen) {
+            if (!desktopFullscreen) {
                 previousNonFullscreenPlacement = windowState.placement
             }
+            desktopFullscreen = !desktopFullscreen
             windowState.placement = nextDesktopWindowPlacement(
-                current = windowState.placement,
+                isFullscreen = desktopFullscreen,
                 previousNonFullscreen = previousNonFullscreenPlacement,
             )
         }
@@ -85,19 +93,23 @@ fun main(args: Array<String>) {
         }
 
         Window(
-            onCloseRequest = ::exitApplication,
+            onCloseRequest = {
+                DesktopPlayerRegistry.closeAll("windowClose")
+                DesktopPlayerRegistry.awaitAllCloses(timeoutMs = 1500)
+                exitApplication()
+            },
             title = "Nuvio",
             state = windowState,
             icon = painterResource(Res.drawable.app_logo_mark),
         ) {
             val awtWindow = window
             DisposableEffect(awtWindow) {
-                awtWindow.background = Color.BLACK
-                (awtWindow as? JFrame)?.contentPane?.background = Color.BLACK
+                DesktopWindowChrome.applyNuvioChrome(awtWindow)
 
                 val recoveryListener = object : WindowAdapter() {
                     private fun recover(event: WindowEvent) {
                         if (isDesktopWindowRecoveryEvent(event.id)) {
+                            DesktopWindowChrome.applyNuvioChrome(awtWindow)
                             repaintDesktopWindow(awtWindow)
                         }
                     }
@@ -118,7 +130,7 @@ fun main(args: Array<String>) {
             Box(modifier = Modifier.fillMaxSize()) {
                 App()
 
-                if (windowState.placement != WindowPlacement.Fullscreen) {
+                if (!desktopFullscreen) {
                     DesktopFullscreenButton(
                         onClick = currentToggleFullscreen,
                         modifier = Modifier
@@ -155,13 +167,13 @@ private fun DesktopFullscreenButton(
 }
 
 internal fun nextDesktopWindowPlacement(
-    current: WindowPlacement,
+    isFullscreen: Boolean,
     previousNonFullscreen: WindowPlacement,
 ): WindowPlacement =
-    if (current == WindowPlacement.Fullscreen) {
-        previousNonFullscreen.takeUnless { it == WindowPlacement.Fullscreen } ?: WindowPlacement.Floating
-    } else {
+    if (isFullscreen) {
         WindowPlacement.Fullscreen
+    } else {
+        previousNonFullscreen.takeUnless { it == WindowPlacement.Fullscreen } ?: WindowPlacement.Floating
     }
 
 internal fun isDesktopFullscreenShortcut(keyCode: Int, isAltDown: Boolean): Boolean =

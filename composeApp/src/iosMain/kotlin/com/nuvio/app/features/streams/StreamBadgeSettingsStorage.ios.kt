@@ -10,13 +10,27 @@ import platform.Foundation.NSUserDefaults
 
 actual object StreamBadgeSettingsStorage {
     private const val streamBadgeRulesKey = "stream_badge_rules"
+    private const val showFileSizeBadgesKey = "show_file_size_badges"
     private const val legacyDebridStreamBadgeRulesKey = "debrid_stream_badge_rules"
-    private val syncKeys = listOf(streamBadgeRulesKey)
+    private val syncKeys = listOf(streamBadgeRulesKey, showFileSizeBadgesKey)
 
     actual fun loadStreamBadgeRules(): String? = loadString(streamBadgeRulesKey)
 
     actual fun saveStreamBadgeRules(rules: String) {
         saveString(streamBadgeRulesKey, rules)
+    }
+
+    actual fun loadShowFileSizeBadges(): Boolean? {
+        val key = ProfileScopedKey.of(showFileSizeBadgesKey)
+        return if (NSUserDefaults.standardUserDefaults.objectForKey(key) != null) {
+            NSUserDefaults.standardUserDefaults.boolForKey(key)
+        } else {
+            null
+        }
+    }
+
+    actual fun saveShowFileSizeBadges(enabled: Boolean) {
+        NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(showFileSizeBadgesKey))
     }
 
     actual fun loadLegacyDebridStreamBadgeRules(): String? =
@@ -35,6 +49,7 @@ actual object StreamBadgeSettingsStorage {
 
     actual fun exportToSyncPayload(): JsonObject = buildJsonObject {
         loadStreamBadgeRules()?.let { put(streamBadgeRulesKey, encodeSyncString(it)) }
+        loadShowFileSizeBadges()?.let { put(showFileSizeBadgesKey, it) }
     }
 
     actual fun replaceFromSyncPayload(payload: JsonObject) {
@@ -43,5 +58,8 @@ actual object StreamBadgeSettingsStorage {
         }
 
         payload.decodeSyncString(streamBadgeRulesKey)?.let(::saveStreamBadgeRules)
+        payload[showFileSizeBadgesKey]?.let { element ->
+            runCatching { element.toString().toBooleanStrictOrNull() }.getOrNull()?.let(::saveShowFileSizeBadges)
+        }
     }
 }

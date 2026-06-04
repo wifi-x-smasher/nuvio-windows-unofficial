@@ -63,6 +63,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.nuvio.app.core.ui.NuvioHorizontalScrollControls
+import com.nuvio.app.core.ui.NuvioLazyRowScrollControls
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.streams.StreamItem
@@ -289,29 +291,32 @@ private fun EpisodesListSubView(
 
         // Season tabs
         if (availableSeasons.size > 1) {
-            LazyRow(
-                state = seasonListState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(availableSeasons, key = { season -> season }) { season ->
-                    val label = if (season == 0) {
-                        stringResource(Res.string.episodes_specials)
-                    } else {
-                        stringResource(Res.string.episodes_season, season)
+            Box(modifier = Modifier.fillMaxWidth()) {
+                LazyRow(
+                    state = seasonListState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(end = 56.dp, bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(availableSeasons, key = { season -> season }) { season ->
+                        val label = if (season == 0) {
+                            stringResource(Res.string.episodes_specials)
+                        } else {
+                            stringResource(Res.string.episodes_season, season)
+                        }
+                        AddonFilterChip(
+                            label = label,
+                            isSelected = selectedSeason == season,
+                            onClick = {
+                                selectedSeason = season
+                                onSeasonSelected(season)
+                            },
+                        )
                     }
-                    AddonFilterChip(
-                        label = label,
-                        isSelected = selectedSeason == season,
-                        onClick = {
-                            selectedSeason = season
-                            onSeasonSelected(season)
-                        },
-                    )
                 }
+                NuvioLazyRowScrollControls(listState = seasonListState)
             }
         }
 
@@ -560,29 +565,33 @@ private fun EpisodeStreamsSubView(
             streamsUiState.groups.map { it.addonName }.distinct()
         }
         if (addonNames.size > 1) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp)
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                AddonFilterChip(
-                    label = stringResource(Res.string.collections_tab_all),
-                    isSelected = streamsUiState.selectedFilter == null,
-                    onClick = { onFilterSelected(null) },
-                )
-                addonNames.forEach { addon ->
-                    val group = streamsUiState.groups.firstOrNull { it.addonName == addon }
+            val filterScrollState = rememberScrollState()
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(filterScrollState)
+                        .padding(horizontal = 20.dp)
+                        .padding(end = 56.dp, bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     AddonFilterChip(
-                        label = addon,
-                        isSelected = streamsUiState.selectedFilter == group?.addonId,
-                        isLoading = group?.isLoading == true,
-                        hasError = group?.error != null,
-                        onClick = { onFilterSelected(group?.addonId) },
+                        label = stringResource(Res.string.collections_tab_all),
+                        isSelected = streamsUiState.selectedFilter == null,
+                        onClick = { onFilterSelected(null) },
                     )
+                    addonNames.forEach { addon ->
+                        val group = streamsUiState.groups.firstOrNull { it.addonName == addon }
+                        AddonFilterChip(
+                            label = addon,
+                            isSelected = streamsUiState.selectedFilter == group?.addonId,
+                            isLoading = group?.isLoading == true,
+                            hasError = group?.error != null,
+                            onClick = { onFilterSelected(group?.addonId) },
+                        )
+                    }
                 }
+                NuvioHorizontalScrollControls(scrollState = filterScrollState)
             }
         }
 

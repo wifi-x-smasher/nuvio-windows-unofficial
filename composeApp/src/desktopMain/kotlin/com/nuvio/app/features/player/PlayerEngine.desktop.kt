@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import com.nuvio.app.core.diagnostics.AppDiagnostics
+import com.nuvio.app.features.player.desktop.DesktopPlayerSurfaceHost
 import java.net.URI
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicLong
@@ -56,6 +57,70 @@ actual fun PlatformPlayerSurface(
     streamTitle: String,
     providerName: String,
     onBack: (() -> Unit)?,
+    onControllerReady: (PlayerEngineController) -> Unit,
+    onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
+    onError: (String?) -> Unit,
+) {
+    var useMpvBackend by remember(sourceUrl, sourceAudioUrl, sourceHeaders, sourceResponseHeaders) {
+        mutableStateOf(DesktopMpvRuntime.isNativeRuntimeAvailable())
+    }
+
+    if (useMpvBackend) {
+        DesktopPlayerSurfaceHost(
+            sourceUrl = sourceUrl,
+            sourceAudioUrl = sourceAudioUrl,
+            sourceHeaders = sanitizePlaybackHeaders(sourceHeaders),
+            sourceResponseHeaders = sanitizePlaybackResponseHeaders(sourceResponseHeaders),
+            modifier = modifier,
+            playWhenReady = playWhenReady,
+            resizeMode = resizeMode,
+            onControllerReady = onControllerReady,
+            onSnapshot = onSnapshot,
+            onError = { message ->
+                if (message?.contains("runtime", ignoreCase = true) == true) {
+                    AppDiagnostics.breadcrumb(
+                        event = "player.mpv.runtime_fallback_to_vlc",
+                        details = mapOf("reason" to message.take(160)),
+                    )
+                    useMpvBackend = false
+                } else {
+                    onError(message)
+                }
+            },
+        )
+    } else {
+        DesktopVlcCallbackPlayerSurface(
+            sourceUrl = sourceUrl,
+            sourceAudioUrl = sourceAudioUrl,
+            sourceHeaders = sourceHeaders,
+            sourceResponseHeaders = sourceResponseHeaders,
+            useYoutubeChunkedPlayback = useYoutubeChunkedPlayback,
+            modifier = modifier,
+            playWhenReady = playWhenReady,
+            resizeMode = resizeMode,
+            title = title,
+            streamTitle = streamTitle,
+            providerName = providerName,
+            onControllerReady = onControllerReady,
+            onSnapshot = onSnapshot,
+            onError = onError,
+        )
+    }
+}
+
+@Composable
+private fun DesktopVlcCallbackPlayerSurface(
+    sourceUrl: String,
+    sourceAudioUrl: String?,
+    sourceHeaders: Map<String, String>,
+    sourceResponseHeaders: Map<String, String>,
+    useYoutubeChunkedPlayback: Boolean,
+    modifier: Modifier,
+    playWhenReady: Boolean,
+    resizeMode: PlayerResizeMode,
+    title: String,
+    streamTitle: String,
+    providerName: String,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
@@ -484,7 +549,7 @@ internal class DesktopVlcPlayerController(
         return desktopBrightness
     }
 
-    fun currentVolume(): PlayerAudioLevel {
+    override fun currentVolume(): PlayerAudioLevel {
         val volume = mediaPlayer?.audio()?.volume()?.coerceIn(0, 100) ?: 100
         return PlayerAudioLevel(
             fraction = volume / 100f,
@@ -492,7 +557,7 @@ internal class DesktopVlcPlayerController(
         )
     }
 
-    fun setVolume(level: Float): PlayerAudioLevel {
+    override fun setVolume(level: Float): PlayerAudioLevel {
         val volume = (level.coerceIn(0f, 1f) * 100f).toInt().coerceIn(0, 100)
         mediaPlayer?.audio()?.setMute(volume == 0)
         mediaPlayer?.audio()?.setVolume(volume)

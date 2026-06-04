@@ -86,7 +86,26 @@ fun CatalogScreen(
         WatchedRepository.ensureLoaded()
         WatchedRepository.uiState
     }.collectAsStateWithLifecycle()
-    val gridState = rememberLazyGridState()
+    val initialScrollPosition = remember(
+        manifestUrl,
+        type,
+        catalogId,
+        genre,
+        supportsPagination,
+        homeCatalogSettingsUiState.hideUnreleasedContent,
+    ) {
+        CatalogRepository.scrollPosition(
+            manifestUrl = manifestUrl,
+            type = type,
+            catalogId = catalogId,
+            genre = genre,
+            supportsPagination = supportsPagination,
+        )
+    }
+    val gridState = rememberLazyGridState(
+        initialFirstVisibleItemIndex = initialScrollPosition.firstVisibleItemIndex,
+        initialFirstVisibleItemScrollOffset = initialScrollPosition.firstVisibleItemScrollOffset,
+    )
     var headerHeightPx by remember { mutableIntStateOf(0) }
     var observedOfflineState by remember { mutableStateOf(false) }
 
@@ -97,8 +116,44 @@ fun CatalogScreen(
             catalogId = catalogId,
             genre = genre,
             supportsPagination = supportsPagination,
-            force = true,
         )
+    }
+
+    LaunchedEffect(initialScrollPosition) {
+        if (initialScrollPosition.firstVisibleItemIndex > 0 || initialScrollPosition.firstVisibleItemScrollOffset > 0) {
+            gridState.scrollToItem(
+                index = initialScrollPosition.firstVisibleItemIndex,
+                scrollOffset = initialScrollPosition.firstVisibleItemScrollOffset,
+            )
+        }
+    }
+
+    LaunchedEffect(
+        gridState,
+        manifestUrl,
+        type,
+        catalogId,
+        genre,
+        supportsPagination,
+        homeCatalogSettingsUiState.hideUnreleasedContent,
+    ) {
+        snapshotFlow {
+            CatalogScrollPosition(
+                firstVisibleItemIndex = gridState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset,
+            )
+        }
+            .distinctUntilChanged()
+            .collect { position ->
+                CatalogRepository.saveScrollPosition(
+                    manifestUrl = manifestUrl,
+                    type = type,
+                    catalogId = catalogId,
+                    genre = genre,
+                    supportsPagination = supportsPagination,
+                    position = position,
+                )
+            }
     }
 
     LaunchedEffect(gridState, uiState.canLoadMore, uiState.isLoading) {

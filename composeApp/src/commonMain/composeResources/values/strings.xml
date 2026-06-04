@@ -13,6 +13,7 @@
     <string name="action_ok">OK</string>
     <string name="action_open">Open</string>
     <string name="action_play">Play</string>
+    <string name="action_preview">Preview</string>
     <string name="action_previous">Previous</string>
     <string name="action_remove">Remove</string>
     <string name="action_reorder">Reorder</string>
@@ -22,6 +23,8 @@
     <string name="action_save">Save</string>
     <string name="action_saving">Saving…</string>
     <string name="action_validate">Validate</string>
+    <string name="status_active">Active</string>
+    <string name="status_inactive">Inactive</string>
     <string name="addon_installing">Installing</string>
     <string name="addon_title">Addons</string>
     <string name="addons_badge_active">Active</string>
@@ -434,8 +437,18 @@
     <string name="settings_diagnostics_section_app">APP</string>
     <string name="settings_diagnostics_section_logs">LOGS</string>
     <string name="settings_stream_badges_section">STREAM BADGES</string>
+    <string name="settings_stream_size_badges_title">Size badges</string>
+    <string name="settings_stream_size_badges_description">Show file size badges in stream results and player source panels.</string>
     <string name="settings_stream_badge_urls_title">Badge URLs</string>
     <string name="settings_stream_badge_urls_description">Import up to %1$d stream badge JSON URLs. Each URL can be updated or deleted separately.</string>
+    <string name="settings_stream_badge_rules_summary">%1$d/%2$d URLs, %3$d active badges</string>
+    <string name="settings_stream_badge_urls_empty">No badge URLs imported.</string>
+    <string name="settings_stream_badge_json_url">Badge JSON URL</string>
+    <string name="settings_stream_badge_urls_imported_count">%1$d/%2$d URLs imported</string>
+    <string name="settings_stream_badge_import_status">%1$s, %2$d enabled badges, %3$d groups</string>
+    <string name="settings_stream_badge_preview_title">Badge preview</string>
+    <string name="settings_stream_badge_preview_count">%1$d badges from this URL</string>
+    <string name="settings_stream_badge_preview_empty">No badge images in this URL.</string>
     <string name="settings_stream_badge_urls_search_description">Manage imported stream badge JSON URLs.</string>
     <string name="settings_licenses_attributions_section_app">APP LICENSE</string>
     <string name="settings_licenses_attributions_section_data">DATA &amp; SERVICES</string>

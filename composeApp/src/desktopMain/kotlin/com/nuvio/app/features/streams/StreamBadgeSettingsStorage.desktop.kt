@@ -10,17 +10,25 @@ import kotlinx.serialization.json.put
 
 internal actual object StreamBadgeSettingsStorage {
     private const val streamBadgeRulesKey = "stream_badge_rules"
+    private const val showFileSizeBadgesKey = "show_file_size_badges"
     private const val legacyDebridStreamBadgeRulesKey = "debrid_stream_badge_rules"
 
     private val preferences = DesktopPreferences("nuvio_stream_badge_settings")
     private val legacyDebridPreferences = DesktopPreferences("nuvio_debrid_settings")
-    private val syncKeys = listOf(streamBadgeRulesKey)
+    private val syncKeys = listOf(streamBadgeRulesKey, showFileSizeBadgesKey)
 
     actual fun loadStreamBadgeRules(): String? =
         preferences.getString(ProfileScopedKey.of(streamBadgeRulesKey))
 
     actual fun saveStreamBadgeRules(rules: String) {
         preferences.putString(ProfileScopedKey.of(streamBadgeRulesKey), rules)
+    }
+
+    actual fun loadShowFileSizeBadges(): Boolean? =
+        preferences.getBoolean(ProfileScopedKey.of(showFileSizeBadgesKey))
+
+    actual fun saveShowFileSizeBadges(enabled: Boolean) {
+        preferences.putBoolean(ProfileScopedKey.of(showFileSizeBadgesKey), enabled)
     }
 
     actual fun loadLegacyDebridStreamBadgeRules(): String? =
@@ -32,11 +40,15 @@ internal actual object StreamBadgeSettingsStorage {
 
     actual fun exportToSyncPayload(): JsonObject = buildJsonObject {
         loadStreamBadgeRules()?.let { put(streamBadgeRulesKey, encodeSyncString(it)) }
+        loadShowFileSizeBadges()?.let { put(showFileSizeBadgesKey, it) }
     }
 
     actual fun replaceFromSyncPayload(payload: JsonObject) {
         syncKeys.forEach { preferences.remove(ProfileScopedKey.of(it)) }
         payload.decodeSyncString(streamBadgeRulesKey)?.let(::saveStreamBadgeRules)
+        payload[showFileSizeBadgesKey]?.let { element ->
+            runCatching { element.toString().toBooleanStrictOrNull() }.getOrNull()?.let(::saveShowFileSizeBadges)
+        }
         clearLegacyDebridStreamBadgeRules()
     }
 }

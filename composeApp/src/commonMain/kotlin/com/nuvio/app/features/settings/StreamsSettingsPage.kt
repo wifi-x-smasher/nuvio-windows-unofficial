@@ -56,20 +56,16 @@ import com.nuvio.app.features.streams.StreamBadgeImportResult
 import com.nuvio.app.features.streams.StreamBadgeRules
 import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
 import kotlinx.coroutines.launch
-import nuvio.composeapp.generated.resources.Res
-import nuvio.composeapp.generated.resources.action_cancel
-import nuvio.composeapp.generated.resources.action_delete
-import nuvio.composeapp.generated.resources.settings_stream_badge_urls_description
-import nuvio.composeapp.generated.resources.settings_stream_badge_urls_title
-import nuvio.composeapp.generated.resources.settings_stream_badges_section
+import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
 internal fun LazyListScope.streamsSettingsContent(isTablet: Boolean) {
     item {
-        val currentRules by remember {
+        val currentSettings by remember {
             StreamBadgeSettingsRepository.ensureLoaded()
             StreamBadgeSettingsRepository.uiState
         }.collectAsStateWithLifecycle()
+        val currentRules = currentSettings.rules
         var showBadgeImportDialog by rememberSaveable { mutableStateOf(false) }
 
         SettingsSection(
@@ -77,6 +73,14 @@ internal fun LazyListScope.streamsSettingsContent(isTablet: Boolean) {
             isTablet = isTablet,
         ) {
             SettingsGroup(isTablet = isTablet) {
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.settings_stream_size_badges_title),
+                    description = stringResource(Res.string.settings_stream_size_badges_description),
+                    checked = currentSettings.showFileSizeBadges,
+                    isTablet = isTablet,
+                    onCheckedChange = StreamBadgeSettingsRepository::setShowFileSizeBadges,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
                 SettingsNavigationRow(
                     title = stringResource(Res.string.settings_stream_badge_urls_title),
                     description = badgeRulesPreview(currentRules),
@@ -96,12 +100,18 @@ internal fun LazyListScope.streamsSettingsContent(isTablet: Boolean) {
     }
 }
 
+@Composable
 private fun badgeRulesPreview(rules: StreamBadgeRules): String {
     val normalizedRules = rules.normalized()
     return if (normalizedRules.hasImport) {
-        "${normalizedRules.imports.size}/$STREAM_BADGE_IMPORT_LIMIT URLs, ${normalizedRules.enabledFilterCount} active badges"
+        stringResource(
+            Res.string.settings_stream_badge_rules_summary,
+            normalizedRules.imports.size,
+            STREAM_BADGE_IMPORT_LIMIT,
+            normalizedRules.enabledFilterCount,
+        )
     } else {
-        "No badge URLs imported."
+        stringResource(Res.string.settings_stream_badge_urls_empty)
     }
 }
 
@@ -132,7 +142,7 @@ private fun BadgeUrlManagerDialog(
                     errorMessage = null
                 },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Badge JSON URL") },
+                label = { Text(stringResource(Res.string.settings_stream_badge_json_url)) },
                 singleLine = false,
                 minLines = 2,
                 maxLines = 4,
@@ -151,7 +161,11 @@ private fun BadgeUrlManagerDialog(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "${imports.size}/$STREAM_BADGE_IMPORT_LIMIT URLs imported",
+                    text = stringResource(
+                        Res.string.settings_stream_badge_urls_imported_count,
+                        imports.size,
+                        STREAM_BADGE_IMPORT_LIMIT,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
@@ -182,7 +196,7 @@ private fun BadgeUrlManagerDialog(
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                     } else {
-                        Text(text = "Import", maxLines = 1)
+                        Text(text = stringResource(Res.string.action_import), maxLines = 1)
                     }
                 }
             }
@@ -196,7 +210,7 @@ private fun BadgeUrlManagerDialog(
 
             if (imports.isEmpty()) {
                 Text(
-                    text = "No badge URLs imported.",
+                    text = stringResource(Res.string.settings_stream_badge_urls_empty),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -303,9 +317,18 @@ private fun BadgeUrlRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             ) {
-                val status = if (import.isActive) "Active" else "Inactive"
+                val status = if (import.isActive) {
+                    stringResource(Res.string.status_active)
+                } else {
+                    stringResource(Res.string.status_inactive)
+                }
                 Text(
-                    text = "$status, ${import.enabledFilterCount} enabled badges, ${import.groups.size} groups",
+                    text = stringResource(
+                        Res.string.settings_stream_badge_import_status,
+                        status,
+                        import.enabledFilterCount,
+                        import.groups.size,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
@@ -320,7 +343,7 @@ private fun BadgeUrlRow(
                         modifier = Modifier.size(16.dp),
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "Preview", maxLines = 1)
+                    Text(text = stringResource(Res.string.action_preview), maxLines = 1)
                 }
                 IconButton(
                     enabled = enabled,
@@ -346,7 +369,7 @@ private fun BadgePreviewDialog(
     val badgeCount = sections.sumOf { it.filters.size }
 
     BasicAlertDialog(onDismissRequest = onDismiss) {
-        SettingsDialogSurface(title = "Badge preview") {
+        SettingsDialogSurface(title = stringResource(Res.string.settings_stream_badge_preview_title)) {
             Text(
                 text = import.sourceUrl,
                 style = MaterialTheme.typography.bodyMedium,
@@ -355,13 +378,13 @@ private fun BadgePreviewDialog(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "$badgeCount badges from this URL",
+                text = stringResource(Res.string.settings_stream_badge_preview_count, badgeCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (sections.isEmpty()) {
                 Text(
-                    text = "No badge images in this URL.",
+                    text = stringResource(Res.string.settings_stream_badge_preview_empty),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -411,7 +434,7 @@ private fun BadgePreviewDialog(
                 horizontalArrangement = Arrangement.End,
             ) {
                 TextButton(onClick = onDismiss) {
-                    Text(text = "Close", maxLines = 1)
+                    Text(text = stringResource(Res.string.action_close), maxLines = 1)
                 }
             }
         }

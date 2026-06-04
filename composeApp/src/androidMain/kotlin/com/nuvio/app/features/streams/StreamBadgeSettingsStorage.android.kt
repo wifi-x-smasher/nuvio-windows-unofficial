@@ -13,9 +13,10 @@ actual object StreamBadgeSettingsStorage {
     private const val preferencesName = "nuvio_stream_badge_settings"
     private const val legacyDebridPreferencesName = "nuvio_debrid_settings"
     private const val streamBadgeRulesKey = "stream_badge_rules"
+    private const val showFileSizeBadgesKey = "show_file_size_badges"
     private const val legacyDebridStreamBadgeRulesKey = "debrid_stream_badge_rules"
 
-    private val syncKeys = listOf(streamBadgeRulesKey)
+    private val syncKeys = listOf(streamBadgeRulesKey, showFileSizeBadgesKey)
 
     private var preferences: SharedPreferences? = null
     private var legacyDebridPreferences: SharedPreferences? = null
@@ -29,6 +30,22 @@ actual object StreamBadgeSettingsStorage {
 
     actual fun saveStreamBadgeRules(rules: String) {
         saveString(streamBadgeRulesKey, rules)
+    }
+
+    actual fun loadShowFileSizeBadges(): Boolean? =
+        preferences?.let { sharedPreferences ->
+            if (sharedPreferences.contains(ProfileScopedKey.of(showFileSizeBadgesKey))) {
+                sharedPreferences.getBoolean(ProfileScopedKey.of(showFileSizeBadgesKey), true)
+            } else {
+                null
+            }
+        }
+
+    actual fun saveShowFileSizeBadges(enabled: Boolean) {
+        preferences
+            ?.edit()
+            ?.putBoolean(ProfileScopedKey.of(showFileSizeBadgesKey), enabled)
+            ?.apply()
     }
 
     actual fun loadLegacyDebridStreamBadgeRules(): String? =
@@ -53,6 +70,7 @@ actual object StreamBadgeSettingsStorage {
 
     actual fun exportToSyncPayload(): JsonObject = buildJsonObject {
         loadStreamBadgeRules()?.let { put(streamBadgeRulesKey, encodeSyncString(it)) }
+        loadShowFileSizeBadges()?.let { put(showFileSizeBadgesKey, it) }
     }
 
     actual fun replaceFromSyncPayload(payload: JsonObject) {
@@ -61,5 +79,8 @@ actual object StreamBadgeSettingsStorage {
         }?.apply()
 
         payload.decodeSyncString(streamBadgeRulesKey)?.let(::saveStreamBadgeRules)
+        payload[showFileSizeBadgesKey]?.let { element ->
+            runCatching { element.toString().toBooleanStrictOrNull() }.getOrNull()?.let(::saveShowFileSizeBadges)
+        }
     }
 }

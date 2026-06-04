@@ -1475,19 +1475,27 @@ fun PlayerScreen(
         }
 
         fun adjustVolumeBy(delta: Float): Boolean {
-            val controller = gestureController ?: return false
-            val current = controller.currentVolume() ?: return false
-            val updated = controller.setVolume(current.fraction + delta) ?: return false
+            val activeController = playerController
+            val current = activeController?.currentVolume()
+                ?: gestureController?.currentVolume()
+                ?: return false
+            val updated = activeController?.setVolume(current.fraction + delta)
+                ?: gestureController?.setVolume(current.fraction + delta)
+                ?: return false
             showVolumeFeedback(updated)
             controlsVisible = true
             return true
         }
 
         fun toggleMute(): Boolean {
-            val controller = gestureController ?: return false
-            val current = controller.currentVolume() ?: return false
+            val activeController = playerController
+            val current = activeController?.currentVolume()
+                ?: gestureController?.currentVolume()
+                ?: return false
             val targetVolume = if (current.isMuted || current.fraction <= 0.01f) 0.8f else 0f
-            val updated = controller.setVolume(targetVolume) ?: return false
+            val updated = activeController?.setVolume(targetVolume)
+                ?: gestureController?.setVolume(targetVolume)
+                ?: return false
             showVolumeFeedback(updated)
             controlsVisible = true
             return true

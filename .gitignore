@@ -2,6 +2,7 @@
 .kotlin
 .gradle
 **/build/
+**/build-ci/
 !composeApp/src/**/kotlin/com/nuvio/app/core/build/
 !composeApp/src/**/kotlin/com/nuvio/app/core/build/**
 xcuserdata

@@ -1,12 +1,14 @@
 package com.nuvio.app.features.player
 
 import com.nuvio.app.core.diagnostics.AppDiagnostics
+import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeBootstrap
+import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeLocator
 import java.nio.file.Path
 import kotlin.io.path.isRegularFile
 
 internal actual object InternalPlayerPlatform {
     actual fun isAvailable(): Boolean =
-        DesktopMpvRuntime.executablePath() != null
+        DesktopMpvRuntime.isNativeRuntimeAvailable() || DesktopMpvRuntime.executablePath() != null
 
     actual fun unavailableMessage(): String? =
         if (isAvailable()) {
@@ -26,6 +28,18 @@ internal object DesktopMpvRuntime {
             executablePath = currentExecutablePath(),
             exists = { it.isRegularFile() },
         )
+
+    fun isNativeRuntimeAvailable(): Boolean {
+        val runtime = MpvRuntimeLocator.resolve()
+        val bootstrap = MpvRuntimeBootstrap.apply(runtime)
+        if (!bootstrap.success) {
+            AppDiagnostics.breadcrumb(
+                event = "player.mpv.native_runtime_unavailable",
+                details = mapOf("diagnostics" to bootstrap.diagnostics.take(500)),
+            )
+        }
+        return bootstrap.success
+    }
 
     internal fun executablePath(
         env: Map<String, String>,

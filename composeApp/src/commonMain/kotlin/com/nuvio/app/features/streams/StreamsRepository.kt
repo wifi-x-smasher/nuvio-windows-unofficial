@@ -30,11 +30,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import kotlinx.coroutines.launch
 
 object StreamsRepository {
+    private const val PLUGIN_STREAM_SCRAPER_TIMEOUT_MS = 20_000L
+
     private val log = Logger.withTag("StreamsRepo")
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _uiState = MutableStateFlow(StreamsUiState())
@@ -516,17 +520,36 @@ object StreamsRepository {
                 val includeScraperNameInSubtitle = false
                 providerGroup.scrapers.forEach { scraper ->
                     launch {
-                        val completion = PluginRepository.executeScraper(
-                            scraper = scraper,
-                            tmdbId = pluginContentId(
-                                videoId = videoId,
-                                season = season,
-                                episode = episode,
-                            ),
-                            mediaType = type,
+                        val pluginId = pluginContentId(
+                            videoId = videoId,
                             season = season,
                             episode = episode,
-                        ).fold(
+                        )
+                        AppDiagnostics.breadcrumb(
+                            event = "streams.plugin.start",
+                            details = streamRequestDetails(type, videoId, parentMetaId, season, episode, manualSelection) +
+                                mapOf(
+                                    "providerName" to providerGroup.addonName,
+                                    "providerId" to providerGroup.addonId,
+                                    "scraperName" to scraper.name,
+                                    "scraperId" to scraper.id.safeDiagnosticId(),
+                                    "pluginContentId" to pluginId.safeDiagnosticContentId(),
+                                ),
+                        )
+                        val startedAtMs = currentStreamTimeMillis()
+                        val scraperResult = runCatchingUnlessCancelled {
+                            withTimeout(PLUGIN_STREAM_SCRAPER_TIMEOUT_MS) {
+                                PluginRepository.executeScraper(
+                                    scraper = scraper,
+                                    tmdbId = pluginId,
+                                    mediaType = type,
+                                    season = season,
+                                    episode = episode,
+                                ).getOrThrow()
+                            }
+                        }
+                        val elapsedMs = (currentStreamTimeMillis() - startedAtMs).coerceAtLeast(0L)
+                        val completion = scraperResult.fold(
                             onSuccess = { results ->
                                 AppDiagnostics.breadcrumb(
                                     event = "streams.plugin.success",
@@ -535,7 +558,9 @@ object StreamsRepository {
                                             "providerName" to providerGroup.addonName,
                                             "providerId" to providerGroup.addonId,
                                             "scraperName" to scraper.name,
+                                            "scraperId" to scraper.id.safeDiagnosticId(),
                                             "streamCount" to results.size.toString(),
+                                            "elapsedMs" to elapsedMs.toString(),
                                         ),
                                 )
                                 StreamLoadCompletion.PluginScraper(
@@ -560,6 +585,8 @@ object StreamsRepository {
                                             "providerName" to providerGroup.addonName,
                                             "providerId" to providerGroup.addonId,
                                             "scraperName" to scraper.name,
+                                            "scraperId" to scraper.id.safeDiagnosticId(),
+                                            "elapsedMs" to elapsedMs.toString(),
                                         ),
                                 )
                                 StreamLoadCompletion.PluginScraper(
@@ -905,11 +932,25 @@ private fun List<AddonStreamGroup>.toEmptyStateReason(anyLoading: Boolean): Stre
 private suspend fun <T> runCatchingUnlessCancelled(block: suspend () -> T): Result<T> =
     try {
         Result.success(block())
+    } catch (error: TimeoutCancellationException) {
+        Result.failure(error)
     } catch (error: CancellationException) {
         throw error
     } catch (error: Throwable) {
         Result.failure(error)
     }
+
+private fun currentStreamTimeMillis(): Long = epochMs()
+
+private fun String.safeDiagnosticId(): String =
+    trim()
+        .takeLast(80)
+        .ifBlank { "unknown" }
+
+private fun String.safeDiagnosticContentId(): String =
+    trim()
+        .take(64)
+        .ifBlank { "unknown" }
 
 internal fun PluginRuntimeResult.toStreamItem(
     scraper: PluginScraper,

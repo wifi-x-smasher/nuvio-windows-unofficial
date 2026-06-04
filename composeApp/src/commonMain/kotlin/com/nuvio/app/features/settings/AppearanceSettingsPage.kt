@@ -11,9 +11,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -213,21 +216,23 @@ private fun AppearanceLanguageBottomSheet(
         },
         sheetState = sheetState,
     ) {
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(max = 520.dp)
                 .padding(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
-            Text(
-                text = stringResource(Res.string.settings_appearance_app_language_sheet_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            )
+            item {
+                Text(
+                    text = stringResource(Res.string.settings_appearance_app_language_sheet_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                )
+            }
 
-            options.forEachIndexed { index, option ->
+            itemsIndexed(options) { index, option ->
                 if (index > 0) {
                     NuvioBottomSheetDivider()
                 }

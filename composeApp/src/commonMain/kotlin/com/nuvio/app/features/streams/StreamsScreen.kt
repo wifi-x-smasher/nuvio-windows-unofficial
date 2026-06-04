@@ -80,6 +80,7 @@ import com.nuvio.app.core.i18n.localizedByteUnit
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.NuvioBottomSheetActionRow
 import com.nuvio.app.core.ui.NuvioBottomSheetDivider
+import com.nuvio.app.core.ui.NuvioHorizontalScrollControls
 import com.nuvio.app.core.ui.NuvioModalBottomSheet
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.dismissNuvioBottomSheet
@@ -133,6 +134,10 @@ fun StreamsScreen(
     modifier: Modifier = Modifier,
 ) {
     val uiState by StreamsRepository.uiState.collectAsStateWithLifecycle()
+    val streamBadgeSettings by remember {
+        StreamBadgeSettingsRepository.ensureLoaded()
+        StreamBadgeSettingsRepository.uiState
+    }.collectAsStateWithLifecycle()
     val playerSettings by remember {
         PlayerSettingsRepository.ensureLoaded()
         PlayerSettingsRepository.uiState
@@ -230,6 +235,7 @@ fun StreamsScreen(
                 uiState = uiState,
                 debridEnabled = debridSettings.canResolvePlayableLinks,
                 appendInstantServiceToDefaultName = debridSettings.canResolvePlayableLinks && !debridSettings.hasCustomStreamFormatting,
+                showFileSizeBadges = streamBadgeSettings.showFileSizeBadges,
                 resumePositionMs = effectiveResumePositionMs,
                 resumeProgressFraction = effectiveResumeProgressFraction,
                 onStreamSelected = { stream, positionMs, progressFraction ->
@@ -249,6 +255,7 @@ fun StreamsScreen(
                 uiState = uiState,
                 debridEnabled = debridSettings.canResolvePlayableLinks,
                 appendInstantServiceToDefaultName = debridSettings.canResolvePlayableLinks && !debridSettings.hasCustomStreamFormatting,
+                showFileSizeBadges = streamBadgeSettings.showFileSizeBadges,
                 resumePositionMs = effectiveResumePositionMs,
                 resumeProgressFraction = effectiveResumeProgressFraction,
                 onStreamSelected = { stream, positionMs, progressFraction ->
@@ -397,6 +404,7 @@ private fun MobileStreamsLayout(
     uiState: StreamsUiState,
     debridEnabled: Boolean,
     appendInstantServiceToDefaultName: Boolean,
+    showFileSizeBadges: Boolean,
     resumePositionMs: Long?,
     resumeProgressFraction: Float?,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
@@ -479,6 +487,7 @@ private fun MobileStreamsLayout(
                         uiState = uiState,
                         debridEnabled = debridEnabled,
                         appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
+                        showFileSizeBadges = showFileSizeBadges,
                         onStreamSelected = onStreamSelected,
                         onStreamLongPress = onStreamLongPress,
                         resumePositionMs = resumePositionMs,
@@ -684,28 +693,32 @@ internal fun ProviderFilterRow(
     val addonGroups = groups.filter { it.streams.isNotEmpty() || it.isLoading }
     if (addonGroups.isEmpty()) return
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        // "All" chip
-        FilterChip(
-            label = stringResource(Res.string.collections_tab_all),
-            isSelected = selectedFilter == null,
-            onClick = { onFilterSelected(null) },
-            desktopScale = desktopScale,
-        )
-        addonGroups.forEach { group ->
+    val scrollState = rememberScrollState()
+    Box(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .padding(end = 56.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             FilterChip(
-                label = group.addonName,
-                isSelected = selectedFilter == group.addonId,
-                onClick = { onFilterSelected(group.addonId) },
+                label = stringResource(Res.string.collections_tab_all),
+                isSelected = selectedFilter == null,
+                onClick = { onFilterSelected(null) },
                 desktopScale = desktopScale,
             )
+            addonGroups.forEach { group ->
+                FilterChip(
+                    label = group.addonName,
+                    isSelected = selectedFilter == group.addonId,
+                    onClick = { onFilterSelected(group.addonId) },
+                    desktopScale = desktopScale,
+                )
+            }
         }
+        NuvioHorizontalScrollControls(scrollState = scrollState)
     }
 }
 
@@ -778,6 +791,7 @@ internal fun StreamList(
     uiState: StreamsUiState,
     debridEnabled: Boolean,
     appendInstantServiceToDefaultName: Boolean,
+    showFileSizeBadges: Boolean,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
     resumePositionMs: Long?,
@@ -819,6 +833,7 @@ internal fun StreamList(
                         showHeader = uiState.selectedFilter == null,
                         debridEnabled = debridEnabled,
                         appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
+                        showFileSizeBadges = showFileSizeBadges,
                         onStreamSelected = onStreamSelected,
                         onStreamLongPress = onStreamLongPress,
                         resumePositionMs = resumePositionMs,
@@ -845,6 +860,7 @@ private fun LazyListScope.streamSection(
     showHeader: Boolean,
     debridEnabled: Boolean,
     appendInstantServiceToDefaultName: Boolean,
+    showFileSizeBadges: Boolean,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
     resumePositionMs: Long?,
@@ -894,6 +910,7 @@ private fun LazyListScope.streamSection(
                 stream = stream,
                 enabled = stream.isSelectableForPlayback(debridEnabled),
                 appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
+                showFileSizeBadges = showFileSizeBadges,
                 desktopScale = desktopScale,
                 onClick = {
                     if (stream.isSelectableForPlayback(debridEnabled)) {
@@ -1002,6 +1019,7 @@ private fun StreamCard(
     stream: StreamItem,
     enabled: Boolean,
     appendInstantServiceToDefaultName: Boolean,
+    showFileSizeBadges: Boolean,
     desktopScale: Float = 1f,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
@@ -1056,7 +1074,7 @@ private fun StreamCard(
             }
 
             val badgeImages = stream.badges.filter { it.imageURL.isNotBlank() }
-            if (badgeImages.isNotEmpty() || stream.streamSizeBytes() != null) {
+            if (badgeImages.isNotEmpty() || (showFileSizeBadges && stream.streamSizeBytes() != null)) {
                 Spacer(modifier = Modifier.height(6.dp * desktopScale))
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -1066,7 +1084,9 @@ private fun StreamCard(
                     badgeImages.forEach { badge ->
                         StreamBadgeImage(badge = badge)
                     }
-                    StreamFileSizeBadge(stream = stream)
+                    if (showFileSizeBadges) {
+                        StreamFileSizeBadge(stream = stream)
+                    }
                 }
             }
         }
