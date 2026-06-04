@@ -23,6 +23,7 @@ internal fun playerKeyboardShortcutFor(key: Key): PlayerKeyboardShortcut? = when
     Key.DirectionUp -> PlayerKeyboardShortcut.VolumeUp
     Key.DirectionDown -> PlayerKeyboardShortcut.VolumeDown
     Key.M -> PlayerKeyboardShortcut.ToggleMute
-    Key.Escape -> PlayerKeyboardShortcut.CloseOrBack
+    Key.Escape,
+    Key.Backspace -> PlayerKeyboardShortcut.CloseOrBack
     else -> null
 }

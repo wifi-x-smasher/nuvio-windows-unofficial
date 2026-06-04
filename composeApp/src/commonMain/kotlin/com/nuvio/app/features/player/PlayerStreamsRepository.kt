@@ -329,14 +329,43 @@ object PlayerStreamsRepository {
                     )
 
                     val displayName = addon.addonName
+                    AppDiagnostics.breadcrumb(
+                        event = "player.sources.addon.start",
+                        details = playerStreamRequestDetails(type, videoId, season, episode) +
+                            mapOf(
+                                "addonName" to displayName,
+                                "addonId" to addon.addonId.safePlayerDiagnosticId(),
+                            ),
+                    )
+                    val startedAtMs = epochMs()
                     runCatching {
                         val payload = httpGetText(url)
                         StreamParser.parse(payload, displayName, addon.addonId)
                     }.fold(
                         onSuccess = { streams ->
+                            AppDiagnostics.breadcrumb(
+                                event = "player.sources.addon.success",
+                                details = playerStreamRequestDetails(type, videoId, season, episode) +
+                                    mapOf(
+                                        "addonName" to displayName,
+                                        "addonId" to addon.addonId.safePlayerDiagnosticId(),
+                                        "streamCount" to streams.size.toString(),
+                                        "elapsedMs" to (epochMs() - startedAtMs).coerceAtLeast(0L).toString(),
+                                    ),
+                            )
                             AddonStreamGroup(displayName, addon.addonId, streams, isLoading = false)
                         },
                         onFailure = { err ->
+                            AppDiagnostics.error(
+                                event = "player.sources.addon.failure",
+                                throwable = err,
+                                details = playerStreamRequestDetails(type, videoId, season, episode) +
+                                    mapOf(
+                                        "addonName" to displayName,
+                                        "addonId" to addon.addonId.safePlayerDiagnosticId(),
+                                        "elapsedMs" to (epochMs() - startedAtMs).coerceAtLeast(0L).toString(),
+                                    ),
+                            )
                             log.w(err) { "Failed: ${displayName}" }
                             AddonStreamGroup(displayName, addon.addonId, emptyList(), isLoading = false, error = err.message)
                         },
@@ -344,8 +373,9 @@ object PlayerStreamsRepository {
                 }
             }
 
-            val pluginJobs = pluginScrapers.map { scraper ->
-                async {
+            val completions = Channel<AddonStreamGroup>(capacity = Channel.BUFFERED)
+            val pluginWorkers = pluginScrapers.map { scraper ->
+                launch {
                     val pluginId = pluginContentId(
                         videoId = videoId,
                         season = season,
@@ -373,7 +403,7 @@ object PlayerStreamsRepository {
                         }
                     }
                     val elapsedMs = (epochMs() - startedAtMs).coerceAtLeast(0L)
-                    scraperResult.fold(
+                    val group = scraperResult.fold(
                         onSuccess = { results ->
                             AppDiagnostics.breadcrumb(
                                 event = "player.sources.plugin.success",
@@ -413,21 +443,21 @@ object PlayerStreamsRepository {
                             )
                         },
                     )
+                    completions.send(group)
                 }
             }
 
-            val jobs = addonJobs + pluginJobs
-            val completions = Channel<AddonStreamGroup>(capacity = Channel.BUFFERED)
-            jobs.forEach { deferred ->
+            addonJobs.forEach { deferred ->
                 launch {
                     completions.send(deferred.await())
                 }
             }
-            repeat(jobs.size) {
+            repeat(addonJobs.size + pluginScrapers.size) {
                 val result = completions.receive()
                 publishStreamGroup(presentStreamGroup(result))
                 launchDebridAvailability(result)
             }
+            pluginWorkers.forEach { it.join() }
             for (availabilityJob in debridAvailabilityJobs) {
                 availabilityJob.join()
             }

@@ -354,7 +354,13 @@
     <string name="compose_player_sources">Sources</string>
     <string name="compose_player_style">Style</string>
     <string name="compose_player_subs">Subs</string>
+    <string name="compose_player_sync">Sync</string>
     <string name="compose_player_subtitles">Subtitles</string>
+    <string name="compose_player_subtitle_delay">Subtitle delay</string>
+    <string name="compose_player_subtitle_delay_value">Current offset: %1$s</string>
+    <string name="compose_player_subtitle_delay_early">-250 ms</string>
+    <string name="compose_player_subtitle_delay_reset">Reset</string>
+    <string name="compose_player_subtitle_delay_late">+250 ms</string>
     <string name="compose_player_brightness_level">Brightness %1$s</string>
     <string name="compose_player_volume_level">Volume %1$s</string>
     <string name="compose_player_muted">Muted</string>
@@ -694,6 +700,8 @@
     <string name="settings_meta_cast_description">Principal cast list.</string>
     <string name="settings_meta_cinematic_background">Cinematic Background</string>
     <string name="settings_meta_cinematic_background_description">Blurred backdrop behind content, similar to stream screen.</string>
+    <string name="settings_meta_hero_trailer_playback">Hero Trailer Playback</string>
+    <string name="settings_meta_hero_trailer_playback_description">Play trailer previews in the metadata hero when a trailer is available.</string>
     <string name="settings_meta_collection">Collection</string>
     <string name="settings_meta_collection_description">Related collection or franchise rail.</string>
     <string name="settings_meta_comments">Comments</string>

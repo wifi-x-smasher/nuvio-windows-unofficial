@@ -439,6 +439,7 @@ kotlin {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.ktor.client.cio)
+                implementation("com.squareup.okhttp3:okhttp:4.12.0")
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.vlcj)
                 implementation(libs.jna)

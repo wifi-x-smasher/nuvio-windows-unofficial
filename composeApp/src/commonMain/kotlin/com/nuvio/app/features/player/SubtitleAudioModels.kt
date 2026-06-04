@@ -36,6 +36,7 @@ enum class SubtitleTab {
     BuiltIn,
     Addons,
     Style,
+    Sync,
 }
 
 data class SubtitleStyleState(

@@ -20,6 +20,7 @@ interface PlayerEngineController {
     fun clearExternalSubtitle()
     fun clearExternalSubtitleAndSelect(trackIndex: Int)
     fun applySubtitleStyle(style: SubtitleStyleState) {}
+    fun setSubtitleDelayMillis(delayMillis: Int) {}
     fun configureIosVideoOutput(settings: PlayerSettingsUiState) {}
 }
 

@@ -231,17 +231,14 @@ internal class MpvDesktopPlayerBackend private constructor(
     private fun applyDesktopVideoOutputProfile(reason: String) {
         if (nativeClosed) return
         runCatching {
-            val applied = linkedMapOf(
-                "hwdec" to "auto-safe",
-                "tone-mapping" to "bt.2390",
-                "hdr-compute-peak" to "yes",
-                "target-colorspace-hint" to "yes",
-                "icc-profile-auto" to "yes",
-                "dither-depth" to "auto",
-            ).mapValues { (name, value) ->
+            val applied = DesktopMpvVideoOptionProfile.options.mapValues { (name, value) ->
                 player.impl.setMpvRuntimeOption(name, value)
             }
-            DesktopRuntimeLog.info("MPV video profile reason=$reason applied=$applied")
+            DesktopRuntimeLog.info(
+                "MPV video profile reason=$reason applied=$applied " +
+                    "gpuNextAvailable=${DesktopMpvVideoOptionProfile.canRequestGpuNextRenderBackend} " +
+                    "note=${DesktopMpvVideoOptionProfile.rendererLimitationNote}",
+            )
         }.onFailure {
             DesktopRuntimeLog.warn("MPV video profile failed reason=$reason message=${it.message}")
         }
@@ -469,6 +466,19 @@ internal class MpvDesktopPlayerBackend private constructor(
             latestSubtitleStyle = style
             if (!canReceiveCommands()) return
             applySubtitleStyleToCurrentTrack(style, reason = "settings")
+        }
+
+        override fun setSubtitleDelayMillis(delayMillis: Int) {
+            if (!canReceiveCommands()) return
+            val clamped = com.nuvio.app.features.player.clampSubtitleDelayMillis(delayMillis)
+            val seconds = com.nuvio.app.features.player.subtitleDelayMillisToMpvSeconds(clamped)
+            runCatching {
+                player.impl.setMpvProperty("sub-delay", seconds)
+            }.onSuccess {
+                DesktopRuntimeLog.info("MPV subtitle delay applied delayMs=$clamped seconds=$seconds")
+            }.onFailure {
+                DesktopRuntimeLog.error("MPV subtitle delay failed delayMs=$clamped", it)
+            }
         }
 
         private fun applySubtitleStyleToCurrentTrack(style: SubtitleStyleState, reason: String) {

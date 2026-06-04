@@ -509,6 +509,12 @@ fun PlayerScreen(
         var useCustomSubtitles by remember { mutableStateOf(false) }
         var preferredAudioSelectionApplied by rememberSaveable(sourceUrl) { mutableStateOf(false) }
         var preferredSubtitleSelectionApplied by rememberSaveable(sourceUrl) { mutableStateOf(false) }
+        var preferredAddonSubtitleSelectionApplied by rememberSaveable(
+            sourceUrl,
+            playerSettingsUiState.preferredSubtitleLanguage,
+            playerSettingsUiState.secondaryPreferredSubtitleLanguage,
+        ) { mutableStateOf(false) }
+        var subtitleDelayMillis by rememberSaveable(sourceUrl) { mutableStateOf(0) }
         var activeSubtitleTab by remember { mutableStateOf(SubtitleTab.BuiltIn) }
         val subtitleStyle = playerSettingsUiState.subtitleStyle
         val addonsUiState by AddonRepository.uiState.collectAsStateWithLifecycle()
@@ -569,7 +575,9 @@ fun PlayerScreen(
                 )
 
                 if (preferredSubtitleTargets.isEmpty()) {
-                    if (selectedSubtitleIndex != -1 || subtitleTracks.any { it.isSelected }) {
+                    if (useCustomSubtitles) {
+                        playerController?.clearExternalSubtitle()
+                    } else if (selectedSubtitleIndex != -1 || subtitleTracks.any { it.isSelected }) {
                         playerController?.selectSubtitleTrack(-1)
                     }
                     selectedSubtitleIndex = -1
@@ -1454,6 +1462,10 @@ fun PlayerScreen(
             playerController?.applySubtitleStyle(subtitleStyle)
         }
 
+        LaunchedEffect(playerController, subtitleDelayMillis) {
+            playerController?.setSubtitleDelayMillis(subtitleDelayMillis)
+        }
+
         val playerFocusRequester = remember { FocusRequester() }
 
         LaunchedEffect(Unit) {
@@ -1535,11 +1547,71 @@ fun PlayerScreen(
             }
         }
 
+        DisposableEffect(Unit) {
+            PlayerKeyboardShortcutBridge.register(::handleKeyboardShortcut)
+            onDispose {
+                PlayerKeyboardShortcutBridge.unregister()
+            }
+        }
+
         LaunchedEffect(activeSourceUrl, addonSubtitleFetchKey) {
             val fetchKey = addonSubtitleFetchKey ?: return@LaunchedEffect
             if (autoFetchedAddonSubtitlesForKey == fetchKey) return@LaunchedEffect
             autoFetchedAddonSubtitlesForKey = fetchKey
             fetchAddonSubtitlesForActiveItem()
+        }
+
+        LaunchedEffect(
+            playerController,
+            playbackSnapshot.isLoading,
+            addonSubtitles,
+            selectedSubtitleIndex,
+            useCustomSubtitles,
+            preferredAddonSubtitleSelectionApplied,
+            playerSettingsUiState.preferredSubtitleLanguage,
+            playerSettingsUiState.secondaryPreferredSubtitleLanguage,
+        ) {
+            val controller = playerController ?: return@LaunchedEffect
+            if (playbackSnapshot.isLoading || preferredAddonSubtitleSelectionApplied) {
+                return@LaunchedEffect
+            }
+
+            val preferredSubtitleTargets = resolvePreferredSubtitleLanguageTargets(
+                preferredSubtitleLanguage = playerSettingsUiState.preferredSubtitleLanguage,
+                secondaryPreferredSubtitleLanguage = playerSettingsUiState.secondaryPreferredSubtitleLanguage,
+                deviceLanguages = DeviceLanguagePreferences.preferredLanguageCodes(),
+            )
+            if (useCustomSubtitles || preferredSubtitleTargets.isEmpty()) {
+                return@LaunchedEffect
+            }
+            if (selectedSubtitleIndex >= 0) {
+                val selectedBuiltInSubtitle = subtitleTracks.firstOrNull { it.index == selectedSubtitleIndex }
+                if (selectedBuiltInSubtitle.matchesSubtitlePreference(preferredSubtitleTargets)) {
+                    preferredAddonSubtitleSelectionApplied = true
+                    return@LaunchedEffect
+                }
+                controller.selectSubtitleTrack(-1)
+                selectedSubtitleIndex = -1
+            }
+            if (addonSubtitles.isEmpty()) {
+                return@LaunchedEffect
+            }
+
+            val preferredAddonSubtitleIndex = findPreferredAddonSubtitleIndex(
+                subtitles = addonSubtitles,
+                targets = preferredSubtitleTargets,
+            )
+            if (preferredAddonSubtitleIndex < 0) {
+                preferredAddonSubtitleSelectionApplied = true
+                return@LaunchedEffect
+            }
+
+            val addon = addonSubtitles[preferredAddonSubtitleIndex]
+            selectedAddonSubtitleId = addon.id
+            selectedSubtitleIndex = -1
+            useCustomSubtitles = true
+            controller.setSubtitleUri(addon.url)
+            preferredAddonSubtitleSelectionApplied = true
         }
 
         LaunchedEffect(playbackSnapshot.isLoading, playerController) {
@@ -2253,12 +2325,14 @@ fun PlayerScreen(
                 selectedAddonSubtitleId = selectedAddonSubtitleId,
                 isLoadingAddonSubtitles = isLoadingAddonSubtitles,
                 subtitleStyle = subtitleStyle,
+                subtitleDelayMillis = subtitleDelayMillis,
                 onTabSelected = { activeSubtitleTab = it },
                 onBuiltInTrackSelected = { index ->
                     val wasCustom = useCustomSubtitles
                     selectedSubtitleIndex = index
                     selectedAddonSubtitleId = null
                     useCustomSubtitles = false
+                    preferredAddonSubtitleSelectionApplied = true
                     if (wasCustom) {
                         playerController?.clearExternalSubtitleAndSelect(index)
                     } else {
@@ -2269,10 +2343,15 @@ fun PlayerScreen(
                     selectedAddonSubtitleId = addon.id
                     selectedSubtitleIndex = -1
                     useCustomSubtitles = true
+                    preferredAddonSubtitleSelectionApplied = true
                     playerController?.setSubtitleUri(addon.url)
                 },
                 onFetchAddonSubtitles = ::fetchAddonSubtitlesForActiveItem,
                 onStyleChanged = PlayerSettingsRepository::setSubtitleStyle,
+                onSubtitleDelayChanged = { nextDelay ->
+                    subtitleDelayMillis = clampSubtitleDelayMillis(nextDelay)
+                    playerController?.setSubtitleDelayMillis(subtitleDelayMillis)
+                },
                 onDismiss = { showSubtitleModal = false },
             )
 
@@ -2495,4 +2574,10 @@ private fun findPreferredSubtitleTrackIndex(
     }
 
     return -1
+}
+
+private fun SubtitleTrack?.matchesSubtitlePreference(targets: List<String>): Boolean {
+    val track = this ?: return false
+    if (targets.isEmpty()) return false
+    return findPreferredSubtitleTrackIndex(listOf(track), targets) == 0
 }

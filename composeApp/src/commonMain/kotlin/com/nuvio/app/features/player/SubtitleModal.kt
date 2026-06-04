@@ -53,6 +53,12 @@ import nuvio.composeapp.generated.resources.compose_player_built_in
 import nuvio.composeapp.generated.resources.compose_player_fetch_subtitles
 import nuvio.composeapp.generated.resources.compose_player_none
 import nuvio.composeapp.generated.resources.compose_player_style
+import nuvio.composeapp.generated.resources.compose_player_subtitle_delay
+import nuvio.composeapp.generated.resources.compose_player_subtitle_delay_late
+import nuvio.composeapp.generated.resources.compose_player_subtitle_delay_reset
+import nuvio.composeapp.generated.resources.compose_player_subtitle_delay_value
+import nuvio.composeapp.generated.resources.compose_player_subtitle_delay_early
+import nuvio.composeapp.generated.resources.compose_player_sync
 import nuvio.composeapp.generated.resources.compose_player_subtitles
 import org.jetbrains.compose.resources.stringResource
 
@@ -66,11 +72,13 @@ fun SubtitleModal(
     selectedAddonSubtitleId: String?,
     isLoadingAddonSubtitles: Boolean,
     subtitleStyle: SubtitleStyleState,
+    subtitleDelayMillis: Int,
     onTabSelected: (SubtitleTab) -> Unit,
     onBuiltInTrackSelected: (Int) -> Unit,
     onAddonSubtitleSelected: (AddonSubtitle) -> Unit,
     onFetchAddonSubtitles: () -> Unit,
     onStyleChanged: (SubtitleStyleState) -> Unit,
+    onSubtitleDelayChanged: (Int) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -177,6 +185,10 @@ fun SubtitleModal(
                                     isCompact = isCompact,
                                     onStyleChanged = onStyleChanged,
                                 )
+                                SubtitleTab.Sync -> SubtitleSyncPanel(
+                                    delayMillis = subtitleDelayMillis,
+                                    onDelayChanged = onSubtitleDelayChanged,
+                                )
                             }
                         }
                     }
@@ -196,9 +208,9 @@ private fun SubtitleTabBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 70.dp)
+            .padding(horizontal = 20.dp)
             .padding(bottom = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(15.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         SubtitleTab.entries.forEach { tab ->
             val isSelected = tab == activeTab
@@ -225,6 +237,7 @@ private fun SubtitleTabBar(
                         SubtitleTab.BuiltIn -> stringResource(Res.string.compose_player_built_in)
                         SubtitleTab.Addons -> stringResource(Res.string.addon_title)
                         SubtitleTab.Style -> stringResource(Res.string.compose_player_style)
+                        SubtitleTab.Sync -> stringResource(Res.string.compose_player_sync)
                     },
                     color = if (isSelected) colorScheme.onPrimaryContainer else colorScheme.onSurfaceVariant,
                     fontSize = 13.sp,
@@ -232,6 +245,78 @@ private fun SubtitleTabBar(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SubtitleSyncPanel(
+    delayMillis: Int,
+    onDelayChanged: (Int) -> Unit,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val clampedDelay = clampSubtitleDelayMillis(delayMillis)
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text(
+            text = stringResource(Res.string.compose_player_subtitle_delay),
+            color = colorScheme.onSurface,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = stringResource(
+                Res.string.compose_player_subtitle_delay_value,
+                formatSubtitleDelayMillis(clampedDelay),
+            ),
+            color = colorScheme.onSurfaceVariant,
+            fontSize = 13.sp,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SubtitleDelayButton(
+                label = stringResource(Res.string.compose_player_subtitle_delay_early),
+                onClick = { onDelayChanged(clampSubtitleDelayMillis(clampedDelay - 250)) },
+                modifier = Modifier.weight(1f),
+            )
+            SubtitleDelayButton(
+                label = stringResource(Res.string.compose_player_subtitle_delay_reset),
+                onClick = { onDelayChanged(0) },
+                modifier = Modifier.weight(1f),
+            )
+            SubtitleDelayButton(
+                label = stringResource(Res.string.compose_player_subtitle_delay_late),
+                onClick = { onDelayChanged(clampSubtitleDelayMillis(clampedDelay + 250)) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubtitleDelayButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(colorScheme.surfaceVariant.copy(alpha = 0.78f))
+            .clickable(onClick = onClick)
+            .padding(vertical = 11.dp, horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = colorScheme.onSurface,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
     }
 }
 

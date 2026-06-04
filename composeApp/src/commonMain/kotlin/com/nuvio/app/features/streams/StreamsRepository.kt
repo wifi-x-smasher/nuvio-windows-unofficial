@@ -516,9 +516,9 @@ object StreamsRepository {
                 }
             }
 
-            pluginProviderGroups.forEach { providerGroup ->
+            val pluginWorkers = pluginProviderGroups.flatMap { providerGroup ->
                 val includeScraperNameInSubtitle = false
-                providerGroup.scrapers.forEach { scraper ->
+                providerGroup.scrapers.map { scraper ->
                     launch {
                         val pluginId = pluginContentId(
                             videoId = videoId,
@@ -654,6 +654,7 @@ object StreamsRepository {
 
                 }
             }
+            pluginWorkers.forEach { it.join() }
 
             for (availabilityJob in debridAvailabilityJobs) {
                 availabilityJob.join()

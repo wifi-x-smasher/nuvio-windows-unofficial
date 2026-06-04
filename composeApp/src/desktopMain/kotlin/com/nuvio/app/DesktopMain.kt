@@ -31,6 +31,8 @@ import com.nuvio.app.desktop.DesktopRuntimeLog
 import com.nuvio.app.desktop.DesktopWindowChrome
 import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.core.deeplink.DesktopDeepLinkBridge
+import com.nuvio.app.features.player.PlayerKeyboardShortcut
+import com.nuvio.app.features.player.PlayerKeyboardShortcutBridge
 import java.awt.Color
 import java.awt.EventQueue
 import java.awt.KeyboardFocusManager
@@ -75,14 +77,18 @@ fun main(args: Array<String>) {
 
         DisposableEffect(Unit) {
             val dispatcher = java.awt.KeyEventDispatcher { event ->
-                if (
-                    event.id == KeyEvent.KEY_PRESSED &&
-                    isDesktopFullscreenShortcut(event.keyCode, event.isAltDown)
-                ) {
-                    currentToggleFullscreen()
-                    true
-                } else {
+                if (event.id != KeyEvent.KEY_PRESSED) {
                     false
+                } else when {
+                    isDesktopFullscreenShortcut(event.keyCode, event.isAltDown) -> {
+                        currentToggleFullscreen()
+                        true
+                    }
+                    !event.isAltDown && !event.isControlDown && !event.isMetaDown ->
+                        desktopPlayerKeyboardShortcutFor(event.keyCode)
+                            ?.let(PlayerKeyboardShortcutBridge::dispatch)
+                            ?: false
+                    else -> false
                 }
             }
             val keyboardFocusManager = KeyboardFocusManager.getCurrentKeyboardFocusManager()
@@ -178,6 +184,22 @@ internal fun nextDesktopWindowPlacement(
 
 internal fun isDesktopFullscreenShortcut(keyCode: Int, isAltDown: Boolean): Boolean =
     keyCode == KeyEvent.VK_F11 || (isAltDown && keyCode == KeyEvent.VK_ENTER)
+
+internal fun desktopPlayerKeyboardShortcutFor(keyCode: Int): PlayerKeyboardShortcut? = when (keyCode) {
+    KeyEvent.VK_SPACE,
+    KeyEvent.VK_ENTER,
+    KeyEvent.VK_K -> PlayerKeyboardShortcut.TogglePlayback
+    KeyEvent.VK_LEFT,
+    KeyEvent.VK_J -> PlayerKeyboardShortcut.SeekBackward
+    KeyEvent.VK_RIGHT,
+    KeyEvent.VK_L -> PlayerKeyboardShortcut.SeekForward
+    KeyEvent.VK_UP -> PlayerKeyboardShortcut.VolumeUp
+    KeyEvent.VK_DOWN -> PlayerKeyboardShortcut.VolumeDown
+    KeyEvent.VK_M -> PlayerKeyboardShortcut.ToggleMute
+    KeyEvent.VK_ESCAPE,
+    KeyEvent.VK_BACK_SPACE -> PlayerKeyboardShortcut.CloseOrBack
+    else -> null
+}
 
 internal fun isDesktopWindowRecoveryEvent(eventId: Int): Boolean =
     eventId == WindowEvent.WINDOW_ACTIVATED ||

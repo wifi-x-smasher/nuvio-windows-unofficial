@@ -23,6 +23,7 @@ class PlayerKeyboardShortcutsTest {
         assertEquals(PlayerKeyboardShortcut.VolumeDown, playerKeyboardShortcutFor(Key.DirectionDown))
         assertEquals(PlayerKeyboardShortcut.ToggleMute, playerKeyboardShortcutFor(Key.M))
         assertEquals(PlayerKeyboardShortcut.CloseOrBack, playerKeyboardShortcutFor(Key.Escape))
+        assertEquals(PlayerKeyboardShortcut.CloseOrBack, playerKeyboardShortcutFor(Key.Backspace))
         assertNull(playerKeyboardShortcutFor(Key.Tab))
     }
 }

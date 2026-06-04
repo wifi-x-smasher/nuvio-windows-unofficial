@@ -158,8 +158,10 @@ actual class MpvMediampPlayer(
 
                 handle.option("ao", "wasapi")
                 handle.option("vo", "libmpv")
-                handle.option("fbo-format", "rgba16f")
-                handle.option("dither-depth", "auto")
+                handle.option("fbo-format", "rgba8")
+                handle.option("dither-depth", "no")
+                handle.option("video-sync", "audio")
+                handle.option("video-timing-offset", "0.0")
                 // Some Windows GPU/driver combinations corrupt HEVC Main10
                 // frames when libmpv renders hardware-decoded frames into the
                 // OpenGL FBO used by Compose. Let mpv software-decode HEVC on
