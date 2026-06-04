@@ -380,6 +380,10 @@ object AddonRepository {
                 if (isUsingPrimaryAddonsFromSecondaryProfile()) {
                     return@runCatching
                 }
+                if (!pulledFromServer) {
+                    log.w { "pushToServer() — skipped until server pull completes to avoid replacing remote addons" }
+                    return@runCatching
+                }
                 val profileId = currentProfileId
                 val addons = _uiState.value.addons
                     .distinctBy { it.manifestUrl }

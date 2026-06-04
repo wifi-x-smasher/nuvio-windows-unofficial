@@ -11,16 +11,16 @@ class DesktopMpvHdrOptionsTest {
     fun exposesAuditableWindowsHdrOptions() {
         val options = DesktopMpvVideoOptionProfile.options
 
-        assertEquals("rgba16f", options["fbo-format"])
-        assertEquals("bt.2390", options["tone-mapping"])
-        assertEquals("yes", options["hdr-compute-peak"])
-        assertEquals("yes", options["target-colorspace-hint"])
-        assertEquals("yes", options["icc-profile-auto"])
+        assertEquals("auto-safe", options["hwdec"])
+        assertEquals("rgba8", options["fbo-format"])
+        assertEquals("no", options["dither-depth"])
+        assertEquals("audio", options["video-sync"])
+        assertEquals("0.0", options["video-timing-offset"])
     }
 
     @Test
     fun documentsCurrentRendererBackendLimitation() {
         assertFalse(DesktopMpvVideoOptionProfile.canRequestGpuNextRenderBackend)
-        assertTrue(DesktopMpvVideoOptionProfile.rendererLimitationNote.contains("MPV_RENDER_PARAM_BACKEND"))
+        assertTrue(DesktopMpvVideoOptionProfile.rendererLimitationNote.contains("OpenGL/libmpv"))
     }
 }

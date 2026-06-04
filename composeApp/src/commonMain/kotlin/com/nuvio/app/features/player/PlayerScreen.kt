@@ -504,6 +504,7 @@ fun PlayerScreen(
         var audioTracks by remember { mutableStateOf<List<AudioTrack>>(emptyList()) }
         var subtitleTracks by remember { mutableStateOf<List<SubtitleTrack>>(emptyList()) }
         var selectedAudioIndex by remember { mutableStateOf(-1) }
+        var manualAudioTrackSignature by rememberSaveable(activeVideoId) { mutableStateOf<String?>(null) }
         var selectedSubtitleIndex by remember { mutableStateOf(-1) }
         var selectedAddonSubtitleId by remember { mutableStateOf<String?>(null) }
         var useCustomSubtitles by remember { mutableStateOf(false) }
@@ -544,6 +545,18 @@ fun PlayerScreen(
             if (selectedAudio != null) selectedAudioIndex = selectedAudio.index
             val selectedSub = subtitleTracks.firstOrNull { it.isSelected }
             if (selectedSub != null && !useCustomSubtitles) selectedSubtitleIndex = selectedSub.index
+
+            val manualAudioIndex = manualAudioTrackSignature
+                ?.takeIf { audioTracks.isNotEmpty() }
+                ?.let { signature -> audioTracks.indexOfFirst { it.audioTrackPreferenceSignature() == signature } }
+                ?: -1
+            if (manualAudioIndex >= 0) {
+                if (manualAudioIndex != selectedAudioIndex) {
+                    playerController?.selectAudioTrack(manualAudioIndex)
+                    selectedAudioIndex = manualAudioIndex
+                }
+                preferredAudioSelectionApplied = true
+            }
 
             if (!preferredAudioSelectionApplied) {
                 val preferredAudioTargets = resolvePreferredAudioLanguageTargets(
@@ -2307,6 +2320,9 @@ fun PlayerScreen(
                 selectedIndex = selectedAudioIndex,
                 onTrackSelected = { index ->
                     selectedAudioIndex = index
+                    manualAudioTrackSignature = audioTracks
+                        .firstOrNull { it.index == index }
+                        ?.audioTrackPreferenceSignature()
                     playerController?.selectAudioTrack(index)
                     scope.launch {
                         delay(200)
@@ -2547,6 +2563,16 @@ private fun <T> findPreferredTrackIndex(
         }
     }
     return -1
+}
+
+private fun AudioTrack.audioTrackPreferenceSignature(): String {
+    val normalizedLanguage = normalizeLanguageCode(language).orEmpty()
+    val normalizedLabel = label
+        ?.trim()
+        ?.lowercase()
+        ?.replace(Regex("\\s+"), " ")
+        .orEmpty()
+    return "$normalizedLanguage|$normalizedLabel"
 }
 
 private fun findPreferredSubtitleTrackIndex(

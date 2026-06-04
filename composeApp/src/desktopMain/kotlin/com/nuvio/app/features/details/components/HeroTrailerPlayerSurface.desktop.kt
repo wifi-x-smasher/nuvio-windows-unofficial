@@ -56,8 +56,10 @@ actual fun HeroTrailerPlayerSurface(
                 latestOnEnded.value()
             }
         },
-        onError = {
-            latestOnError.value()
+        onError = { message ->
+            if (!message.isNullOrBlank()) {
+                latestOnError.value()
+            }
         },
     )
 }
