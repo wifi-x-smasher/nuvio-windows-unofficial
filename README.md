@@ -28,6 +28,10 @@ Screenshots are illustrative UI captures from a locally configured Nuvio Windows
 
 <img src="assets/screenshots/home-tv-layout.png" alt="Nuvio Windows home screen with TV-style layout" width="900" />
 
+<img src="assets/screenshots/search-discover.png" alt="Nuvio Windows search and discovery screen" width="900" />
+
+<img src="assets/screenshots/meta-hero-trailer.png" alt="Nuvio Windows details screen with hero trailer playback" width="900" />
+
 <img src="assets/screenshots/stream-badges.png" alt="Nuvio Windows stream selection screen with badges" width="900" />
 
 <img src="assets/screenshots/desktop-player.png" alt="Nuvio Windows desktop player controls" width="900" />

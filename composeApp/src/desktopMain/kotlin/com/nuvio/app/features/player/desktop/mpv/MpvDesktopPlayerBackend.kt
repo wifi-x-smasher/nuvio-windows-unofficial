@@ -111,8 +111,17 @@ internal class MpvDesktopPlayerBackend private constructor(
             applyDesktopVideoOutputProfile("load")
             player.setMediaData(UriMediaData(request.sourceUrl, headers))
             request.sourceAudioUrl?.takeIf { it.isNotBlank() }?.let { audioUrl ->
-                runCatching { player.impl.command("audio-add", audioUrl, "auto") }
-                    .onFailure { DesktopRuntimeLog.error("MPV audio-add failed audio=${audioUrl.redactedMediaUrl()}", it) }
+                runCatching {
+                    val addedWithSelect = player.impl.command("audio-add", audioUrl, "select")
+                    val addedWithAutoFallback = !addedWithSelect && player.impl.command("audio-add", audioUrl, "auto")
+                    DesktopRuntimeLog.info(
+                        "MPV audio-add requested audio=${audioUrl.redactedMediaUrl()} " +
+                            "select=$addedWithSelect autoFallback=$addedWithAutoFallback",
+                    )
+                    player.impl.ensureExternalAudioSelected(audioUrl, reason = "load")
+                }.onFailure {
+                    DesktopRuntimeLog.error("MPV audio-add failed audio=${audioUrl.redactedMediaUrl()}", it)
+                }
             }
             setResizeMode(request.resizeMode)
             if (request.playWhenReady) {
@@ -699,8 +708,94 @@ internal class MpvDesktopPlayerBackend private constructor(
             "sub-align-y=${getMpvStringProperty("sub-align-y")}",
         ).joinToString(prefix = "[", postfix = "]")
 
+    private suspend fun MPVHandle.ensureExternalAudioSelected(audioUrl: String, reason: String) {
+        repeat(5) { attempt ->
+            val selected = selectedAudioTrackDetails()
+            val external = newestExternalAudioTrackDetails()
+            if (selected?.external == true) {
+                DesktopRuntimeLog.info(
+                    "MPV external audio selected reason=$reason attempt=${attempt + 1} " +
+                        "selected=${selected.toLogString()} audio=${audioUrl.redactedMediaUrl()}",
+                )
+                return
+            }
+            if (external != null) {
+                val selectedAid = setMpvProperty("aid", external.id)
+                DesktopRuntimeLog.info(
+                    "MPV external audio select reason=$reason attempt=${attempt + 1} " +
+                        "selectedAid=$selectedAid track=${external.toLogString()} audio=${audioUrl.redactedMediaUrl()}",
+                )
+                return
+            }
+            delay(120L * (attempt + 1))
+        }
+        DesktopRuntimeLog.warn(
+            "MPV external audio not found reason=$reason audio=${audioUrl.redactedMediaUrl()} " +
+                "aid=${getMpvStringProperty("aid")} tracks=${audioTrackDiagnostics()}",
+        )
+    }
+
     private fun Path.toSafeLogPath(): String =
         runCatching { toAbsolutePath().toString() }.getOrDefault(toString())
+
+    private data class MpvAudioTrackDetails(
+        val id: Int,
+        val external: Boolean,
+        val title: String,
+        val language: String,
+    ) {
+        fun toLogString(): String =
+            "id=$id external=$external title=${title.ifBlank { "none" }} lang=${language.ifBlank { "none" }}"
+    }
+
+    private fun org.openani.mediamp.mpv.MPVHandle.selectedAudioTrackDetails(): MpvAudioTrackDetails? {
+        val count = getMpvIntProperty("track-list/count") ?: return null
+        for (i in 0 until count) {
+            if (getMpvStringProperty("track-list/$i/type") != "audio") continue
+            if (!getMpvBooleanProperty("track-list/$i/selected")) continue
+            val id = getMpvIntProperty("track-list/$i/id") ?: continue
+            return MpvAudioTrackDetails(
+                id = id,
+                external = getMpvBooleanProperty("track-list/$i/external"),
+                title = getMpvStringProperty("track-list/$i/title"),
+                language = getMpvStringProperty("track-list/$i/lang"),
+            )
+        }
+        return null
+    }
+
+    private fun org.openani.mediamp.mpv.MPVHandle.newestExternalAudioTrackDetails(): MpvAudioTrackDetails? {
+        val count = getMpvIntProperty("track-list/count") ?: return null
+        var newest: MpvAudioTrackDetails? = null
+        for (i in 0 until count) {
+            if (getMpvStringProperty("track-list/$i/type") != "audio") continue
+            if (!getMpvBooleanProperty("track-list/$i/external")) continue
+            val id = getMpvIntProperty("track-list/$i/id") ?: continue
+            newest = MpvAudioTrackDetails(
+                id = id,
+                external = true,
+                title = getMpvStringProperty("track-list/$i/title"),
+                language = getMpvStringProperty("track-list/$i/lang"),
+            )
+        }
+        return newest
+    }
+
+    private fun org.openani.mediamp.mpv.MPVHandle.audioTrackDiagnostics(): String {
+        val count = getMpvIntProperty("track-list/count") ?: return "unavailable"
+        val tracks = buildList {
+            for (i in 0 until count) {
+                if (getMpvStringProperty("track-list/$i/type") != "audio") continue
+                val id = getMpvIntProperty("track-list/$i/id") ?: continue
+                add(
+                    "id=$id external=${getMpvBooleanProperty("track-list/$i/external")} " +
+                        "selected=${getMpvBooleanProperty("track-list/$i/selected")} " +
+                        "lang=${getMpvStringProperty("track-list/$i/lang").ifBlank { "none" }}",
+                )
+            }
+        }
+        return tracks.joinToString(prefix = "[", postfix = "]")
+    }
 
     private data class MpvSubtitleTrackDetails(
         val id: Int,

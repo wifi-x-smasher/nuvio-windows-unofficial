@@ -5,8 +5,10 @@ import com.sun.jna.Memory
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.win32.W32APIOptions
+import java.awt.GraphicsConfiguration
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
+import java.awt.Toolkit
 import java.awt.Window
 import javax.swing.JFrame
 
@@ -72,18 +74,59 @@ internal object DesktopWindowChrome {
     }
 
     private fun fullScreenBounds(window: Window): Rectangle =
-        (window.graphicsConfiguration ?: defaultConfiguration()).bounds
+        targetConfiguration(window).bounds
 
-    private fun workAreaBounds(window: Window): Rectangle {
-        val gc = window.graphicsConfiguration ?: defaultConfiguration()
+    private fun workAreaBounds(window: Window): Rectangle =
+        workAreaBounds(targetConfiguration(window))
+
+    private fun workAreaBounds(gc: GraphicsConfiguration): Rectangle {
         val bounds = gc.bounds
-        val insets = java.awt.Toolkit.getDefaultToolkit().getScreenInsets(gc)
+        val insets = Toolkit.getDefaultToolkit().getScreenInsets(gc)
         return Rectangle(
             bounds.x + insets.left,
             bounds.y + insets.top,
-            bounds.width - insets.left - insets.right,
-            bounds.height - insets.top - insets.bottom,
+            (bounds.width - insets.left - insets.right).coerceAtLeast(1),
+            (bounds.height - insets.top - insets.bottom).coerceAtLeast(1),
         )
+    }
+
+    private fun targetConfiguration(window: Window): GraphicsConfiguration {
+        val configurations = screenConfigurations()
+        val targetBounds = targetScreenBoundsForWindow(
+            windowBounds = window.bounds,
+            screenBounds = configurations.map { it.bounds },
+        ) ?: return window.graphicsConfiguration ?: defaultConfiguration()
+        return configurations.firstOrNull { it.bounds == targetBounds }
+            ?: window.graphicsConfiguration
+            ?: defaultConfiguration()
+    }
+
+    private fun screenConfigurations(): List<GraphicsConfiguration> =
+        GraphicsEnvironment.getLocalGraphicsEnvironment()
+            .screenDevices
+            .map { it.defaultConfiguration }
+
+    internal fun targetScreenBoundsForWindow(
+        windowBounds: Rectangle,
+        screenBounds: List<Rectangle>,
+    ): Rectangle? {
+        if (screenBounds.isEmpty()) return null
+        val centerX = windowBounds.x + windowBounds.width / 2
+        val centerY = windowBounds.y + windowBounds.height / 2
+        screenBounds.firstOrNull { it.contains(centerX, centerY) }?.let { return Rectangle(it) }
+        return screenBounds
+            .maxByOrNull { intersectionArea(windowBounds, it) }
+            ?.let { Rectangle(it) }
+    }
+
+    private fun intersectionArea(first: Rectangle, second: Rectangle): Long {
+        val left = maxOf(first.x, second.x)
+        val top = maxOf(first.y, second.y)
+        val right = minOf(first.x + first.width, second.x + second.width)
+        val bottom = minOf(first.y + first.height, second.y + second.height)
+        val width = (right - left).coerceAtLeast(0)
+        val height = (bottom - top).coerceAtLeast(0)
+        return width.toLong() * height.toLong()
     }
 
     private fun defaultConfiguration() =

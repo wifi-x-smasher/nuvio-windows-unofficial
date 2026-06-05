@@ -1,6 +1,8 @@
 package com.nuvio.app
 
+import com.nuvio.app.desktop.DesktopWindowChrome
 import java.awt.event.KeyEvent
+import java.awt.Rectangle
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -40,6 +42,78 @@ class DesktopWindowModeTest {
         assertFalse(
             shouldDebounceToggle(nowNanos = 1_400_000_000L, lastToggleNanos = 1_000_000_000L),
         )
+    }
+
+    @Test
+    fun clampsDraggedWindowSoAGripRemainsVisible() {
+        val virtualDesktop = Rectangle(0, 0, 1920, 1080)
+        val window = Rectangle(-1500, -900, 1280, 720)
+
+        val clamped = clampedDesktopWindowBounds(window, virtualDesktop, minVisiblePx = 120)
+
+        assertEquals(Rectangle(-1160, -600, 1280, 720), clamped)
+    }
+
+    @Test
+    fun clampsDraggedWindowInsideNegativeCoordinateDesktop() {
+        val virtualDesktop = Rectangle(-1920, 0, 3840, 1080)
+        val window = Rectangle(2400, 990, 1280, 720)
+
+        val clamped = clampedDesktopWindowBounds(window, virtualDesktop, minVisiblePx = 120)
+
+        assertEquals(Rectangle(1800, 960, 1280, 720), clamped)
+    }
+
+    @Test
+    fun leavesVisibleDraggedWindowUnchanged() {
+        val virtualDesktop = Rectangle(-1920, 0, 3840, 1080)
+        val window = Rectangle(100, 80, 1280, 720)
+
+        val clamped = clampedDesktopWindowBounds(window, virtualDesktop, minVisiblePx = 120)
+
+        assertEquals(window, clamped)
+    }
+
+    @Test
+    fun selectsSecondMonitorWhenDraggedWindowCenterIsOnSecondMonitor() {
+        val primary = Rectangle(0, 0, 1920, 1080)
+        val secondary = Rectangle(1920, 0, 1920, 1080)
+        val draggedWindow = Rectangle(2100, 80, 1280, 720)
+
+        val target = DesktopWindowChrome.targetScreenBoundsForWindow(
+            windowBounds = draggedWindow,
+            screenBounds = listOf(primary, secondary),
+        )
+
+        assertEquals(secondary, target)
+    }
+
+    @Test
+    fun selectsNegativeCoordinateMonitorWhenWindowCenterIsLeftOfPrimary() {
+        val secondaryLeft = Rectangle(-1920, 0, 1920, 1080)
+        val primary = Rectangle(0, 0, 1920, 1080)
+        val draggedWindow = Rectangle(-1500, 80, 1280, 720)
+
+        val target = DesktopWindowChrome.targetScreenBoundsForWindow(
+            windowBounds = draggedWindow,
+            screenBounds = listOf(secondaryLeft, primary),
+        )
+
+        assertEquals(secondaryLeft, target)
+    }
+
+    @Test
+    fun fallsBackToLargestIntersectionWhenWindowCenterIsBetweenScreens() {
+        val left = Rectangle(0, 0, 800, 600)
+        val right = Rectangle(1000, 0, 800, 600)
+        val draggedWindow = Rectangle(750, 100, 350, 300)
+
+        val target = DesktopWindowChrome.targetScreenBoundsForWindow(
+            windowBounds = draggedWindow,
+            screenBounds = listOf(left, right),
+        )
+
+        assertEquals(right, target)
     }
 
     @Test

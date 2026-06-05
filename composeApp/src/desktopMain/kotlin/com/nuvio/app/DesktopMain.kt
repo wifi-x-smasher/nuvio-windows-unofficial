@@ -44,16 +44,23 @@ import com.nuvio.app.features.player.PlayerKeyboardShortcut
 import com.nuvio.app.features.player.PlayerKeyboardShortcutBridge
 import java.awt.Color
 import java.awt.EventQueue
+import java.awt.GraphicsEnvironment
 import java.awt.KeyboardFocusManager
+import java.awt.MouseInfo
+import java.awt.Point
+import java.awt.Rectangle
 import java.awt.Window as AwtWindow
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 import java.awt.event.KeyEvent
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
-import kotlin.math.roundToInt
 import javax.swing.JFrame
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.app_logo_mark
 import org.jetbrains.compose.resources.painterResource
+
+private const val DesktopDragMinVisiblePx = 120
 
 fun main(args: Array<String>) {
     System.setProperty("compose.interop.blending", "true")
@@ -159,10 +166,19 @@ fun main(args: Array<String>) {
 
                 awtWindow.addWindowListener(recoveryListener)
                 awtWindow.addWindowFocusListener(recoveryListener)
+
+                val dragBoundsGuard = object : ComponentAdapter() {
+                    override fun componentMoved(event: ComponentEvent) {
+                        clampDesktopWindowToVirtualDesktopNow(awtWindow)
+                    }
+                }
+                awtWindow.addComponentListener(dragBoundsGuard)
+
                 onDispose {
                     fullscreenController = null
                     awtWindow.removeWindowListener(recoveryListener)
                     awtWindow.removeWindowFocusListener(recoveryListener)
+                    awtWindow.removeComponentListener(dragBoundsGuard)
                 }
             }
 
@@ -171,8 +187,9 @@ fun main(args: Array<String>) {
 
                 if (!isPlayerScreenActive && !isFullscreen) {
                     DesktopWindowDragGrip(
-                        onDrag = { deltaX, deltaY ->
-                            moveDesktopWindowBy(awtWindow, deltaX, deltaY)
+                        window = awtWindow,
+                        onDragStart = {
+                            logDesktopWindowDrag("start", awtWindow)
                         },
                         onDragEnd = {
                             snapDesktopWindowToNormalBounds(awtWindow)
@@ -224,20 +241,50 @@ internal fun configureDesktopRenderer(): String {
 
 @Composable
 private fun DesktopWindowDragGrip(
-    onDrag: (Float, Float) -> Unit,
+    window: AwtWindow,
+    onDragStart: () -> Unit,
     onDragEnd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var dragAnchorMouse by remember { mutableStateOf<Point?>(null) }
+    var dragAnchorWindow by remember { mutableStateOf<Point?>(null) }
+
     Box(
         modifier = modifier
             .size(width = 64.dp, height = 42.dp)
             .clip(CircleShape)
             .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.32f))
-            .pointerInput(onDrag, onDragEnd) {
+            .pointerInput(window, onDragStart, onDragEnd) {
                 detectDragGestures(
-                    onDragEnd = onDragEnd,
-                    onDrag = { _, dragAmount ->
-                        onDrag(dragAmount.x, dragAmount.y)
+                    onDragStart = {
+                        dragAnchorMouse = currentScreenPointerLocation()
+                        dragAnchorWindow = window.location
+                        onDragStart()
+                    },
+                    onDragCancel = {
+                        dragAnchorMouse = null
+                        dragAnchorWindow = null
+                        onDragEnd()
+                    },
+                    onDragEnd = {
+                        dragAnchorMouse = null
+                        dragAnchorWindow = null
+                        onDragEnd()
+                    },
+                    onDrag = { _, _ ->
+                        val startMouse = dragAnchorMouse ?: return@detectDragGestures
+                        val startWindow = dragAnchorWindow ?: return@detectDragGestures
+                        val currentMouse = currentScreenPointerLocation() ?: return@detectDragGestures
+                        val targetBounds = clampedDesktopWindowBounds(
+                            windowBounds = Rectangle(
+                                startWindow.x + currentMouse.x - startMouse.x,
+                                startWindow.y + currentMouse.y - startMouse.y,
+                                window.width,
+                                window.height,
+                            ),
+                            virtualDesktopBounds = desktopVirtualBounds(),
+                        )
+                        setDesktopWindowLocation(window, targetBounds.x, targetBounds.y)
                     },
                 )
             },
@@ -249,6 +296,19 @@ private fun DesktopWindowDragGrip(
             tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.72f),
             modifier = Modifier.size(22.dp),
         )
+    }
+}
+
+private fun currentScreenPointerLocation(): Point? =
+    runCatching { MouseInfo.getPointerInfo()?.location }.getOrNull()
+
+private fun setDesktopWindowLocation(window: AwtWindow, x: Int, y: Int) {
+    if (EventQueue.isDispatchThread()) {
+        window.setLocation(x, y)
+    } else {
+        EventQueue.invokeLater {
+            window.setLocation(x, y)
+        }
     }
 }
 
@@ -430,17 +490,78 @@ private fun repaintDesktopWindow(window: AwtWindow) {
     }
 }
 
-private fun moveDesktopWindowBy(window: AwtWindow, deltaX: Float, deltaY: Float) {
-    val dx = deltaX.roundToInt()
-    val dy = deltaY.roundToInt()
-    if (dx == 0 && dy == 0) return
+private fun snapDesktopWindowToNormalBounds(window: AwtWindow) {
     EventQueue.invokeLater {
-        window.setLocation(window.x + dx, window.y + dy)
+        logDesktopWindowDragNow("end-before-snap", window)
+        DesktopWindowChrome.applyNormalBounds(window)
+        clampDesktopWindowToVirtualDesktopNow(window)
+        logDesktopWindowDragNow("end-after-snap", window)
     }
 }
 
-private fun snapDesktopWindowToNormalBounds(window: AwtWindow) {
+internal fun clampedDesktopWindowBounds(
+    windowBounds: Rectangle,
+    virtualDesktopBounds: Rectangle,
+    minVisiblePx: Int = DesktopDragMinVisiblePx,
+): Rectangle {
+    val minVisibleX = minOf(minVisiblePx, windowBounds.width, virtualDesktopBounds.width).coerceAtLeast(1)
+    val minVisibleY = minOf(minVisiblePx, windowBounds.height, virtualDesktopBounds.height).coerceAtLeast(1)
+    val minX = virtualDesktopBounds.x - windowBounds.width + minVisibleX
+    val maxX = virtualDesktopBounds.x + virtualDesktopBounds.width - minVisibleX
+    val minY = virtualDesktopBounds.y - windowBounds.height + minVisibleY
+    val maxY = virtualDesktopBounds.y + virtualDesktopBounds.height - minVisibleY
+    return Rectangle(
+        boundedCoordinate(windowBounds.x, minX, maxX, virtualDesktopBounds.x),
+        boundedCoordinate(windowBounds.y, minY, maxY, virtualDesktopBounds.y),
+        windowBounds.width,
+        windowBounds.height,
+    )
+}
+
+private fun boundedCoordinate(value: Int, min: Int, max: Int, fallback: Int): Int =
+    if (min <= max) value.coerceIn(min, max) else fallback
+
+private fun clampDesktopWindowToVirtualDesktopNow(window: AwtWindow) {
+    val current = window.bounds
+    val virtualDesktop = desktopVirtualBounds()
+    val clamped = clampedDesktopWindowBounds(current, virtualDesktop)
+    if (current.x == clamped.x && current.y == clamped.y) return
+    DesktopRuntimeLog.warn(
+        "desktop.window.drag.clamp from=${current.toDesktopLogString()} " +
+            "to=${clamped.toDesktopLogString()} virtual=${virtualDesktop.toDesktopLogString()}",
+    )
+    window.setLocation(clamped.x, clamped.y)
+}
+
+private fun desktopVirtualBounds(): Rectangle {
+    val configurations = GraphicsEnvironment.getLocalGraphicsEnvironment()
+        .screenDevices
+        .map { it.defaultConfiguration.bounds }
+    return configurations
+        .drop(1)
+        .fold(configurations.firstOrNull() ?: Rectangle(0, 0, 1, 1)) { union, bounds ->
+            union.union(bounds)
+        }
+}
+
+private fun logDesktopWindowDrag(phase: String, window: AwtWindow) {
     EventQueue.invokeLater {
-        DesktopWindowChrome.applyNormalBounds(window)
+        logDesktopWindowDragNow(phase, window)
     }
 }
+
+private fun logDesktopWindowDragNow(phase: String, window: AwtWindow) {
+    val gc = window.graphicsConfiguration
+    val monitorBounds = gc?.bounds
+    val transform = gc?.defaultTransform
+    val screenCount = GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.size
+    DesktopRuntimeLog.info(
+        "desktop.window.drag.$phase bounds=${window.bounds.toDesktopLogString()} " +
+            "monitor=${monitorBounds?.toDesktopLogString() ?: "unknown"} " +
+            "scale=${transform?.scaleX ?: "unknown"}x${transform?.scaleY ?: "unknown"} " +
+            "screens=$screenCount",
+    )
+}
+
+private fun Rectangle.toDesktopLogString(): String =
+    "${x}x${y}+${width}x$height"
