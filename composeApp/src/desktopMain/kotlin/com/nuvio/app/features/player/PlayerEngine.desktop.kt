@@ -61,51 +61,26 @@ actual fun PlatformPlayerSurface(
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
 ) {
-    var useMpvBackend by remember(sourceUrl, sourceAudioUrl, sourceHeaders, sourceResponseHeaders) {
-        mutableStateOf(DesktopMpvRuntime.isNativeRuntimeAvailable())
-    }
-
-    if (useMpvBackend) {
-        DesktopPlayerSurfaceHost(
-            sourceUrl = sourceUrl,
-            sourceAudioUrl = sourceAudioUrl,
-            sourceHeaders = sanitizePlaybackHeaders(sourceHeaders),
-            sourceResponseHeaders = sanitizePlaybackResponseHeaders(sourceResponseHeaders),
-            modifier = modifier,
-            playWhenReady = playWhenReady,
-            resizeMode = resizeMode,
-            onControllerReady = onControllerReady,
-            onSnapshot = onSnapshot,
-            onError = { message ->
-                if (message?.contains("runtime", ignoreCase = true) == true) {
-                    AppDiagnostics.breadcrumb(
-                        event = "player.mpv.runtime_fallback_to_vlc",
-                        details = mapOf("reason" to message.take(160)),
-                    )
-                    useMpvBackend = false
-                } else {
-                    onError(message)
-                }
-            },
-        )
-    } else {
-        DesktopVlcCallbackPlayerSurface(
-            sourceUrl = sourceUrl,
-            sourceAudioUrl = sourceAudioUrl,
-            sourceHeaders = sourceHeaders,
-            sourceResponseHeaders = sourceResponseHeaders,
-            useYoutubeChunkedPlayback = useYoutubeChunkedPlayback,
-            modifier = modifier,
-            playWhenReady = playWhenReady,
-            resizeMode = resizeMode,
-            title = title,
-            streamTitle = streamTitle,
-            providerName = providerName,
-            onControllerReady = onControllerReady,
-            onSnapshot = onSnapshot,
-            onError = onError,
-        )
-    }
+    DesktopPlayerSurfaceHost(
+        sourceUrl = sourceUrl,
+        sourceAudioUrl = sourceAudioUrl,
+        sourceHeaders = sanitizePlaybackHeaders(sourceHeaders),
+        sourceResponseHeaders = sanitizePlaybackResponseHeaders(sourceResponseHeaders),
+        modifier = modifier,
+        playWhenReady = playWhenReady,
+        resizeMode = resizeMode,
+        onControllerReady = onControllerReady,
+        onSnapshot = onSnapshot,
+        onError = { message ->
+            if (message?.contains("runtime", ignoreCase = true) == true) {
+                AppDiagnostics.breadcrumb(
+                    event = "player.internal.runtime_unavailable_no_auto_vlc",
+                    details = mapOf("reason" to message.take(160)),
+                )
+            }
+            onError(message)
+        },
+    )
 }
 
 @Composable

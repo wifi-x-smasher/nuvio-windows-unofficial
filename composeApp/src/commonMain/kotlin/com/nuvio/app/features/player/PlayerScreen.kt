@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -34,6 +36,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -42,18 +45,24 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.NuvioToastController
-import com.nuvio.app.features.debrid.DebridSettingsRepository
-import com.nuvio.app.features.debrid.DirectDebridPlayableResult
-import com.nuvio.app.features.debrid.DirectDebridPlaybackResolver
-import com.nuvio.app.features.debrid.toastMessage
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.AddonResource
 import com.nuvio.app.features.addons.ManagedAddon
 import com.nuvio.app.features.addons.enabledAddons
+import com.nuvio.app.features.addons.httpGetText
+import com.nuvio.app.features.debrid.DebridSettingsRepository
+import com.nuvio.app.features.debrid.DirectDebridPlayableResult
+import com.nuvio.app.features.debrid.DirectDebridPlaybackResolver
+import com.nuvio.app.features.debrid.toastMessage
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.details.MetaVideo
@@ -79,6 +88,7 @@ import com.nuvio.app.features.watchprogress.WatchProgressClock
 import com.nuvio.app.features.watchprogress.WatchProgressPlaybackSession
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
+import com.nuvio.app.isDesktop
 import com.nuvio.app.isIos
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
@@ -507,6 +517,8 @@ fun PlayerScreen(
         var manualAudioTrackSignature by rememberSaveable(activeVideoId) { mutableStateOf<String?>(null) }
         var selectedSubtitleIndex by remember { mutableStateOf(-1) }
         var selectedAddonSubtitleId by remember { mutableStateOf<String?>(null) }
+        var selectedAddonSubtitleUrl by remember { mutableStateOf<String?>(null) }
+        var appRenderedSubtitleCues by remember { mutableStateOf<List<PlayerTimedSubtitleCue>>(emptyList()) }
         var useCustomSubtitles by remember { mutableStateOf(false) }
         var preferredAudioSelectionApplied by rememberSaveable(sourceUrl) { mutableStateOf(false) }
         var preferredSubtitleSelectionApplied by rememberSaveable(sourceUrl) { mutableStateOf(false) }
@@ -535,6 +547,16 @@ fun PlayerScreen(
         }
         var autoFetchedAddonSubtitlesForKey by rememberSaveable(activeSourceUrl, activeVideoId) {
             mutableStateOf<String?>(null)
+        }
+        val activeAppRenderedSubtitle = remember(
+            appRenderedSubtitleCues,
+            displayedPositionMs,
+            subtitleDelayMillis,
+        ) {
+            val effectivePositionMs = (displayedPositionMs - subtitleDelayMillis).coerceAtLeast(0L)
+            appRenderedSubtitleCues.firstOrNull { cue ->
+                effectivePositionMs in cue.startMs..cue.endMs
+            }?.text
         }
 
         fun refreshTracks() {
@@ -595,6 +617,8 @@ fun PlayerScreen(
                     }
                     selectedSubtitleIndex = -1
                     selectedAddonSubtitleId = null
+                    selectedAddonSubtitleUrl = null
+                    appRenderedSubtitleCues = emptyList()
                     useCustomSubtitles = false
                     preferredSubtitleSelectionApplied = true
                 } else if (subtitleTracks.isNotEmpty()) {
@@ -606,6 +630,8 @@ fun PlayerScreen(
                         playerController?.selectSubtitleTrack(preferredSubtitleIndex)
                         selectedSubtitleIndex = preferredSubtitleIndex
                         selectedAddonSubtitleId = null
+                        selectedAddonSubtitleUrl = null
+                        appRenderedSubtitleCues = emptyList()
                         useCustomSubtitles = false
                     } else if (
                         preferredSubtitleIndex < 0 &&
@@ -616,6 +642,8 @@ fun PlayerScreen(
                         }
                         selectedSubtitleIndex = -1
                         selectedAddonSubtitleId = null
+                        selectedAddonSubtitleUrl = null
+                        appRenderedSubtitleCues = emptyList()
                         useCustomSubtitles = false
                     }
                     preferredSubtitleSelectionApplied = true
@@ -1468,6 +1496,8 @@ fun PlayerScreen(
             episodeStreamsPanelState = EpisodeStreamsPanelState()
             PlayerStreamsRepository.clearEpisodeStreams()
             SubtitleRepository.clear()
+            selectedAddonSubtitleUrl = null
+            appRenderedSubtitleCues = emptyList()
             WatchProgressRepository.ensureLoaded()
         }
 
@@ -1477,6 +1507,20 @@ fun PlayerScreen(
 
         LaunchedEffect(playerController, subtitleDelayMillis) {
             playerController?.setSubtitleDelayMillis(subtitleDelayMillis)
+        }
+
+        LaunchedEffect(isDesktop, useCustomSubtitles, selectedAddonSubtitleUrl) {
+            val subtitleUrl = selectedAddonSubtitleUrl
+            if (!isDesktop || !useCustomSubtitles || subtitleUrl.isNullOrBlank()) {
+                appRenderedSubtitleCues = emptyList()
+                return@LaunchedEffect
+            }
+
+            appRenderedSubtitleCues = runCatching {
+                parsePlayerTimedSubtitles(httpGetText(subtitleUrl))
+            }.getOrElse {
+                emptyList()
+            }
         }
 
         val playerFocusRequester = remember { FocusRequester() }
@@ -1621,9 +1665,14 @@ fun PlayerScreen(
 
             val addon = addonSubtitles[preferredAddonSubtitleIndex]
             selectedAddonSubtitleId = addon.id
+            selectedAddonSubtitleUrl = addon.url
             selectedSubtitleIndex = -1
             useCustomSubtitles = true
-            controller.setSubtitleUri(addon.url)
+            if (isDesktop) {
+                controller.selectSubtitleTrack(-1)
+            } else {
+                controller.setSubtitleUri(addon.url)
+            }
             preferredAddonSubtitleSelectionApplied = true
         }
 
@@ -2125,6 +2174,13 @@ fun PlayerScreen(
                 },
             )
 
+            StyledSubtitleOverlay(
+                text = activeAppRenderedSubtitle,
+                style = subtitleStyle,
+                bottomPadding = overlayBottomPadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+
             AnimatedVisibility(
                 visible = pausedOverlayVisible && !controlsVisible && !playerControlsLocked,
                 enter = fadeIn(animationSpec = tween(durationMillis = 220)),
@@ -2347,6 +2403,8 @@ fun PlayerScreen(
                     val wasCustom = useCustomSubtitles
                     selectedSubtitleIndex = index
                     selectedAddonSubtitleId = null
+                    selectedAddonSubtitleUrl = null
+                    appRenderedSubtitleCues = emptyList()
                     useCustomSubtitles = false
                     preferredAddonSubtitleSelectionApplied = true
                     if (wasCustom) {
@@ -2357,10 +2415,15 @@ fun PlayerScreen(
                 },
                 onAddonSubtitleSelected = { addon ->
                     selectedAddonSubtitleId = addon.id
+                    selectedAddonSubtitleUrl = addon.url
                     selectedSubtitleIndex = -1
                     useCustomSubtitles = true
                     preferredAddonSubtitleSelectionApplied = true
-                    playerController?.setSubtitleUri(addon.url)
+                    if (isDesktop) {
+                        playerController?.selectSubtitleTrack(-1)
+                    } else {
+                        playerController?.setSubtitleUri(addon.url)
+                    }
                 },
                 onFetchAddonSubtitles = ::fetchAddonSubtitlesForActiveItem,
                 onStyleChanged = PlayerSettingsRepository::setSubtitleStyle,
@@ -2502,6 +2565,122 @@ fun PlayerScreen(
             }
         }
     }
+}
+
+@Composable
+private fun StyledSubtitleOverlay(
+    text: String?,
+    style: SubtitleStyleState,
+    bottomPadding: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val cleanText = text
+        ?.takeIf { it.isNotBlank() }
+        ?: return
+    val shadow = if (style.outlineEnabled) {
+        Shadow(
+            color = Color.Black.copy(alpha = 0.95f),
+            offset = Offset.Zero,
+            blurRadius = 8f,
+        )
+    } else {
+        Shadow(
+            color = Color.Black.copy(alpha = 0.85f),
+            offset = Offset(0f, 1.5f),
+            blurRadius = 3f,
+        )
+    }
+
+    Box(modifier = modifier) {
+        Text(
+            text = cleanText,
+            color = style.textColor,
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.SemiBold,
+            style = TextStyle(
+                fontSize = style.fontSizeSp.sp,
+                lineHeight = (style.fontSizeSp * 1.22f).sp,
+                shadow = shadow,
+            ),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .widthIn(max = 980.dp)
+                .padding(horizontal = 40.dp)
+                .padding(bottom = bottomPadding + style.bottomOffset.dp),
+        )
+    }
+}
+
+internal data class PlayerTimedSubtitleCue(
+    val startMs: Long,
+    val endMs: Long,
+    val text: String,
+)
+
+internal fun parsePlayerTimedSubtitles(text: String): List<PlayerTimedSubtitleCue> {
+    val normalized = text
+        .replace("\r\n", "\n")
+        .replace('\r', '\n')
+        .lineSequence()
+        .filterNot { line -> line.trim().equals("WEBVTT", ignoreCase = true) }
+        .joinToString("\n")
+
+    return normalized
+        .split(Regex("\n{2,}"))
+        .mapNotNull(::parsePlayerTimedSubtitleBlock)
+}
+
+private fun parsePlayerTimedSubtitleBlock(block: String): PlayerTimedSubtitleCue? {
+    val lines = block
+        .lines()
+        .map { it.trim() }
+        .filter { it.isNotBlank() && !it.startsWith("NOTE", ignoreCase = true) }
+    val timingIndex = lines.indexOfFirst { it.contains("-->") }
+    if (timingIndex < 0) return null
+
+    val timing = lines[timingIndex].split("-->", limit = 2)
+    val startMs = parsePlayerSubtitleTimestamp(timing.getOrNull(0)) ?: return null
+    val endMs = parsePlayerSubtitleTimestamp(
+        timing.getOrNull(1)
+            ?.trim()
+            ?.substringBefore(' ')
+            ?.substringBefore('\t'),
+    ) ?: return null
+    val cueText = lines
+        .drop(timingIndex + 1)
+        .joinToString("\n")
+        .replace(Regex("<[^>]+>"), "")
+        .trim()
+        .takeIf { it.isNotBlank() }
+        ?: return null
+
+    return PlayerTimedSubtitleCue(
+        startMs = startMs,
+        endMs = endMs.coerceAtLeast(startMs + 1L),
+        text = cueText,
+    )
+}
+
+private fun parsePlayerSubtitleTimestamp(value: String?): Long? {
+    val parts = value
+        ?.trim()
+        ?.replace(',', '.')
+        ?.split(':')
+        ?: return null
+    if (parts.size !in 2..3) return null
+
+    val hours = if (parts.size == 3) parts[0].toLongOrNull() ?: return null else 0L
+    val minutes = parts[parts.size - 2].toLongOrNull() ?: return null
+    val secondsParts = parts.last().split('.', limit = 2)
+    val seconds = secondsParts.getOrNull(0)?.toLongOrNull() ?: return null
+    val millis = secondsParts
+        .getOrNull(1)
+        ?.take(3)
+        ?.padEnd(3, '0')
+        ?.toLongOrNull()
+        ?: 0L
+
+    return (hours * 3_600_000L) + (minutes * 60_000L) + (seconds * 1_000L) + millis
 }
 
 private fun buildAddonSubtitleFetchKey(

@@ -2,19 +2,21 @@ package com.nuvio.app.features.player
 
 import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeBootstrap
+import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeBootstrapResult
 import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeLocator
+import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeResolution
 import java.nio.file.Path
 import kotlin.io.path.isRegularFile
 
 internal actual object InternalPlayerPlatform {
     actual fun isAvailable(): Boolean =
-        DesktopMpvRuntime.isNativeRuntimeAvailable() || DesktopMpvRuntime.executablePath() != null
+        DesktopMpvRuntime.isNativeRuntimeAvailable()
 
     actual fun unavailableMessage(): String? =
         if (isAvailable()) {
             null
         } else {
-            "Internal player is unavailable because MPV was not found. Install mpv or use an external player."
+            "Internal player is unavailable because the bundled MPV runtime could not be loaded. Use an external player or send diagnostics logs."
         }
 }
 
@@ -29,16 +31,33 @@ internal object DesktopMpvRuntime {
             exists = { it.isRegularFile() },
         )
 
-    fun isNativeRuntimeAvailable(): Boolean {
-        val runtime = MpvRuntimeLocator.resolve()
-        val bootstrap = MpvRuntimeBootstrap.apply(runtime)
-        if (!bootstrap.success) {
-            AppDiagnostics.breadcrumb(
-                event = "player.mpv.native_runtime_unavailable",
-                details = mapOf("diagnostics" to bootstrap.diagnostics.take(500)),
-            )
+    fun isNativeRuntimeAvailable(): Boolean =
+        isNativeRuntimeAvailable(
+            resolve = MpvRuntimeLocator::resolve,
+            bootstrap = MpvRuntimeBootstrap::apply,
+            logUnavailable = { diagnostics ->
+                AppDiagnostics.breadcrumb(
+                    event = "player.mpv.native_runtime_unavailable",
+                    details = mapOf("diagnostics" to diagnostics.take(500)),
+                )
+            },
+        )
+
+    internal fun isNativeRuntimeAvailable(
+        resolve: () -> MpvRuntimeResolution,
+        bootstrap: (MpvRuntimeResolution) -> MpvRuntimeBootstrapResult,
+        logUnavailable: (String) -> Unit = {},
+    ): Boolean {
+        val runtime = resolve()
+        if (!runtime.available) {
+            logUnavailable("MPV native runtime files unavailable. ${runtime.diagnostics}")
+            return false
         }
-        return bootstrap.success
+        val bootstrapResult = bootstrap(runtime)
+        if (!bootstrapResult.success) {
+            logUnavailable(bootstrapResult.diagnostics)
+        }
+        return bootstrapResult.success
     }
 
     internal fun executablePath(

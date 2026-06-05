@@ -7,8 +7,19 @@ internal data class MpvRuntimeResolution(
     val checkedDirectories: List<String>,
     val diagnostics: String,
 ) {
-    val available: Boolean get() = directory?.resolve("mediampv.dll")?.isFile == true
+    val available: Boolean
+        get() = directory?.let { dir ->
+            requiredMpvNativeRuntimeFiles.all { name -> dir.resolve(name).isFile }
+        } == true
+
+    fun requiredFileInventory(): Map<String, Boolean> =
+        requiredMpvNativeRuntimeFiles.associateWith { name -> directory?.resolve(name)?.isFile == true }
 }
+
+internal val requiredMpvNativeRuntimeFiles = listOf(
+    "mediampv.dll",
+    "libmpv-2.dll",
+)
 
 internal object MpvRuntimeLocator {
     private val isWindows: Boolean
@@ -68,9 +79,14 @@ internal object MpvRuntimeLocator {
         }
 
         val checked = candidates.map { (label, dir) ->
-            "$label=${dir.safePath()} exists=${dir.isDirectory} mediampv=${dir.resolve("mediampv.dll").isFile}"
+            val inventory = requiredMpvNativeRuntimeFiles.joinToString(",") { name ->
+                "$name=${dir.resolve(name).isFile}"
+            }
+            "$label=${dir.safePath()} exists=${dir.isDirectory} native=[$inventory]"
         }
-        val selected = candidates.values.firstOrNull { it.resolve("mediampv.dll").isFile }
+        val selected = candidates.values.firstOrNull { dir ->
+            requiredMpvNativeRuntimeFiles.all { name -> dir.resolve(name).isFile }
+        }
         return MpvRuntimeResolution(
             directory = selected,
             checkedDirectories = checked,

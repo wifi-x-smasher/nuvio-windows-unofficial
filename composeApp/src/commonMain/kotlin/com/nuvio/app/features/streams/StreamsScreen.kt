@@ -66,6 +66,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -1043,6 +1046,10 @@ private fun StreamCard(
             )
             .clip(cardShape)
             .background(cardBackground)
+            .secondaryClickAsLongPress(
+                enabled = enabled,
+                onSecondaryClick = onLongClick,
+            )
             .combinedClickable(
                 enabled = enabled,
                 onClick = onClick,
@@ -1087,6 +1094,24 @@ private fun StreamCard(
                     if (showFileSizeBadges) {
                         StreamFileSizeBadge(stream = stream)
                     }
+                }
+            }
+        }
+    }
+}
+
+private fun Modifier.secondaryClickAsLongPress(
+    enabled: Boolean,
+    onSecondaryClick: (() -> Unit)?,
+): Modifier {
+    if (!isDesktop || !enabled || onSecondaryClick == null) return this
+    return pointerInput(onSecondaryClick) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                    event.changes.forEach { change -> change.consume() }
+                    onSecondaryClick()
                 }
             }
         }

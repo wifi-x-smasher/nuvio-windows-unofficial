@@ -1,10 +1,14 @@
 package com.nuvio.app.desktop
 
+import androidx.compose.ui.window.WindowPlacement
 import com.sun.jna.Library
 import com.sun.jna.Memory
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.win32.W32APIOptions
+import java.awt.EventQueue
+import java.awt.GraphicsEnvironment
+import java.awt.Rectangle
 import java.awt.Window
 import javax.swing.JFrame
 
@@ -42,6 +46,49 @@ internal object DesktopWindowChrome {
         }
     }
 
+    fun enterBorderlessFullscreen(window: Window) {
+        EventQueue.invokeLater {
+            val frame = window as? JFrame
+            val targetBounds = window.graphicsConfiguration?.bounds
+                ?: GraphicsEnvironment.getLocalGraphicsEnvironment()
+                    .defaultScreenDevice
+                    .defaultConfiguration
+                    .bounds
+
+            frame?.extendedState = JFrame.NORMAL
+            frame?.isResizable = false
+            window.bounds = targetBounds
+            window.background = java.awt.Color.BLACK
+            frame?.contentPane?.background = java.awt.Color.BLACK
+            window.validate()
+            window.repaint()
+            DesktopRuntimeLog.info(
+                "desktop.window.borderless_fullscreen.enter bounds=${targetBounds.toLogString()}",
+            )
+        }
+    }
+
+    fun exitBorderlessFullscreen(
+        window: Window,
+        restoreBounds: Rectangle?,
+        restorePlacement: WindowPlacement,
+    ) {
+        EventQueue.invokeLater {
+            val frame = window as? JFrame
+            frame?.isResizable = true
+            if (restorePlacement == WindowPlacement.Floating && restoreBounds != null) {
+                window.bounds = restoreBounds
+            }
+            applyNuvioChrome(window)
+            window.validate()
+            window.repaint()
+            DesktopRuntimeLog.info(
+                "desktop.window.borderless_fullscreen.exit restorePlacement=$restorePlacement " +
+                    "restoreBounds=${restoreBounds?.toLogString() ?: "none"}",
+            )
+        }
+    }
+
     internal fun rgbToColorRef(red: Int, green: Int, blue: Int): Int =
         (red and 0xff) or ((green and 0xff) shl 8) or ((blue and 0xff) shl 16)
 
@@ -53,6 +100,9 @@ internal object DesktopWindowChrome {
 
     private fun isWindows(): Boolean =
         System.getProperty("os.name").orEmpty().contains("windows", ignoreCase = true)
+
+    private fun Rectangle.toLogString(): String =
+        "${x}x${y}+${width}x$height"
 
     private interface DwmApi : Library {
         @Suppress("FunctionName")

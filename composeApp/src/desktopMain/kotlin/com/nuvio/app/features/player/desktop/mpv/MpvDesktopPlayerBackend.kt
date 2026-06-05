@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -51,8 +52,8 @@ import kotlin.coroutines.EmptyCoroutineContext
 
 private const val ExternalSubtitleCodepage = "+utf-8"
 private const val EmbeddedSubtitleCodepage = "auto"
-private const val ExternalSubtitleAssOverride = "strip"
-private const val EmbeddedSubtitleAssOverride = "no"
+private const val AppControlledSubtitleAssOverride = "force"
+private const val NativeSubtitleAssOverride = "no"
 
 @OptIn(InternalMediampApi::class)
 internal class MpvDesktopPlayerBackend private constructor(
@@ -224,7 +225,7 @@ internal class MpvDesktopPlayerBackend private constructor(
         runCatching {
             player.impl.setMpvRuntimeOption("sub-codepage", EmbeddedSubtitleCodepage)
             player.impl.setMpvRuntimeOption("embeddedfonts", "yes")
-            player.impl.setMpvRuntimeOption("sub-ass-override", EmbeddedSubtitleAssOverride)
+            player.impl.setMpvRuntimeOption("sub-ass-override", NativeSubtitleAssOverride)
         }.onFailure { DesktopRuntimeLog.warn("MPV reset external subtitle state failed reason=$reason message=${it.message}") }
     }
 
@@ -400,6 +401,7 @@ internal class MpvDesktopPlayerBackend private constructor(
                     player.impl.command("sub-add", subtitleRef, "select")
                     selectNewestExternalSubtitle()
                     applySubtitleStyleToCurrentTrack(latestSubtitleStyle, reason = "set-external")
+                    reapplySubtitleStyleAfterTrackSettle(requestId, reason = "set-external")
                 }.onFailure {
                     DesktopRuntimeLog.error("MPV setSubtitleUri failed url=${url.redactedMediaUrl()}", it)
                 }
@@ -489,29 +491,58 @@ internal class MpvDesktopPlayerBackend private constructor(
             val subPos = 100 - style.bottomOffset
             runCatching {
                 val selectedTrack = handle.selectedSubtitleTrackDetails()
-                val useExternalSubtitleStyle = externalSubtitleActive || selectedTrack?.external == true
-                val assOverrideMode = if (useExternalSubtitleStyle) ExternalSubtitleAssOverride else EmbeddedSubtitleAssOverride
-                val codepage = if (useExternalSubtitleStyle) ExternalSubtitleCodepage else EmbeddedSubtitleCodepage
+                val styleMode = MpvSubtitleStyleMode(
+                    trackCodec = selectedTrack?.codec,
+                    externalSubtitleActive = externalSubtitleActive,
+                )
+                val useAppSubtitleStyle = styleMode == MpvSubtitleStyleMode.AppControlled
+                val assOverrideMode = styleMode.assOverride
+                val codepage = if (externalSubtitleActive || selectedTrack?.external == true) {
+                    ExternalSubtitleCodepage
+                } else {
+                    EmbeddedSubtitleCodepage
+                }
 
-                // Desktop MPV already renders ASS/SSA through libass. Preserve authored ASS/SSA
-                // styles and embedded fonts for embedded tracks. External addon subtitles are
-                // normalized to app-controlled plain text, so they follow Nuvio style and placement.
+                // Text subtitles should follow the visible Nuvio style controls. Bitmap/image
+                // subtitle formats such as PGS cannot be recolored/resized by mpv, so keep their
+                // native rendering and make that visible in diagnostics instead of pretending.
                 handle.setMpvRuntimeOption("sub-codepage", codepage)
                 handle.setMpvRuntimeOption("embeddedfonts", "yes")
                 handle.setMpvRuntimeOption("sub-ass-override", assOverrideMode)
-                handle.setMpvRuntimeOption("sub-color", colorHex)
-                handle.setMpvRuntimeOption("sub-border-size", outline)
-                handle.setMpvRuntimeOption("sub-font-size", style.fontSizeSp.toDouble())
-                handle.setMpvRuntimeOption("sub-pos", subPos)
-                handle.setMpvRuntimeOption("sub-align-y", "bottom")
+                val appliedStyleProperties = if (useAppSubtitleStyle) {
+                    handle.applyLiveSubtitleStyle(
+                        colorHex = colorHex,
+                        outline = outline,
+                        fontSizeSp = style.fontSizeSp,
+                        subPos = subPos,
+                    )
+                } else {
+                    emptyMap()
+                }
 
                 DesktopRuntimeLog.info(
                     "MPV applySubtitleStyle selected=${selectedTrack?.toLogString() ?: "none"} " +
                         "reason=$reason assOverride=$assOverrideMode codepage=$codepage " +
                         "embeddedfonts=yes externalActive=$externalSubtitleActive " +
-                        "appStyleTarget=${if (useExternalSubtitleStyle) "external-subtitle" else "embedded-plain-text"}",
+                        "appStyleTarget=${styleMode.logLabel} styleApplied=$appliedStyleProperties " +
+                        "styleReadback=${if (useAppSubtitleStyle) handle.subtitleStyleReadback() else "native"}",
                 )
             }.onFailure { DesktopRuntimeLog.error("MPV applySubtitleStyle failed", it) }
+        }
+
+        private fun reapplySubtitleStyleAfterTrackSettle(requestId: Int, reason: String) {
+            scope.launch {
+                repeat(3) { attempt ->
+                    delay(250L * (attempt + 1))
+                    if (requestId != externalSubtitleRequestCounter.get() || !canReceiveCommands()) {
+                        return@launch
+                    }
+                    applySubtitleStyleToCurrentTrack(
+                        style = latestSubtitleStyle,
+                        reason = "$reason-settled-${attempt + 1}",
+                    )
+                }
+            }
         }
 
         fun switchSource(url: String, audioUrl: String?, headersJson: String?) {
@@ -624,6 +655,28 @@ internal class MpvDesktopPlayerBackend private constructor(
         return command("set", name, stringValue) || option(name, stringValue) || setMpvProperty(name, value)
     }
 
+    private fun MPVHandle.applyLiveSubtitleStyle(
+        colorHex: String,
+        outline: Double,
+        fontSizeSp: Int,
+        subPos: Int,
+    ): Map<String, Boolean> = linkedMapOf(
+        "sub-color" to setMpvProperty("sub-color", colorHex),
+        "sub-border-size" to setMpvProperty("sub-border-size", outline),
+        "sub-font-size" to setMpvProperty("sub-font-size", fontSizeSp.toDouble()),
+        "sub-pos" to setMpvProperty("sub-pos", subPos),
+        "sub-align-y" to setMpvProperty("sub-align-y", "bottom"),
+    )
+
+    private fun MPVHandle.subtitleStyleReadback(): String =
+        listOf(
+            "sub-color=${getMpvStringProperty("sub-color")}",
+            "sub-border-size=${getMpvStringProperty("sub-border-size")}",
+            "sub-font-size=${getMpvStringProperty("sub-font-size")}",
+            "sub-pos=${getMpvStringProperty("sub-pos")}",
+            "sub-align-y=${getMpvStringProperty("sub-align-y")}",
+        ).joinToString(prefix = "[", postfix = "]")
+
     private fun Path.toSafeLogPath(): String =
         runCatching { toAbsolutePath().toString() }.getOrDefault(toString())
 
@@ -687,3 +740,34 @@ private fun Color.toMpvColorString(): String {
 }
 
 private fun Int.hex(): String = toString(16).padStart(2, '0').uppercase()
+
+internal enum class MpvSubtitleStyleMode(
+    val assOverride: String,
+    val logLabel: String,
+) {
+    AppControlled(AppControlledSubtitleAssOverride, "app-controlled-text"),
+    Native(NativeSubtitleAssOverride, "native-bitmap-or-image"),
+}
+
+internal fun MpvSubtitleStyleMode(trackCodec: String?, externalSubtitleActive: Boolean): MpvSubtitleStyleMode {
+    if (externalSubtitleActive) return MpvSubtitleStyleMode.AppControlled
+    val normalized = trackCodec
+        ?.lowercase()
+        ?.replace('-', '_')
+        ?.trim()
+        ?: return MpvSubtitleStyleMode.AppControlled
+
+    return if (normalized in imageSubtitleCodecs) {
+        MpvSubtitleStyleMode.Native
+    } else {
+        MpvSubtitleStyleMode.AppControlled
+    }
+}
+
+private val imageSubtitleCodecs = setOf(
+    "hdmv_pgs_subtitle",
+    "pgs",
+    "dvd_subtitle",
+    "dvb_subtitle",
+    "xsub",
+)

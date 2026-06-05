@@ -1,6 +1,7 @@
 package com.nuvio.app.core.diagnostics
 
 import java.awt.Desktop
+import java.awt.GraphicsEnvironment
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.nio.charset.StandardCharsets
@@ -34,7 +35,13 @@ actual object AppDiagnostics {
             event = "app.diagnostics.installed",
             details = mapOf(
                 "os" to System.getProperty("os.name"),
+                "osVersion" to System.getProperty("os.version"),
                 "java" to System.getProperty("java.version"),
+                "javaVendor" to System.getProperty("java.vendor"),
+                "skikoRenderApi" to System.getProperty("skiko.renderApi"),
+                "composeInteropBlending" to System.getProperty("compose.interop.blending"),
+                "composeLayersType" to System.getProperty("compose.layers.type"),
+                "graphicsDevices" to desktopGraphicsDeviceSummary(),
             ),
         )
     }
@@ -96,6 +103,29 @@ actual object AppDiagnostics {
         }
     }
 }
+
+private fun desktopGraphicsDeviceSummary(): String =
+    runCatching {
+        GraphicsEnvironment.getLocalGraphicsEnvironment()
+            .screenDevices
+            .mapIndexed { index, device ->
+                val configuration = device.defaultConfiguration
+                val bounds = configuration.bounds
+                val transform = configuration.defaultTransform
+                "#$index:${device.safeIdString()}:${bounds.x},${bounds.y},${bounds.width}x${bounds.height}:scale=${"%.2f".format(transform.scaleX)}x${"%.2f".format(transform.scaleY)}"
+            }
+            .joinToString(separator = " | ")
+            .take(900)
+    }.getOrElse { error ->
+        "unavailable:${error.message ?: error::class.simpleName.orEmpty()}"
+    }
+
+private fun java.awt.GraphicsDevice.safeIdString(): String =
+    runCatching {
+        javaClass.getMethod("getIDstring").invoke(this)?.toString()
+    }.getOrNull()
+        ?.takeIf(String::isNotBlank)
+        ?: toString()
 
 private fun Throwable?.stackTraceStringOrEmpty(): String =
     this?.let { throwable ->

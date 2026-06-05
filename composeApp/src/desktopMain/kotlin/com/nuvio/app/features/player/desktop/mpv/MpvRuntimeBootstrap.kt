@@ -32,7 +32,7 @@ internal object MpvRuntimeBootstrap {
         if (directory == null || !runtime.available) {
             return MpvRuntimeBootstrapResult(
                 success = false,
-                diagnostics = "MPV runtime directory unresolved. ${runtime.diagnostics}",
+                diagnostics = "MPV runtime directory unresolved or incomplete. inventory=${runtime.requiredFileInventory()} ${runtime.diagnostics}",
             )
         }
         val normalized = directory.absoluteFile.safePath()
@@ -60,17 +60,25 @@ internal object MpvRuntimeBootstrap {
         }.fold(
             onSuccess = {
                 bootstrappedDirectory = normalized
-                DesktopRuntimeLog.info("MPV runtime bootstrap loaded dll=${mediampDll.safePath()}")
-                MpvRuntimeBootstrapResult(success = true, diagnostics = "loaded=${mediampDll.safePath()}")
+                DesktopRuntimeLog.info(
+                    "MPV runtime bootstrap loaded dll=${mediampDll.safePath()} inventory=${runtime.requiredFileInventory()}",
+                )
+                MpvRuntimeBootstrapResult(
+                    success = true,
+                    diagnostics = "loaded=${mediampDll.safePath()} inventory=${runtime.requiredFileInventory()}",
+                )
             },
             onFailure = { throwable ->
                 if (throwable.message?.contains("already loaded", ignoreCase = true) == true) {
                     bootstrappedDirectory = normalized
-                    MpvRuntimeBootstrapResult(success = true, diagnostics = "already loaded dll=${mediampDll.safePath()}")
+                    MpvRuntimeBootstrapResult(
+                        success = true,
+                        diagnostics = "already loaded dll=${mediampDll.safePath()} inventory=${runtime.requiredFileInventory()}",
+                    )
                 } else {
                     MpvRuntimeBootstrapResult(
                         success = false,
-                        diagnostics = "System.load failed dll=${mediampDll.safePath()} runtime=${runtime.diagnostics}",
+                        diagnostics = "System.load failed dll=${mediampDll.safePath()} inventory=${runtime.requiredFileInventory()} runtime=${runtime.diagnostics}",
                         error = throwable,
                     )
                 }

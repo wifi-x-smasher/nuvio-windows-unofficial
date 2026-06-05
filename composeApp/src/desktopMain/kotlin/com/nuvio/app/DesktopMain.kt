@@ -12,6 +12,7 @@ import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +37,7 @@ import com.nuvio.app.features.player.PlayerKeyboardShortcutBridge
 import java.awt.Color
 import java.awt.EventQueue
 import java.awt.KeyboardFocusManager
+import java.awt.Rectangle
 import java.awt.Window as AwtWindow
 import java.awt.event.KeyEvent
 import java.awt.event.WindowAdapter
@@ -49,9 +51,10 @@ fun main(args: Array<String>) {
     System.setProperty("compose.interop.blending", "true")
     System.setProperty("compose.swing.render.on.graphics", "true")
     System.setProperty("compose.layers.type", "COMPONENT")
-    System.setProperty("skiko.renderApi", "OPENGL")
+    val renderApi = configureDesktopRenderer()
     AppDiagnostics.install()
     DesktopRuntimeLog.initialize()
+    DesktopRuntimeLog.info("desktop.renderer configured skiko.renderApi=$renderApi")
     DesktopRuntimeLog.installGlobalExceptionHandlers()
     if (DesktopDeepLinkBridge.forwardToPrimaryInstanceIfNeeded(args)) {
         return
@@ -61,6 +64,7 @@ fun main(args: Array<String>) {
     application {
         val windowState = rememberWindowState(width = 1280.dp, height = 720.dp)
         var previousNonFullscreenPlacement by remember { mutableStateOf(WindowPlacement.Floating) }
+        var previousNonFullscreenBounds by remember { mutableStateOf<Rectangle?>(null) }
         var desktopFullscreen by remember { mutableStateOf(false) }
 
         val toggleFullscreen = {
@@ -73,7 +77,18 @@ fun main(args: Array<String>) {
                 previousNonFullscreen = previousNonFullscreenPlacement,
             )
         }
+        val exitFullscreen = {
+            if (desktopFullscreen) {
+                desktopFullscreen = false
+                windowState.placement = nextDesktopWindowPlacement(
+                    isFullscreen = false,
+                    previousNonFullscreen = previousNonFullscreenPlacement,
+                )
+            }
+        }
         val currentToggleFullscreen by rememberUpdatedState(toggleFullscreen)
+        val currentExitFullscreen by rememberUpdatedState(exitFullscreen)
+        val currentDesktopFullscreen by rememberUpdatedState(desktopFullscreen)
 
         DisposableEffect(Unit) {
             val dispatcher = java.awt.KeyEventDispatcher { event ->
@@ -82,6 +97,15 @@ fun main(args: Array<String>) {
                 } else when {
                     isDesktopFullscreenShortcut(event.keyCode, event.isAltDown) -> {
                         currentToggleFullscreen()
+                        true
+                    }
+                    currentDesktopFullscreen && isDesktopFullscreenExitShortcut(
+                        keyCode = event.keyCode,
+                        isAltDown = event.isAltDown,
+                        isControlDown = event.isControlDown,
+                        isMetaDown = event.isMetaDown,
+                    ) -> {
+                        currentExitFullscreen()
                         true
                     }
                     !event.isAltDown && !event.isControlDown && !event.isMetaDown ->
@@ -106,9 +130,24 @@ fun main(args: Array<String>) {
             },
             title = "Nuvio",
             state = windowState,
+            undecorated = desktopFullscreen,
             icon = painterResource(Res.drawable.app_logo_mark),
         ) {
             val awtWindow = window
+            LaunchedEffect(awtWindow, desktopFullscreen) {
+                if (desktopFullscreen) {
+                    previousNonFullscreenBounds = awtWindow.bounds
+                    DesktopWindowChrome.enterBorderlessFullscreen(awtWindow)
+                } else {
+                    DesktopWindowChrome.exitBorderlessFullscreen(
+                        window = awtWindow,
+                        restoreBounds = previousNonFullscreenBounds,
+                        restorePlacement = previousNonFullscreenPlacement,
+                    )
+                    previousNonFullscreenBounds = null
+                }
+            }
+
             DisposableEffect(awtWindow) {
                 DesktopWindowChrome.applyNuvioChrome(awtWindow)
 
@@ -150,6 +189,21 @@ fun main(args: Array<String>) {
     }
 }
 
+internal fun configureDesktopRenderer(): String {
+    val requested = System.getProperty("nuvio.renderApi")
+        ?: System.getenv("NUVIO_RENDER_API")
+        ?: System.getProperty("skiko.renderApi")
+        ?: "OPENGL"
+    val normalized = requested.trim().uppercase()
+    val safeValue = when (normalized) {
+        "OPENGL",
+        "SOFTWARE" -> normalized
+        else -> "OPENGL"
+    }
+    System.setProperty("skiko.renderApi", safeValue)
+    return safeValue
+}
+
 @Composable
 private fun DesktopFullscreenButton(
     onClick: () -> Unit,
@@ -177,13 +231,21 @@ internal fun nextDesktopWindowPlacement(
     previousNonFullscreen: WindowPlacement,
 ): WindowPlacement =
     if (isFullscreen) {
-        WindowPlacement.Fullscreen
+        WindowPlacement.Floating
     } else {
         previousNonFullscreen.takeUnless { it == WindowPlacement.Fullscreen } ?: WindowPlacement.Floating
     }
 
 internal fun isDesktopFullscreenShortcut(keyCode: Int, isAltDown: Boolean): Boolean =
     keyCode == KeyEvent.VK_F11 || (isAltDown && keyCode == KeyEvent.VK_ENTER)
+
+internal fun isDesktopFullscreenExitShortcut(
+    keyCode: Int,
+    isAltDown: Boolean,
+    isControlDown: Boolean,
+    isMetaDown: Boolean,
+): Boolean =
+    keyCode == KeyEvent.VK_ESCAPE && !isAltDown && !isControlDown && !isMetaDown
 
 internal fun desktopPlayerKeyboardShortcutFor(keyCode: Int): PlayerKeyboardShortcut? = when (keyCode) {
     KeyEvent.VK_SPACE,

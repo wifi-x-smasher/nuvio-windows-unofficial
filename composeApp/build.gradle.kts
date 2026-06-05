@@ -45,6 +45,10 @@ val bundledMpvNativeResourcesDir = layout.buildDirectory.dir("desktop-runtime-re
 val mediampRootDir = rootProject.file("vendor/mediamp-nuvio")
 val mediampNativeBuildDir = mediampRootDir.resolve("mediamp-mpv/build-ci")
 val mediampNativeReleaseDir = mediampNativeBuildDir.resolve("Release")
+val requiredMediampMpvRuntimeFiles = listOf(
+    "mediampv.dll",
+    "libmpv-2.dll",
+)
 
 fun sha256Hex(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -595,10 +599,35 @@ val prepareMediampMpvRuntimeResources by tasks.registering(Copy::class) {
     into(bundledMpvNativeResourcesDir)
 }
 
+val verifyMediampMpvRuntimeResources by tasks.registering {
+    group = "verification"
+    description = "Verifies that the packaged Windows MPV runtime contains the required native files."
+    dependsOn(prepareMediampMpvRuntimeResources)
+    onlyIf {
+        System.getProperty("os.name").contains("Windows", ignoreCase = true)
+    }
+    inputs.dir(bundledMpvNativeResourcesDir)
+
+    doLast {
+        val nativeDir = bundledMpvNativeResourcesDir.get().asFile
+        val missing = requiredMediampMpvRuntimeFiles.filterNot { name ->
+            nativeDir.resolve(name).isFile
+        }
+        check(missing.isEmpty()) {
+            "Missing packaged MPV native runtime files in ${nativeDir.absolutePath}: ${missing.joinToString()}"
+        }
+    }
+}
+
 val prepareAllDesktopRuntimeResources by tasks.registering {
     group = "distribution"
     description = "Prepares all bundled desktop player runtimes for native Windows packages."
-    dependsOn(prepareDesktopRuntimeResources, prepareMpvRuntimeResources, prepareMediampMpvRuntimeResources)
+    dependsOn(
+        prepareDesktopRuntimeResources,
+        prepareMpvRuntimeResources,
+        prepareMediampMpvRuntimeResources,
+        verifyMediampMpvRuntimeResources,
+    )
 }
 
 compose.desktop {
