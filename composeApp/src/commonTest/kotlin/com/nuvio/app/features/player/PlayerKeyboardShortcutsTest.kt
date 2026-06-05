@@ -4,6 +4,7 @@ import androidx.compose.ui.input.key.Key
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertFalse
 
 class PlayerKeyboardShortcutsTest {
     @Test
@@ -25,5 +26,19 @@ class PlayerKeyboardShortcutsTest {
         assertEquals(PlayerKeyboardShortcut.CloseOrBack, playerKeyboardShortcutFor(Key.Escape))
         assertEquals(PlayerKeyboardShortcut.CloseOrBack, playerKeyboardShortcutFor(Key.Backspace))
         assertNull(playerKeyboardShortcutFor(Key.Tab))
+    }
+
+    @Test
+    fun notifiesWhenPlayerShortcutsBecomeActive() {
+        PlayerKeyboardShortcutBridge.unregister()
+        val states = mutableListOf<Boolean>()
+        val removeObserver = PlayerKeyboardShortcutBridge.observeActiveState(states::add)
+
+        PlayerKeyboardShortcutBridge.register { true }
+        PlayerKeyboardShortcutBridge.unregister()
+        removeObserver()
+
+        assertEquals(listOf(false, true, false), states)
+        assertFalse(PlayerKeyboardShortcutBridge.isActive)
     }
 }

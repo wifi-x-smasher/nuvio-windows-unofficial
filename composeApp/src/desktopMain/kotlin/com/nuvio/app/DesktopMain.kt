@@ -73,9 +73,13 @@ fun main(args: Array<String>) {
         )
         var fullscreenController by remember { mutableStateOf<DesktopFullscreenController?>(null) }
         var isFullscreen by remember { mutableStateOf(false) }
+        var isPlayerScreenActive by remember { mutableStateOf(PlayerKeyboardShortcutBridge.isActive) }
         val currentController by rememberUpdatedState(fullscreenController)
 
         DisposableEffect(Unit) {
+            val removePlayerActiveObserver = PlayerKeyboardShortcutBridge.observeActiveState { active ->
+                isPlayerScreenActive = active
+            }
             val dispatcher = java.awt.KeyEventDispatcher { event ->
                 if (event.id != KeyEvent.KEY_PRESSED) {
                     false
@@ -111,6 +115,7 @@ fun main(args: Array<String>) {
             keyboardFocusManager.addKeyEventDispatcher(dispatcher)
             onDispose {
                 keyboardFocusManager.removeKeyEventDispatcher(dispatcher)
+                removePlayerActiveObserver()
             }
         }
 
@@ -160,22 +165,24 @@ fun main(args: Array<String>) {
             Box(modifier = Modifier.fillMaxSize()) {
                 App()
 
-                DesktopWindowControls(
-                    isFullscreen = isFullscreen,
-                    onToggleFullscreen = { currentController?.toggle() },
-                    onMinimize = {
-                        (awtWindow as? JFrame)?.extendedState = JFrame.ICONIFIED
-                    },
-                    onClose = {
-                        DesktopPlayerRegistry.closeAll("windowClose")
-                        DesktopPlayerRegistry.awaitAllCloses(timeoutMs = 1500)
-                        exitApplication()
-                    },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 12.dp, end = 78.dp)
-                        .zIndex(20f),
-                )
+                if (!isPlayerScreenActive) {
+                    DesktopWindowControls(
+                        isFullscreen = isFullscreen,
+                        onToggleFullscreen = { currentController?.toggle() },
+                        onMinimize = {
+                            (awtWindow as? JFrame)?.extendedState = JFrame.ICONIFIED
+                        },
+                        onClose = {
+                            DesktopPlayerRegistry.closeAll("windowClose")
+                            DesktopPlayerRegistry.awaitAllCloses(timeoutMs = 1500)
+                            exitApplication()
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 12.dp, end = 78.dp)
+                            .zIndex(20f),
+                    )
+                }
             }
         }
     }
