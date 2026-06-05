@@ -269,6 +269,7 @@ val releaseKeystore = releaseStoreFile?.let(rootProject::file)
 val appVersionConfigFile = rootProject.file("iosApp/Configuration/Version.xcconfig")
 val releaseAppVersionName = readXcconfigValue(appVersionConfigFile, "MARKETING_VERSION")
     ?: error("MARKETING_VERSION is missing from ${appVersionConfigFile.path}")
+val releaseInstallerPackageVersion = releaseAppVersionName.substringBefore('-')
 val releaseAppVersionCode = readXcconfigValue(appVersionConfigFile, "CURRENT_PROJECT_VERSION")
     ?.toIntOrNull()
     ?: error("CURRENT_PROJECT_VERSION is missing or invalid in ${appVersionConfigFile.path}")
@@ -639,7 +640,7 @@ compose.desktop {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             appResourcesRootDir.set(layout.buildDirectory.dir("desktop-runtime-resources"))
             packageName = "Nuvio"
-            packageVersion = releaseAppVersionName
+            packageVersion = releaseInstallerPackageVersion
             description = "Unofficial Nuvio media hub for Windows"
             vendor = "wifi-x-smasher"
             modules("java.instrument", "java.management", "java.naming", "java.net.http", "jdk.unsupported")
@@ -681,7 +682,7 @@ tasks.matching { it.name == "packageMsi" }.configureEach {
         if (!System.getProperty("os.name").contains("Windows", ignoreCase = true)) return@doLast
 
         val msiPath = layout.buildDirectory
-            .file("compose/binaries/main/msi/Nuvio-$releaseAppVersionName.msi")
+            .file("compose/binaries/main/msi/Nuvio-$releaseInstallerPackageVersion.msi")
             .get()
             .asFile
         val brandScript = project.file("scripts/brand-windows-msi.ps1")
