@@ -110,19 +110,6 @@ internal class MpvDesktopPlayerBackend private constructor(
             resetExternalSubtitleState("load")
             applyDesktopVideoOutputProfile("load")
             player.setMediaData(UriMediaData(request.sourceUrl, headers))
-            request.sourceAudioUrl?.takeIf { it.isNotBlank() }?.let { audioUrl ->
-                runCatching {
-                    val addedWithSelect = player.impl.command("audio-add", audioUrl, "select")
-                    val addedWithAutoFallback = !addedWithSelect && player.impl.command("audio-add", audioUrl, "auto")
-                    DesktopRuntimeLog.info(
-                        "MPV audio-add requested audio=${audioUrl.redactedMediaUrl()} " +
-                            "select=$addedWithSelect autoFallback=$addedWithAutoFallback",
-                    )
-                    player.impl.ensureExternalAudioSelected(audioUrl, reason = "load")
-                }.onFailure {
-                    DesktopRuntimeLog.error("MPV audio-add failed audio=${audioUrl.redactedMediaUrl()}", it)
-                }
-            }
             setResizeMode(request.resizeMode)
             if (request.playWhenReady) {
                 player.resume()
@@ -130,6 +117,15 @@ internal class MpvDesktopPlayerBackend private constructor(
                     .onFailure { DesktopRuntimeLog.error("MPV unpause after load failed", it) }
             } else {
                 player.pause()
+            }
+            // Attach split trailer audio after MPV has loaded the main file; audio-add is rejected
+            // while the core is still idle. This stays after play/pause so video start is not delayed.
+            request.sourceAudioUrl?.takeIf { it.isNotBlank() }?.let { audioUrl ->
+                runCatching {
+                    player.impl.attachExternalAudio(audioUrl, reason = "load")
+                }.onFailure {
+                    DesktopRuntimeLog.error("MPV audio-add failed audio=${audioUrl.redactedMediaUrl()}", it)
+                }
             }
             DesktopRuntimeLog.info("MPV load success session=${request.sessionKey}")
             logVideoOutputSnapshot("load-success")
@@ -707,6 +703,42 @@ internal class MpvDesktopPlayerBackend private constructor(
             "sub-pos=${getMpvStringProperty("sub-pos")}",
             "sub-align-y=${getMpvStringProperty("sub-align-y")}",
         ).joinToString(prefix = "[", postfix = "]")
+
+    /**
+     * Waits until MPV has actually loaded the primary file (its track-list becomes non-empty).
+     * MPV's `audio-add` is a runtime command that is rejected while the core is still idle, so the
+     * external audio stream must only be attached after the main file is loaded. Bounded by a
+     * timeout so a stuck/invalid source can never block playback indefinitely.
+     */
+    private suspend fun MPVHandle.awaitFileLoaded(reason: String, timeoutMs: Long = 6000L): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if ((getMpvIntProperty("track-list/count") ?: 0) > 0) return true
+            delay(100L)
+        }
+        DesktopRuntimeLog.warn("MPV file load wait timed out reason=$reason timeoutMs=$timeoutMs")
+        return false
+    }
+
+    /**
+     * Attaches a separate audio stream by waiting for the main file, issuing `audio-add`, then
+     * selecting the newest external audio track.
+     */
+    private suspend fun MPVHandle.attachExternalAudio(audioUrl: String, reason: String) {
+        val loaded = awaitFileLoaded(reason)
+        for (attempt in 0 until 4) {
+            if (newestExternalAudioTrackDetails() != null) break
+            val select = runCatching { command("audio-add", audioUrl, "select") }.getOrDefault(false)
+            val auto = !select && runCatching { command("audio-add", audioUrl, "auto") }.getOrDefault(false)
+            DesktopRuntimeLog.info(
+                "MPV audio-add attempt=${attempt + 1} reason=$reason loaded=$loaded " +
+                    "audio=${audioUrl.redactedMediaUrl()} select=$select autoFallback=$auto",
+            )
+            if (select || auto) break
+            delay(150L * (attempt + 1))
+        }
+        ensureExternalAudioSelected(audioUrl, reason)
+    }
 
     private suspend fun MPVHandle.ensureExternalAudioSelected(audioUrl: String, reason: String) {
         repeat(5) { attempt ->
