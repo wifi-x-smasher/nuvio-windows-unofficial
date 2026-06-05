@@ -2,7 +2,6 @@ package com.nuvio.app.features.player.desktop.mpv
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import com.nuvio.app.desktop.DesktopPlayerRegistry
 import com.nuvio.app.desktop.DesktopRuntimeLog
 import com.nuvio.app.features.player.AudioTrack
@@ -486,7 +485,7 @@ internal class MpvDesktopPlayerBackend private constructor(
         private fun applySubtitleStyleToCurrentTrack(style: SubtitleStyleState, reason: String) {
             if (!canReceiveCommands()) return
             val handle = player.impl
-            val colorHex = style.textColor.toMpvColorString()
+            val colorHex = style.textColor.toMpvSubtitleColorString()
             val outline = if (style.outlineEnabled) 2.0 else 0.0
             val subPos = 100 - style.bottomOffset
             runCatching {
@@ -730,16 +729,6 @@ private fun parseHeadersJson(headersJson: String?): Map<String, String> {
         }.toMap()
     }.getOrDefault(emptyMap())
 }
-
-private fun Color.toMpvColorString(): String {
-    val r = (red * 255).toInt().coerceIn(0, 255)
-    val g = (green * 255).toInt().coerceIn(0, 255)
-    val b = (blue * 255).toInt().coerceIn(0, 255)
-    val a = (alpha * 255).toInt().coerceIn(0, 255)
-    return "#${r.hex()}${g.hex()}${b.hex()}${a.hex()}"
-}
-
-private fun Int.hex(): String = toString(16).padStart(2, '0').uppercase()
 
 internal enum class MpvSubtitleStyleMode(
     val assOverride: String,

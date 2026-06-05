@@ -46,6 +46,14 @@ internal object MpvRuntimeLocator {
         add("appDir/native", appDir?.resolve("native"))
         add("resourcesDir/native", resourcesDir?.resolve("native"))
 
+        currentExecutableDirectory()?.let { exeDir ->
+            add("exeDir/native", exeDir.resolve("native"))
+            add("exeDir/resources/native", exeDir.resolve("resources/native"))
+            add("exeDir/app/native", exeDir.resolve("app/native"))
+            add("exeDir/app/resources/native", exeDir.resolve("app/resources/native"))
+            add("exeDir/parent/app/resources/native", exeDir.parentFile?.resolve("app/resources/native"))
+        }
+
         add("env:NUVIO_MEDIAMP_RUNTIME_DIR", System.getenv("NUVIO_MEDIAMP_RUNTIME_DIR")?.toFileOrNull())
         System.getenv("NUVIO_MPV_DIR")?.toFileOrNull()?.let { dir ->
             add("env:NUVIO_MPV_DIR", dir)
@@ -112,6 +120,15 @@ internal object MpvRuntimeLocator {
             ?.filter(String::isNotEmpty)
             ?.map(::File)
             .orEmpty()
+
+    private fun currentExecutableDirectory(): File? =
+        ProcessHandle.current()
+            .info()
+            .command()
+            .orElse(null)
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::File)
+            ?.parentFile
 
     private fun String.toFileOrNull(): File? =
         takeIf { it.isNotBlank() }?.let(::File)

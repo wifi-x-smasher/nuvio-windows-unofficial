@@ -38,7 +38,7 @@ internal fun MPVHandle.subtitleTracks(): List<SubtitleTrack> {
             SubtitleTrack(
                 index = tracks.size,
                 id = id.toString(),
-                label = title.ifEmpty { lang ?: "Subtitle $id" },
+                label = displaySubtitleTrackLabel(title = title, language = lang, id = id),
                 language = lang,
                 isSelected = getMpvBooleanProperty("track-list/$i/selected"),
                 isForced = forced,

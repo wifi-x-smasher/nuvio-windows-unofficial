@@ -642,7 +642,7 @@ compose.desktop {
             packageVersion = releaseAppVersionName
             description = "Unofficial Nuvio media hub for Windows"
             vendor = "wifi-x-smasher"
-            modules("java.instrument", "java.management", "java.naming", "jdk.unsupported")
+            modules("java.instrument", "java.management", "java.naming", "java.net.http", "jdk.unsupported")
             windows {
                 menuGroup = "Nuvio"
                 iconFile.set(project.file("src/desktopMain/resources/app-icon.ico"))

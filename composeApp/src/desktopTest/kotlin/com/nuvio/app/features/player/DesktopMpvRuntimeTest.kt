@@ -1,6 +1,7 @@
 package com.nuvio.app.features.player
 
 import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeBootstrapResult
+import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeBootstrap
 import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeResolution
 import java.nio.file.Files
 import kotlin.test.Test
@@ -86,5 +87,40 @@ class DesktopMpvRuntimeTest {
 
         assertTrue(available)
         assertEquals(runtimeDir.absolutePath, bootstrapDirectory)
+    }
+
+    @Test
+    fun bootstrapPublishesExplicitMediampDllPathForMediaMpLoader() {
+        if (!System.getProperty("os.name").contains("Windows", ignoreCase = true)) return
+        val runtimeDir = Files.createTempDirectory("nuvio-mediamp-loader-test").toFile()
+        val mediampDll = runtimeDir.resolve("mediampv.dll").apply { writeText("placeholder") }
+        runtimeDir.resolve("libmpv-2.dll").writeText("placeholder")
+        val previous = System.getProperty(MpvRuntimeBootstrap.MediampDllPathProperty)
+        try {
+            System.clearProperty(MpvRuntimeBootstrap.MediampDllPathProperty)
+            val result = MpvRuntimeBootstrap.apply(
+                MpvRuntimeResolution(
+                    directory = runtimeDir,
+                    checkedDirectories = listOf("test=${runtimeDir.absolutePath}"),
+                    diagnostics = "test runtime with fake mediampv.dll",
+                ),
+            )
+
+            assertFalse(result.success)
+            assertEquals(
+                mediampDll.absolutePath,
+                System.getProperty(MpvRuntimeBootstrap.MediampDllPathProperty),
+            )
+        } finally {
+            restoreProperty(MpvRuntimeBootstrap.MediampDllPathProperty, previous)
+        }
+    }
+}
+
+private fun restoreProperty(name: String, value: String?) {
+    if (value == null) {
+        System.clearProperty(name)
+    } else {
+        System.setProperty(name, value)
     }
 }

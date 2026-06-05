@@ -1,12 +1,10 @@
 package com.nuvio.app.desktop
 
-import androidx.compose.ui.window.WindowPlacement
 import com.sun.jna.Library
 import com.sun.jna.Memory
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.win32.W32APIOptions
-import java.awt.EventQueue
 import java.awt.GraphicsEnvironment
 import java.awt.Rectangle
 import java.awt.Window
@@ -46,48 +44,52 @@ internal object DesktopWindowChrome {
         }
     }
 
-    fun enterBorderlessFullscreen(window: Window) {
-        EventQueue.invokeLater {
-            val frame = window as? JFrame
-            val targetBounds = window.graphicsConfiguration?.bounds
-                ?: GraphicsEnvironment.getLocalGraphicsEnvironment()
-                    .defaultScreenDevice
-                    .defaultConfiguration
-                    .bounds
-
-            frame?.extendedState = JFrame.NORMAL
-            frame?.isResizable = false
-            window.bounds = targetBounds
-            window.background = java.awt.Color.BLACK
-            frame?.contentPane?.background = java.awt.Color.BLACK
-            window.validate()
-            window.repaint()
-            DesktopRuntimeLog.info(
-                "desktop.window.borderless_fullscreen.enter bounds=${targetBounds.toLogString()}",
-            )
-        }
+    /**
+     * Sizes the (undecorated) window to the current monitor's full bounds, including the area
+     * behind the taskbar, for immersive fullscreen. Must be called on the AWT event thread.
+     */
+    fun applyFullscreenBounds(window: Window) {
+        applyBounds(window, fullScreenBounds(window), label = "fullscreen")
     }
 
-    fun exitBorderlessFullscreen(
-        window: Window,
-        restoreBounds: Rectangle?,
-        restorePlacement: WindowPlacement,
-    ) {
-        EventQueue.invokeLater {
-            val frame = window as? JFrame
-            frame?.isResizable = true
-            if (restorePlacement == WindowPlacement.Floating && restoreBounds != null) {
-                window.bounds = restoreBounds
-            }
-            applyNuvioChrome(window)
-            window.validate()
-            window.repaint()
-            DesktopRuntimeLog.info(
-                "desktop.window.borderless_fullscreen.exit restorePlacement=$restorePlacement " +
-                    "restoreBounds=${restoreBounds?.toLogString() ?: "none"}",
-            )
-        }
+    /**
+     * Sizes the (undecorated) window to the current monitor's work area (excluding the taskbar)
+     * so it reads as a maximized browsing window. Must be called on the AWT event thread.
+     */
+    fun applyNormalBounds(window: Window) {
+        applyBounds(window, workAreaBounds(window), label = "normal")
     }
+
+    private fun applyBounds(window: Window, bounds: Rectangle, label: String) {
+        val frame = window as? JFrame
+        frame?.extendedState = JFrame.NORMAL
+        window.bounds = bounds
+        window.background = java.awt.Color.BLACK
+        frame?.contentPane?.background = java.awt.Color.BLACK
+        window.validate()
+        window.repaint()
+        DesktopRuntimeLog.info("desktop.window.$label bounds=${bounds.toLogString()}")
+    }
+
+    private fun fullScreenBounds(window: Window): Rectangle =
+        (window.graphicsConfiguration ?: defaultConfiguration()).bounds
+
+    private fun workAreaBounds(window: Window): Rectangle {
+        val gc = window.graphicsConfiguration ?: defaultConfiguration()
+        val bounds = gc.bounds
+        val insets = java.awt.Toolkit.getDefaultToolkit().getScreenInsets(gc)
+        return Rectangle(
+            bounds.x + insets.left,
+            bounds.y + insets.top,
+            bounds.width - insets.left - insets.right,
+            bounds.height - insets.top - insets.bottom,
+        )
+    }
+
+    private fun defaultConfiguration() =
+        GraphicsEnvironment.getLocalGraphicsEnvironment()
+            .defaultScreenDevice
+            .defaultConfiguration
 
     internal fun rgbToColorRef(red: Int, green: Int, blue: Int): Int =
         (red and 0xff) or ((green and 0xff) shl 8) or ((blue and 0xff) shl 16)

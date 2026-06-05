@@ -15,6 +15,7 @@ internal data class MpvRuntimeBootstrapResult(
 )
 
 internal object MpvRuntimeBootstrap {
+    internal const val MediampDllPathProperty = "nuvio.mediampv.dll"
     private const val LOAD_LIBRARY_SEARCH_DEFAULT_DIRS = 0x00001000
     private const val LOAD_LIBRARY_SEARCH_USER_DIRS = 0x00000400
 
@@ -36,6 +37,8 @@ internal object MpvRuntimeBootstrap {
             )
         }
         val normalized = directory.absoluteFile.safePath()
+        val mediampDll = directory.resolve("mediampv.dll")
+        System.setProperty(MediampDllPathProperty, mediampDll.absolutePath)
         if (bootstrappedDirectory == normalized) {
             return MpvRuntimeBootstrapResult(success = true, diagnostics = "already bootstrapped dir=$normalized")
         }
@@ -54,7 +57,6 @@ internal object MpvRuntimeBootstrap {
                 .onFailure { DesktopRuntimeLog.error("MPV runtime bootstrap SetDllDirectoryW failed dir=$normalized", it) }
         }
 
-        val mediampDll = directory.resolve("mediampv.dll")
         return runCatching {
             System.load(mediampDll.absolutePath)
         }.fold(

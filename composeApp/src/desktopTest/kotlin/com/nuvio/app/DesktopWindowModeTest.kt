@@ -1,6 +1,5 @@
 package com.nuvio.app
 
-import androidx.compose.ui.window.WindowPlacement
 import java.awt.event.KeyEvent
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -9,31 +8,37 @@ import kotlin.test.assertTrue
 
 class DesktopWindowModeTest {
     @Test
-    fun togglesIntoBorderlessFullscreenFromNormalPlacements() {
-        assertEquals(
-            WindowPlacement.Floating,
-            nextDesktopWindowPlacement(
-                isFullscreen = true,
-                previousNonFullscreen = WindowPlacement.Floating,
-            ),
+    fun togglesBetweenNormalAndFullscreenModes() {
+        assertEquals(DesktopWindowMode.Fullscreen, nextWindowMode(DesktopWindowMode.Normal))
+        assertEquals(DesktopWindowMode.Normal, nextWindowMode(DesktopWindowMode.Fullscreen))
+    }
+
+    @Test
+    fun escapeExitsFullscreenOnlyWhileBrowsing() {
+        assertTrue(
+            shouldExitFullscreenOnEscape(DesktopWindowMode.Fullscreen, handledByPlayer = false),
         )
-        assertEquals(
-            WindowPlacement.Floating,
-            nextDesktopWindowPlacement(
-                isFullscreen = true,
-                previousNonFullscreen = WindowPlacement.Floating,
-            ),
+        // The player owns Esc during playback (close/back), so fullscreen must not steal it.
+        assertFalse(
+            shouldExitFullscreenOnEscape(DesktopWindowMode.Fullscreen, handledByPlayer = true),
+        )
+        // Esc is a no-op when we are not in fullscreen.
+        assertFalse(
+            shouldExitFullscreenOnEscape(DesktopWindowMode.Normal, handledByPlayer = false),
         )
     }
 
     @Test
-    fun restoresThePreviousNonFullscreenPlacement() {
-        assertEquals(
-            WindowPlacement.Maximized,
-            nextDesktopWindowPlacement(
-                isFullscreen = false,
-                previousNonFullscreen = WindowPlacement.Maximized,
-            ),
+    fun debouncesRapidToggleEvents() {
+        // First toggle (no prior timestamp) is always allowed.
+        assertFalse(shouldDebounceToggle(nowNanos = 1_000_000_000L, lastToggleNanos = 0L))
+        // A second toggle 50ms later (key auto-repeat) is swallowed.
+        assertTrue(
+            shouldDebounceToggle(nowNanos = 1_050_000_000L, lastToggleNanos = 1_000_000_000L),
+        )
+        // A deliberate toggle 400ms later is allowed through.
+        assertFalse(
+            shouldDebounceToggle(nowNanos = 1_400_000_000L, lastToggleNanos = 1_000_000_000L),
         )
     }
 
@@ -46,30 +51,14 @@ class DesktopWindowModeTest {
     }
 
     @Test
-    fun recognizesEscapeAsFullscreenExitOnlyWithoutModifiers() {
-        assertTrue(
-            isDesktopFullscreenExitShortcut(
-                keyCode = KeyEvent.VK_ESCAPE,
-                isAltDown = false,
-                isControlDown = false,
-                isMetaDown = false,
-            ),
+    fun escapeAndBackspaceBelongToPlayerShortcuts() {
+        assertEquals(
+            com.nuvio.app.features.player.PlayerKeyboardShortcut.CloseOrBack,
+            desktopPlayerKeyboardShortcutFor(KeyEvent.VK_ESCAPE),
         )
-        assertFalse(
-            isDesktopFullscreenExitShortcut(
-                keyCode = KeyEvent.VK_ESCAPE,
-                isAltDown = true,
-                isControlDown = false,
-                isMetaDown = false,
-            ),
-        )
-        assertFalse(
-            isDesktopFullscreenExitShortcut(
-                keyCode = KeyEvent.VK_BACK_SPACE,
-                isAltDown = false,
-                isControlDown = false,
-                isMetaDown = false,
-            ),
+        assertEquals(
+            com.nuvio.app.features.player.PlayerKeyboardShortcut.CloseOrBack,
+            desktopPlayerKeyboardShortcutFor(KeyEvent.VK_BACK_SPACE),
         )
     }
 
