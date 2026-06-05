@@ -32,7 +32,7 @@ val runtimeConfigOverrideKeys = listOf(
 )
 
 val bundledVlcVersion = "3.0.21"
-val bundledVlcDownloadUrl = "https://get.videolan.org/vlc/$bundledVlcVersion/win64/vlc-$bundledVlcVersion-win64.zip"
+val bundledVlcDownloadUrl = "https://download.videolan.org/pub/videolan/vlc/$bundledVlcVersion/win64/vlc-$bundledVlcVersion-win64.zip"
 val bundledVlcZipSha256 = "a0b7ec02b50adf6417eed014fb8df50af39690505a4225b85b3dc2ed17d14843"
 val bundledVlcZip = layout.buildDirectory.file("downloads/vlc/vlc-$bundledVlcVersion-win64.zip")
 val bundledVlcResourcesDir = layout.buildDirectory.dir("desktop-runtime-resources/vlc")
