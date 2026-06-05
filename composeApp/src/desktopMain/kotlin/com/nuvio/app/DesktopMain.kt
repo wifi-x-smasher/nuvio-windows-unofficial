@@ -2,6 +2,7 @@ package com.nuvio.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Remove
@@ -26,6 +28,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
@@ -46,6 +49,7 @@ import java.awt.Window as AwtWindow
 import java.awt.event.KeyEvent
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
+import kotlin.math.roundToInt
 import javax.swing.JFrame
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.app_logo_mark
@@ -165,6 +169,21 @@ fun main(args: Array<String>) {
             Box(modifier = Modifier.fillMaxSize()) {
                 App()
 
+                if (!isPlayerScreenActive && !isFullscreen) {
+                    DesktopWindowDragGrip(
+                        onDrag = { deltaX, deltaY ->
+                            moveDesktopWindowBy(awtWindow, deltaX, deltaY)
+                        },
+                        onDragEnd = {
+                            snapDesktopWindowToNormalBounds(awtWindow)
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 12.dp, end = 230.dp)
+                            .zIndex(20f),
+                    )
+                }
+
                 if (!isPlayerScreenActive) {
                     DesktopWindowControls(
                         isFullscreen = isFullscreen,
@@ -201,6 +220,36 @@ internal fun configureDesktopRenderer(): String {
     }
     System.setProperty("skiko.renderApi", safeValue)
     return safeValue
+}
+
+@Composable
+private fun DesktopWindowDragGrip(
+    onDrag: (Float, Float) -> Unit,
+    onDragEnd: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(width = 64.dp, height = 42.dp)
+            .clip(CircleShape)
+            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.32f))
+            .pointerInput(onDrag, onDragEnd) {
+                detectDragGestures(
+                    onDragEnd = onDragEnd,
+                    onDrag = { _, dragAmount ->
+                        onDrag(dragAmount.x, dragAmount.y)
+                    },
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.DragIndicator,
+            contentDescription = "Drag window",
+            tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.72f),
+            modifier = Modifier.size(22.dp),
+        )
+    }
 }
 
 @Composable
@@ -378,5 +427,20 @@ private fun repaintDesktopWindow(window: AwtWindow) {
         window.invalidate()
         window.validate()
         window.repaint()
+    }
+}
+
+private fun moveDesktopWindowBy(window: AwtWindow, deltaX: Float, deltaY: Float) {
+    val dx = deltaX.roundToInt()
+    val dy = deltaY.roundToInt()
+    if (dx == 0 && dy == 0) return
+    EventQueue.invokeLater {
+        window.setLocation(window.x + dx, window.y + dy)
+    }
+}
+
+private fun snapDesktopWindowToNormalBounds(window: AwtWindow) {
+    EventQueue.invokeLater {
+        DesktopWindowChrome.applyNormalBounds(window)
     }
 }

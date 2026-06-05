@@ -32,7 +32,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.openani.mediamp.InternalMediampApi
 import org.openani.mediamp.PlaybackState
-import org.openani.mediamp.features.PlaybackSpeed
 import org.openani.mediamp.mpv.MPVHandle
 import org.openani.mediamp.mpv.MpvMediampPlayer
 import org.openani.mediamp.source.UriMediaData
@@ -76,6 +75,7 @@ internal class MpvDesktopPlayerBackend private constructor(
     @Volatile private var currentRequest: DesktopPlayerRequest? = null
     @Volatile private var externalSubtitleActive = false
     @Volatile private var latestSubtitleStyle = SubtitleStyleState.DEFAULT
+    @Volatile private var playbackSpeed = 1.0f
     private val externalSubtitleRequestCounter = AtomicInteger(0)
     private val externalSubtitleTempFiles = mutableSetOf<Path>()
     private val subtitleHttpClient = HttpClient.newBuilder()
@@ -183,7 +183,7 @@ internal class MpvDesktopPlayerBackend private constructor(
                 positionMs = position,
                 durationMs = props?.durationMillis?.takeIf { it > 0 } ?: 0L,
                 bufferedPositionMs = 0L,
-                playbackSpeed = player.features[PlaybackSpeed]?.value ?: 1.0f,
+                playbackSpeed = currentPlaybackSpeed(),
                 backendName = backendName,
                 diagnostics = runtime.diagnostics,
                 error = if (playbackState == PlaybackState.ERROR) {
@@ -215,6 +215,12 @@ internal class MpvDesktopPlayerBackend private constructor(
 
     private fun snapshotForLog(): String =
         "state=${player.getCurrentPlaybackState()} posMs=${player.currentPositionMillis.value} durationMs=${durationMs() ?: -1}"
+
+    private fun currentPlaybackSpeed(): Float =
+        player.impl.getMpvDoubleProperty("speed")
+            ?.toFloat()
+            ?.takeIf { it > 0f }
+            ?: playbackSpeed
 
     private fun resetExternalSubtitleState(reason: String) {
         if (nativeClosed) return
@@ -307,7 +313,24 @@ internal class MpvDesktopPlayerBackend private constructor(
 
         override fun setPlaybackSpeed(speed: Float) {
             if (!canReceiveCommands()) return
-            player.features[PlaybackSpeed]?.set(speed.coerceIn(0.25f, 4.0f))
+            val targetSpeed = speed.coerceIn(0.25f, 4.0f)
+            val before = snapshotForLog()
+            val result = runCatching {
+                player.impl.setMpvProperty("speed", targetSpeed.toDouble()) ||
+                    player.impl.command("set", "speed", targetSpeed.toString())
+            }
+            result
+                .onSuccess { applied ->
+                    if (applied) {
+                        playbackSpeed = targetSpeed
+                        stateFlow.value = stateFlow.value.copy(playbackSpeed = targetSpeed)
+                    }
+                    DesktopRuntimeLog.info(
+                        "MPV controller setPlaybackSpeed target=$targetSpeed applied=$applied " +
+                            "before=$before after=${snapshotForLog()}",
+                    )
+                }
+                .onFailure { DesktopRuntimeLog.error("MPV controller setPlaybackSpeed failed target=$targetSpeed", it) }
         }
 
         override fun currentVolume(): PlayerAudioLevel? {
