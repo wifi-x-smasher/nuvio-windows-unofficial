@@ -22,6 +22,16 @@ This project is not affiliated with, sponsored by, or endorsed by the official N
 
 The app works as a client-side interface for Nuvio accounts, profiles, add-ons, catalogs, collections, watch progress, stream badges, and playback. It does not host or provide media content.
 
+## Features
+
+- TV-inspired Windows layout with keyboard, mouse, and fullscreen support.
+- Nuvio account login, profile sync, add-ons, catalogs, collections, and watch progress.
+- Stream badges and stream-card formatting aligned with current Nuvio mobile behavior.
+- Connected services sync for the same signed-in Nuvio account.
+- Trakt OAuth setup from inside the Windows app.
+- Internal desktop playback with MPV-based rendering and an external-player option.
+- In-app update checks through GitHub Releases.
+
 ## Screenshots
 
 Screenshots are illustrative UI captures from a locally configured Nuvio Windows setup. Nuvio Windows Unofficial does not host, provide, or bundle media content.
@@ -43,6 +53,17 @@ Download the latest Windows installer from [GitHub Releases](https://github.com/
 Recommended installer: `.msi`
 
 If a release is still marked as a draft, download the installer from the successful GitHub Actions run artifacts instead.
+
+### Requirements
+
+- Windows 10 or Windows 11, 64-bit.
+- A Nuvio account for synced profiles, add-ons, catalogs, and connected services.
+- User-installed add-ons or user-provided sources. Nuvio Windows does not include content sources.
+
+### Current Limitations
+
+- Plugin stream results are still being debugged. Add-on-backed stream results work, but some plugin-only sources may keep searching or return no streams.
+- HDR playback is expected to work best in the internal MPV player after the latest fixes. If a specific HDR file still looks wrong on your hardware, use the in-player external-player option as a temporary workaround and report the stream type, GPU, Windows version, and logs.
 
 ## Development
 
@@ -129,7 +150,8 @@ For comprehensive legal information from the upstream project, including the ful
 - Kotlin Multiplatform
 - Compose Multiplatform
 - Kotlin
-- VLCJ / LibVLC desktop playback integration
+- MediaMP / MPV desktop playback integration
+- VLC desktop playback fallback
 - GitHub Releases for Windows update checks
 
 ## License
