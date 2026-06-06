@@ -12,24 +12,32 @@ import kotlinx.coroutines.runBlocking
 
 class PluginExecutionGateTest {
     @Test
-    fun quickJsWorkRunsSeriallyEvenWhenScrapersStartConcurrently() = runBlocking {
+    fun quickJsWorkRunsConcurrentlyUpToTheConfiguredBound() = runBlocking {
         val active = AtomicInteger(0)
         val maxActive = AtomicInteger(0)
+        val permits = PluginExecutionGate.MAX_CONCURRENT_PLUGINS
 
         coroutineScope {
-            List(12) {
+            List(permits * 3) {
                 async {
                     PluginExecutionGate.runQuickJs {
                         val current = active.incrementAndGet()
                         maxActive.updateAndGet { previous -> maxOf(previous, current) }
-                        delay(5)
+                        delay(50)
                         active.decrementAndGet()
                     }
                 }
             }.awaitAll()
         }
 
-        assertEquals(0, active.get())
-        assertTrue(maxActive.get() <= 1, "QuickJS execution must be serialized on desktop")
+        assertEquals(0, active.get(), "All permits must be released after execution")
+        assertTrue(
+            maxActive.get() > 1,
+            "Plugin execution must run concurrently, not serialized (maxActive=${maxActive.get()})",
+        )
+        assertTrue(
+            maxActive.get() <= permits,
+            "Plugin concurrency must stay within the bound $permits (maxActive=${maxActive.get()})",
+        )
     }
 }

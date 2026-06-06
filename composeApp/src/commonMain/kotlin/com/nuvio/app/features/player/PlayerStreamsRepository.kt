@@ -38,15 +38,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 
 /**
  * Dedicated stream fetcher for use inside the player (sources & episodes panels).
  * Uses its own state so it doesn't interfere with the main [StreamsRepository].
  */
 object PlayerStreamsRepository {
-    private const val PLUGIN_SOURCE_SCRAPER_TIMEOUT_MS = 20_000L
-
     private val log = Logger.withTag("PlayerStreamsRepo")
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -392,15 +389,13 @@ object PlayerStreamsRepository {
                     )
                     val startedAtMs = epochMs()
                     val scraperResult = runCatchingUnlessCancelled {
-                        withTimeout(PLUGIN_SOURCE_SCRAPER_TIMEOUT_MS) {
-                            PluginRepository.executeScraper(
-                                scraper = scraper,
-                                tmdbId = pluginId,
-                                mediaType = type,
-                                season = season,
-                                episode = episode,
-                            ).getOrThrow()
-                        }
+                        PluginRepository.executeScraper(
+                            scraper = scraper,
+                            tmdbId = pluginId,
+                            mediaType = type,
+                            season = season,
+                            episode = episode,
+                        ).getOrThrow()
                     }
                     val elapsedMs = (epochMs() - startedAtMs).coerceAtLeast(0L)
                     val group = scraperResult.fold(

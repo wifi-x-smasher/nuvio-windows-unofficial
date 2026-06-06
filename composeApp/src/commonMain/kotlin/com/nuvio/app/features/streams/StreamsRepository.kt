@@ -31,14 +31,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.withTimeout
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import kotlinx.coroutines.launch
 
 object StreamsRepository {
-    private const val PLUGIN_STREAM_SCRAPER_TIMEOUT_MS = 20_000L
-
     private val log = Logger.withTag("StreamsRepo")
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _uiState = MutableStateFlow(StreamsUiState())
@@ -538,15 +535,13 @@ object StreamsRepository {
                         )
                         val startedAtMs = currentStreamTimeMillis()
                         val scraperResult = runCatchingUnlessCancelled {
-                            withTimeout(PLUGIN_STREAM_SCRAPER_TIMEOUT_MS) {
-                                PluginRepository.executeScraper(
-                                    scraper = scraper,
-                                    tmdbId = pluginId,
-                                    mediaType = type,
-                                    season = season,
-                                    episode = episode,
-                                ).getOrThrow()
-                            }
+                            PluginRepository.executeScraper(
+                                scraper = scraper,
+                                tmdbId = pluginId,
+                                mediaType = type,
+                                season = season,
+                                episode = episode,
+                            ).getOrThrow()
                         }
                         val elapsedMs = (currentStreamTimeMillis() - startedAtMs).coerceAtLeast(0L)
                         val completion = scraperResult.fold(

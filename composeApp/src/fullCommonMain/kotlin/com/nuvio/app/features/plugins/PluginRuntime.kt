@@ -23,6 +23,8 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.random.Random
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 private const val PLUGIN_TIMEOUT_MS = 60_000L
 private const val MAX_FETCH_BODY_CHARS = 256 * 1024
@@ -45,22 +47,53 @@ internal object PluginRuntime {
         episode: Int?,
         scraperId: String,
         scraperSettings: Map<String, Any> = emptyMap(),
-    ): List<PluginRuntimeResult> =
-        PluginExecutionGate.runQuickJs {
-            withContext(Dispatchers.Default) {
-                withTimeout(PLUGIN_TIMEOUT_MS) {
-                    executePluginInternal(
-                        code = code,
-                        tmdbId = tmdbId,
-                        mediaType = mediaType,
-                        season = season,
-                        episode = episode,
-                        scraperId = scraperId,
-                        scraperSettings = scraperSettings,
-                    )
+    ): List<PluginRuntimeResult> {
+        // Timing split so plugin starvation is visible in logs: queuedMs = time spent waiting for a
+        // PluginExecutionGate permit, execMs = actual runtime once started. Monotonic clock keeps
+        // this multiplatform-safe. Only ids/timings/exception type are logged — never URLs/secrets.
+        val queuedMark = TimeSource.Monotonic.markNow()
+        var startMark: TimeMark? = null
+        var queuedMs = -1L
+        return try {
+            PluginExecutionGate.runQuickJs {
+                val executionMark = TimeSource.Monotonic.markNow()
+                startMark = executionMark
+                queuedMs = queuedMark.elapsedNow().inWholeMilliseconds
+                val results = withContext(Dispatchers.IO) {
+                    withTimeout(PLUGIN_TIMEOUT_MS) {
+                        executePluginInternal(
+                            code = code,
+                            tmdbId = tmdbId,
+                            mediaType = mediaType,
+                            season = season,
+                            episode = episode,
+                            scraperId = scraperId,
+                            scraperSettings = scraperSettings,
+                        )
+                    }
+                }
+                log.i {
+                    "Plugin:$scraperId completed queuedMs=$queuedMs " +
+                        "execMs=${executionMark.elapsedNow().inWholeMilliseconds} results=${results.size}"
+                }
+                results
+            }
+        } catch (t: Throwable) {
+            val started = startMark
+            if (started == null) {
+                log.w {
+                    "Plugin:$scraperId aborted while queued for runtime " +
+                        "queuedMs=${queuedMark.elapsedNow().inWholeMilliseconds} reason=${t::class.simpleName}"
+                }
+            } else {
+                log.w {
+                    "Plugin:$scraperId failed after start queuedMs=$queuedMs " +
+                        "execMs=${started.elapsedNow().inWholeMilliseconds} reason=${t::class.simpleName}"
                 }
             }
+            throw t
         }
+    }
 
     private suspend fun executePluginInternal(
         code: String,
@@ -77,7 +110,10 @@ internal object PluginRuntime {
         var resultJson = "[]"
 
         try {
-            quickJs(Dispatchers.Default) {
+            // IO dispatcher (not Default): the synchronous __native_fetch binding runs a blocking
+            // runBlocking { httpRequestRaw } on the QuickJS thread, so it must hold an IO-pool thread
+            // rather than starving the small Default pool shared with other app work.
+            quickJs(Dispatchers.IO) {
                 define("console") {
                     function("log") { args ->
                         log.d { "Plugin:$scraperId ${args.joinToString(" ") { it?.toString() ?: "null" }}" }
