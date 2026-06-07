@@ -96,6 +96,7 @@ import com.nuvio.app.core.sync.AppForegroundMonitor
 import com.nuvio.app.core.sync.ProfileSettingsSync
 import com.nuvio.app.core.sync.SyncManager
 import com.nuvio.app.core.ui.NuvioNavigationBar
+import com.nuvio.app.features.commandpalette.CommandPalette
 import com.nuvio.app.core.ui.NuvioContinueWatchingActionSheet
 import com.nuvio.app.core.ui.NuvioPosterActionSheet
 import com.nuvio.app.core.ui.NuvioStatusModal
@@ -2498,6 +2499,19 @@ private fun MainAppContent(
                 exit = fadeOut(androidx.compose.animation.core.tween(400)),
             ) {
                 AppLaunchOverlay(modifier = Modifier.fillMaxSize())
+            }
+
+            // Command palette (Ctrl+K) — desktop only. Rendered here so it can drive real navigation.
+            if (isDesktop) {
+                CommandPalette(
+                    navController = navController,
+                    onSelectTab = { tab ->
+                        if (navController.currentDestination?.hasRoute<TabsRoute>() != true) {
+                            navController.popBackStack(TabsRoute, false)
+                        }
+                        handleRootTabClick(tab)
+                    },
+                )
             }
 
             // Auto-dismiss profile switch overlay

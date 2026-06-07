@@ -16,6 +16,7 @@ import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
@@ -37,9 +38,12 @@ import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.zIndex
 import com.nuvio.app.desktop.DesktopPlayerRegistry
 import com.nuvio.app.desktop.DesktopRuntimeLog
+import com.nuvio.app.desktop.DesktopSystemTray
 import com.nuvio.app.desktop.DesktopWindowChrome
+import com.nuvio.app.desktop.DiscordRichPresence
 import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.core.deeplink.DesktopDeepLinkBridge
+import com.nuvio.app.features.commandpalette.CommandPaletteController
 import com.nuvio.app.features.player.PlayerKeyboardShortcut
 import com.nuvio.app.features.player.PlayerKeyboardShortcutBridge
 import java.awt.Color
@@ -75,6 +79,7 @@ fun main(args: Array<String>) {
         return
     }
     DesktopDeepLinkBridge.install(args)
+    DiscordRichPresence.start()
 
     application {
         val windowState = rememberWindowState(
@@ -97,6 +102,11 @@ fun main(args: Array<String>) {
                 } else when {
                     isDesktopFullscreenShortcut(event.keyCode, event.isAltDown) -> {
                         currentController?.toggle()
+                        true
+                    }
+                    event.isControlDown && !event.isAltDown && !event.isMetaDown &&
+                        (event.keyCode == KeyEvent.VK_K || event.keyCode == KeyEvent.VK_P) -> {
+                        CommandPaletteController.toggle()
                         true
                     }
                     !event.isAltDown && !event.isControlDown && !event.isMetaDown -> {
@@ -144,6 +154,12 @@ fun main(args: Array<String>) {
             val awtWindow = window
             DisposableEffect(awtWindow) {
                 DesktopWindowChrome.applyNuvioChrome(awtWindow)
+
+                DesktopSystemTray.install(awtWindow) {
+                    DesktopPlayerRegistry.closeAll("trayQuit")
+                    DesktopPlayerRegistry.awaitAllCloses(timeoutMs = 1500)
+                    exitApplication()
+                }
 
                 val controller = DesktopFullscreenController(awtWindow) { fullscreen ->
                     isFullscreen = fullscreen
@@ -196,7 +212,7 @@ fun main(args: Array<String>) {
                         },
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(top = 12.dp, end = 230.dp)
+                            .padding(top = 12.dp, end = 290.dp)
                             .zIndex(20f),
                     )
                 }
@@ -204,6 +220,7 @@ fun main(args: Array<String>) {
                 if (!isPlayerScreenActive) {
                     DesktopWindowControls(
                         isFullscreen = isFullscreen,
+                        onCommandPalette = { CommandPaletteController.toggle() },
                         onToggleFullscreen = { currentController?.toggle() },
                         onMinimize = {
                             (awtWindow as? JFrame)?.extendedState = JFrame.ICONIFIED
@@ -315,6 +332,7 @@ private fun setDesktopWindowLocation(window: AwtWindow, x: Int, y: Int) {
 @Composable
 private fun DesktopWindowControls(
     isFullscreen: Boolean,
+    onCommandPalette: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onMinimize: () -> Unit,
     onClose: () -> Unit,
@@ -324,6 +342,13 @@ private fun DesktopWindowControls(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (!isFullscreen) {
+            DesktopControlButton(
+                icon = Icons.Rounded.Search,
+                contentDescription = "Command palette (Ctrl+K)",
+                onClick = onCommandPalette,
+            )
+        }
         DesktopControlButton(
             icon = if (isFullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
             contentDescription = "Toggle fullscreen (F11)",

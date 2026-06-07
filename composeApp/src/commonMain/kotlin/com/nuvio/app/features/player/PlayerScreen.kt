@@ -413,6 +413,52 @@ fun PlayerScreen(
             )
         }
 
+        // Discord Rich Presence (desktop, opt-in): publish what's playing so the desktop service can
+        // mirror it to Discord. No-op on other platforms — nothing reads NowPlayingBridge there.
+        if (isDesktop) {
+            LaunchedEffect(
+                title,
+                activeSeasonNumber,
+                activeEpisodeNumber,
+                activeEpisodeTitle,
+                playbackSnapshot.isPlaying,
+                playbackSnapshot.isLoading,
+                playbackSnapshot.isEnded,
+                playbackSnapshot.durationMs,
+                playbackSnapshot.positionMs / 10_000,
+            ) {
+                val ready = !playbackSnapshot.isLoading &&
+                    !playbackSnapshot.isEnded &&
+                    playbackSnapshot.durationMs > 0L
+                if (!ready) {
+                    NowPlayingBridge.clear()
+                    return@LaunchedEffect
+                }
+                val nowPlayingSubtitle = if (activeSeasonNumber != null && activeEpisodeNumber != null) {
+                    buildString {
+                        append("S").append(activeSeasonNumber).append(" · E").append(activeEpisodeNumber)
+                        activeEpisodeTitle?.trim()?.takeIf { it.isNotBlank() }
+                            ?.let { append(" — ").append(it) }
+                    }
+                } else {
+                    null
+                }
+                NowPlayingBridge.update(
+                    NowPlayingInfo(
+                        title = title,
+                        subtitle = nowPlayingSubtitle,
+                        positionMs = playbackSnapshot.positionMs,
+                        durationMs = playbackSnapshot.durationMs,
+                        isPaused = !playbackSnapshot.isPlaying,
+                        posterUrl = poster,
+                    ),
+                )
+            }
+            DisposableEffect(Unit) {
+                onDispose { NowPlayingBridge.clear() }
+            }
+        }
+
         fun currentPlaybackProgressPercent(snapshot: PlayerPlaybackSnapshot = playbackSnapshot): Float {
             val duration = snapshot.durationMs.takeIf { it > 0L } ?: return 0f
             return ((snapshot.positionMs.toFloat() / duration.toFloat()) * 100f)
@@ -1725,7 +1771,14 @@ fun PlayerScreen(
                 ?.takeIf { it > 0f }
                 ?.coerceIn(0f, 1f)
             val targetPositionMs = when {
-                activeInitialPositionMs > 0L -> activeInitialPositionMs
+                activeInitialPositionMs > 0L && playbackSnapshot.durationMs > 0L -> activeInitialPositionMs
+                // Issue #10: an absolute resume is requested but the player isn't seekable yet
+                // (duration still unknown). Wait — this effect is keyed on durationMs, so it re-runs
+                // and applies the seek once the player is ready. Without this gate the seek fired too
+                // early, MPV ignored it, playback started at 0, and a near-start save then overwrote
+                // the real progress. (The Trakt/fraction path below already waited for duration,
+                // which is why Trakt resume worked and Nuvio Sync resume did not.)
+                activeInitialPositionMs > 0L -> return@LaunchedEffect
                 progressFraction != null && playbackSnapshot.durationMs > 0L -> {
                     (playbackSnapshot.durationMs.toDouble() * progressFraction.toDouble()).toLong()
                 }

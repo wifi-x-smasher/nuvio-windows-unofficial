@@ -59,6 +59,7 @@ import com.nuvio.app.features.player.ExternalPlayerPlatform
 import com.nuvio.app.features.player.IosHardwareDecoderMode
 import com.nuvio.app.features.player.IosTargetPrimaries
 import com.nuvio.app.features.player.IosTargetTransfer
+import com.nuvio.app.features.player.DiscordPresenceSettings
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.player.STREAM_AUTO_PLAY_TIMEOUT_VALUES
 import com.nuvio.app.features.player.SubtitleLanguageOption
@@ -192,6 +193,7 @@ private fun PlaybackSettingsSection(
     var showAutoPlayRegexDialog by remember { mutableStateOf(false) }
     val pluginsEnabled = AppFeaturePolicy.pluginsEnabled
     val autoPlayPlayerSettings by PlayerSettingsRepository.uiState.collectAsStateWithLifecycle()
+    val discordPresenceEnabled by DiscordPresenceSettings.enabled.collectAsStateWithLifecycle()
     val availableExternalPlayers = ExternalPlayerPlatform.availablePlayers()
     val selectedExternalPlayer = availableExternalPlayers.firstOrNull {
         it.id == autoPlayPlayerSettings.externalPlayerId
@@ -209,6 +211,23 @@ private fun PlaybackSettingsSection(
     Column(
         verticalArrangement = Arrangement.spacedBy(sectionSpacing),
     ) {
+        if (isDesktop) {
+            SettingsSection(
+                title = "Discord",
+                isTablet = isTablet,
+            ) {
+                SettingsGroup(isTablet = isTablet) {
+                    SettingsSwitchRow(
+                        title = "Discord Rich Presence",
+                        description = "Show what you're watching on your Discord profile while a " +
+                            "video is playing. Requires the Discord desktop app to be running. Off by default.",
+                        checked = discordPresenceEnabled,
+                        isTablet = isTablet,
+                        onCheckedChange = DiscordPresenceSettings::setEnabled,
+                    )
+                }
+            }
+        }
         SettingsSection(
             title = stringResource(Res.string.settings_playback_section_player),
             isTablet = isTablet,
