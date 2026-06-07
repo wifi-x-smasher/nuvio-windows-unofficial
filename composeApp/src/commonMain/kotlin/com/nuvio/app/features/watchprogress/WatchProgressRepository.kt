@@ -2,6 +2,7 @@ package com.nuvio.app.features.watchprogress
 
 import co.touchlab.kermit.Logger
 import com.nuvio.app.core.auth.AuthRepository
+import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.core.auth.AuthState
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.details.MetaDetails
@@ -510,6 +511,22 @@ object WatchProgressRepository {
         }
 
         val useTraktProgress = shouldUseTraktProgress()
+
+        // Diagnostic for issue #10: flags a regressive overwrite (a >60s stored position replaced by
+        // a near-start one) — the signature of a failed resume saving ~0 back over good progress.
+        val previousPositionMs = entriesByVideoId[session.videoId]?.lastPositionMs ?: 0L
+        if (!isCompleted && previousPositionMs > 60_000L && positionMs in 1L until (previousPositionMs / 2)) {
+            AppDiagnostics.breadcrumb(
+                event = "watchprogress.regression",
+                details = mapOf(
+                    "videoId" to session.videoId,
+                    "newPositionMs" to positionMs.toString(),
+                    "previousPositionMs" to previousPositionMs.toString(),
+                    "durationMs" to durationMs.toString(),
+                    "usingTrakt" to useTraktProgress.toString(),
+                ),
+            )
+        }
 
         entriesByVideoId[session.videoId] = entry
         if (useTraktProgress) {

@@ -97,6 +97,7 @@ import com.nuvio.app.features.debrid.DebridProviders
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
+import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.isDesktop
 import kotlinx.coroutines.launch
 import kotlin.math.round
@@ -188,6 +189,31 @@ fun StreamsScreen(
         } else {
             (resumePositionMs ?: storedProgress?.takeIf { it.isResumable }?.lastPositionMs)?.takeIf { it > 0L }
         }
+    }
+
+    // Diagnostic for issue #10 (Nuvio Sync resume restarts at 0:00): one repro reveals whether the
+    // stored entry was missing, had a 0/low position, wasn't resumable, or wasn't loaded yet.
+    // Only ids/positions are recorded — no tokens or secrets.
+    LaunchedEffect(videoId, storedProgress, effectiveResumePositionMs, effectiveResumeProgressFraction) {
+        AppDiagnostics.breadcrumb(
+            event = "watchprogress.resume.resolve",
+            details = mapOf(
+                "videoId" to videoId,
+                "startFromBeginning" to startFromBeginning.toString(),
+                "entryFound" to (storedProgress != null).toString(),
+                "source" to storedProgress?.source,
+                "isResumable" to storedProgress?.isResumable?.toString(),
+                "storedPositionMs" to storedProgress?.lastPositionMs?.toString(),
+                "storedDurationMs" to storedProgress?.durationMs?.toString(),
+                "storedPercent" to storedProgress?.progressPercent?.toString(),
+                "paramPositionMs" to resumePositionMs?.toString(),
+                "paramFraction" to resumeProgressFraction?.toString(),
+                "effectivePositionMs" to effectiveResumePositionMs?.toString(),
+                "effectiveFraction" to effectiveResumeProgressFraction?.toString(),
+                "entriesCount" to watchProgressUiState.entries.size.toString(),
+                "hasLoadedRemote" to watchProgressUiState.hasLoadedRemoteProgress.toString(),
+            ),
+        )
     }
 
     LaunchedEffect(type, videoId, seasonNumber, episodeNumber, manualSelection) {
