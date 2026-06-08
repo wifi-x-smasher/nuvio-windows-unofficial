@@ -111,6 +111,10 @@ private const val PlayerRightGestureBoundary = 0.6f
 private const val PlayerVerticalGestureSensitivity = 1f
 /** Hard ceiling for next-episode stream search to prevent hanging forever. */
 private const val NEXT_EPISODE_HARD_TIMEOUT_MS = 120_000L
+// Safety net for the opening (loading) overlay: if the media never reports it's open — e.g. a live
+// stream that exposes no duration — reveal the player anyway after this grace period so the overlay
+// can't get stuck. Normal playback dismisses the overlay far sooner via the media-ready signal.
+private const val PlayerOpeningOverlayMaxWaitMs = 25_000L
 private val PlayerSliderOverlayGap = 12.dp
 private val PlayerTimeRowHeight = 36.dp
 private val PlayerActionRowHeight = 50.dp
@@ -299,6 +303,15 @@ fun PlayerScreen(
             initialLoadCompleted = initialLoadCompleted,
             hasError = errorMessage != null,
         )
+
+        // Safety net: if the media-ready signal never arrives (e.g. a live stream with no duration that
+        // also never advances position), reveal the player after a grace period so the opening overlay
+        // can't hang forever. Resets per source via the activeSourceUrl key. (issue #12 follow-up)
+        LaunchedEffect(activeSourceUrl) {
+            if (initialLoadCompleted) return@LaunchedEffect
+            delay(PlayerOpeningOverlayMaxWaitMs)
+            initialLoadCompleted = true
+        }
 
         LaunchedEffect(currentGestureFeedback) {
             if (currentGestureFeedback != null) {
@@ -2211,7 +2224,14 @@ fun PlayerScreen(
                 },
                 onSnapshot = { snapshot ->
                     playbackSnapshot = snapshot
-                    if (!snapshot.isLoading) {
+                    // Keep the opening overlay up until the media has actually opened — not merely when
+                    // the backend reports "playing" (see isOpeningMediaReady). (issue #12 follow-up)
+                    if (isOpeningMediaReady(
+                            isLoading = snapshot.isLoading,
+                            durationMs = snapshot.durationMs,
+                            positionMs = snapshot.positionMs,
+                        )
+                    ) {
                         initialLoadCompleted = true
                     }
                     if (snapshot.isEnded) {
