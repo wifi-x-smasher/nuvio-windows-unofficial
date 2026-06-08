@@ -4,6 +4,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.ScrollbarStyle
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.rememberScrollbarAdapter
@@ -12,6 +13,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+
+private val DesktopScrollbarEdgeInset = 14.dp
 
 @Composable
 private fun nuvioScrollbarStyle(): ScrollbarStyle = ScrollbarStyle(
@@ -27,7 +30,9 @@ private fun nuvioScrollbarStyle(): ScrollbarStyle = ScrollbarStyle(
 actual fun NuvioVerticalScrollbar(listState: LazyListState, modifier: Modifier) {
     VerticalScrollbar(
         adapter = rememberScrollbarAdapter(listState),
-        modifier = modifier.fillMaxHeight(),
+        modifier = modifier
+            .fillMaxHeight()
+            .padding(end = DesktopScrollbarEdgeInset),
         style = nuvioScrollbarStyle(),
     )
 }
@@ -36,7 +41,9 @@ actual fun NuvioVerticalScrollbar(listState: LazyListState, modifier: Modifier) 
 actual fun NuvioVerticalScrollbar(gridState: LazyGridState, modifier: Modifier) {
     VerticalScrollbar(
         adapter = rememberScrollbarAdapter(gridState),
-        modifier = modifier.fillMaxHeight(),
+        modifier = modifier
+            .fillMaxHeight()
+            .padding(end = DesktopScrollbarEdgeInset),
         style = nuvioScrollbarStyle(),
     )
 }
@@ -45,7 +52,9 @@ actual fun NuvioVerticalScrollbar(gridState: LazyGridState, modifier: Modifier) 
 actual fun NuvioVerticalScrollbar(scrollState: ScrollState, modifier: Modifier) {
     VerticalScrollbar(
         adapter = rememberScrollbarAdapter(scrollState),
-        modifier = modifier.fillMaxHeight(),
+        modifier = modifier
+            .fillMaxHeight()
+            .padding(end = DesktopScrollbarEdgeInset),
         style = nuvioScrollbarStyle(),
     )
 }

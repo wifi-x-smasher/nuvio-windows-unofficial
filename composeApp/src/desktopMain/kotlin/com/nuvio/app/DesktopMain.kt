@@ -442,6 +442,7 @@ internal class DesktopFullscreenController(
 
     fun applyInitial() {
         EventQueue.invokeLater {
+            setDesktopWindowResizable(window, true)
             DesktopWindowChrome.applyNormalBounds(window)
             onModeChanged(false)
         }
@@ -477,8 +478,10 @@ internal class DesktopFullscreenController(
 
     private fun applyMode(target: DesktopWindowMode) {
         if (target == DesktopWindowMode.Fullscreen) {
+            setDesktopWindowResizable(window, false)
             DesktopWindowChrome.applyFullscreenBounds(window)
         } else {
+            setDesktopWindowResizable(window, true)
             DesktopWindowChrome.applyNormalBounds(window)
         }
         mode = target
@@ -523,6 +526,10 @@ private fun repaintDesktopWindow(window: AwtWindow) {
         window.validate()
         window.repaint()
     }
+}
+
+private fun setDesktopWindowResizable(window: AwtWindow, resizable: Boolean) {
+    (window as? JFrame)?.isResizable = resizable
 }
 
 private fun snapDesktopWindowToNormalBounds(window: AwtWindow) {

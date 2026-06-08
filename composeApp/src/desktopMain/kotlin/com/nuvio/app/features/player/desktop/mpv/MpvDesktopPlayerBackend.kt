@@ -9,6 +9,7 @@ import com.nuvio.app.features.player.AudioTrack
 import com.nuvio.app.features.player.PlayerEngineController
 import com.nuvio.app.features.player.PlayerAudioLevel
 import com.nuvio.app.features.player.PlayerResizeMode
+import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.player.SubtitleStyleState
 import com.nuvio.app.features.player.SubtitleTrack
 import com.nuvio.app.features.player.desktop.DesktopPlayerBackend
@@ -244,11 +245,18 @@ internal class MpvDesktopPlayerBackend private constructor(
         if (nativeClosed) return
         runCatching {
             val upscalerPreset = ExperimentalFeatureSettings.videoUpscalerPreset.value
-            val applied = DesktopMpvVideoOptionProfile.optionsFor(upscalerPreset).mapValues { (name, value) ->
+            PlayerSettingsRepository.ensureLoaded()
+            val decoderPriority = PlayerSettingsRepository.uiState.value.decoderPriority
+            val applied = DesktopMpvVideoOptionProfile.optionsFor(
+                upscalerPreset = upscalerPreset,
+                decoderPriority = decoderPriority,
+            ).mapValues { (name, value) ->
                 player.impl.setMpvRuntimeOption(name, value)
             }
             DesktopRuntimeLog.info(
-                "MPV video profile reason=$reason upscaler=${upscalerPreset.id} applied=$applied " +
+                "MPV video profile reason=$reason upscaler=${upscalerPreset.id} " +
+                    "decoder=${DesktopMpvDecoderOptions.labelFor(decoderPriority)} " +
+                    "decoderPriority=$decoderPriority applied=$applied " +
                     "gpuNextAvailable=${DesktopMpvVideoOptionProfile.canRequestGpuNextRenderBackend} " +
                     "note=${DesktopMpvVideoOptionProfile.rendererLimitationNote}",
             )
