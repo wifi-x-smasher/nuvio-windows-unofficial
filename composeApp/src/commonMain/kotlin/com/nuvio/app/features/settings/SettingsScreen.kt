@@ -58,6 +58,7 @@ import com.nuvio.app.core.ui.NuvioDesktopContentMaxWidth
 import com.nuvio.app.core.ui.NuvioDesktopSettingsRailWidth
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
+import com.nuvio.app.core.ui.NuvioVerticalScrollbar
 import com.nuvio.app.core.ui.PlatformBackHandler
 import com.nuvio.app.core.ui.nuvioDesktopUiScale
 import com.nuvio.app.core.ui.scaledByDesktop
@@ -1047,6 +1048,13 @@ private fun TabletSettingsScreen(
                     )
                 }
             }
+            NuvioVerticalScrollbar(
+                listState = listState,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(top = topOffset, bottom = bottomOverlayPadding)
+                    .padding(end = 4.dp),
+            )
         }
         }
     }

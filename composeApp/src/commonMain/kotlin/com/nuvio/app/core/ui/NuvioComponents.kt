@@ -86,20 +86,30 @@ fun NuvioScreen(
 ) {
     val desktopScale = nuvioDesktopUiScale
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    LazyColumn(
-        state = listState,
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(
-            start = horizontalPadding.scaledByDesktop(desktopScale),
-            top = topPadding ?: 10.dp.scaledByDesktop(desktopScale) + statusBarTop + nuvioPlatformExtraTopPadding,
-            end = horizontalPadding.scaledByDesktop(desktopScale),
-            bottom = nuvioSafeBottomPadding(18.dp.scaledByDesktop(desktopScale)),
-        ),
-        verticalArrangement = Arrangement.spacedBy(12.dp.scaledByDesktop(desktopScale)),
-        content = content,
-    )
+    ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = horizontalPadding.scaledByDesktop(desktopScale),
+                top = topPadding ?: 10.dp.scaledByDesktop(desktopScale) + statusBarTop + nuvioPlatformExtraTopPadding,
+                end = horizontalPadding.scaledByDesktop(desktopScale),
+                bottom = nuvioSafeBottomPadding(18.dp.scaledByDesktop(desktopScale)),
+            ),
+            verticalArrangement = Arrangement.spacedBy(12.dp.scaledByDesktop(desktopScale)),
+            content = content,
+        )
+        // Desktop-only draggable scrollbar (no-op on touch platforms). Covers every screen
+        // built on NuvioScreen — Home, Search, Library, Addons, Downloads, Collections, etc.
+        NuvioVerticalScrollbar(
+            listState = listState,
+            modifier = Modifier.align(Alignment.TopEnd),
+        )
+    }
 }
 
 internal fun Modifier.nuvioBlockPointerPassthrough(): Modifier =

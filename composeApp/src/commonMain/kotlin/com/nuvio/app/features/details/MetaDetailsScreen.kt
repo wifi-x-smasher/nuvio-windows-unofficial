@@ -65,6 +65,7 @@ import com.nuvio.app.core.build.TrailerPlaybackMode
 import com.nuvio.app.core.network.NetworkCondition
 import com.nuvio.app.core.network.NetworkStatusRepository
 import com.nuvio.app.core.ui.NuvioBackButton
+import com.nuvio.app.core.ui.NuvioVerticalScrollbar
 import com.nuvio.app.core.ui.TraktListPickerDialog
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
 import com.nuvio.app.features.details.components.DetailActionButtons
@@ -1126,6 +1127,16 @@ fun MetaDetailsScreen(
                                 onDismiss = { selectedComment = null },
                             )
                         }
+                        NuvioVerticalScrollbar(
+                            scrollState = scrollState,
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(
+                                    top = WindowInsets.statusBars.asPaddingValues()
+                                        .calculateTopPadding() + 56.dp,
+                                    bottom = nuvioSafeBottomPadding(16.dp),
+                                ),
+                        )
                     }
                 }
             }
