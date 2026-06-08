@@ -98,6 +98,7 @@ object WatchProgressRepository {
         syncScope.launch {
             TraktProgressRepository.uiState.collectLatest {
                 if (shouldUseTraktProgress()) {
+                    cacheTraktSnapshotIfLoaded()
                     publish()
                 }
             }
@@ -596,14 +597,66 @@ object WatchProgressRepository {
 
     private fun currentEntries(): List<WatchProgressEntry> {
         return if (shouldUseTraktProgress()) {
-            TraktProgressRepository.uiState.value.entries
+            val traktState = TraktProgressRepository.uiState.value
+            mergeTraktEntriesWithLocalFallback(
+                traktEntries = traktState.entries,
+                localEntries = entriesByVideoId.values.toList(),
+                hasLoadedRemoteProgress = traktState.hasLoadedRemoteProgress,
+            )
         } else {
             entriesByVideoId.values.toList()
         }
     }
 
+    private fun cacheTraktSnapshotIfLoaded() {
+        val traktState = TraktProgressRepository.uiState.value
+        if (!traktState.hasLoadedRemoteProgress) return
+        val mergedEntries = mergeTraktEntriesWithLocalFallback(
+            traktEntries = traktState.entries,
+            localEntries = entriesByVideoId.values.toList(),
+            hasLoadedRemoteProgress = true,
+        )
+        val mergedByVideoId = mergedEntries.associateBy { it.videoId }
+        if (mergedByVideoId == entriesByVideoId) return
+        entriesByVideoId = mergedByVideoId.toMutableMap()
+        persist()
+    }
+
     fun isDroppedShow(contentId: String): Boolean {
         return shouldUseTraktProgress() && TraktProgressRepository.isShowHiddenFromProgress(contentId)
+    }
+
+    internal fun mergeTraktEntriesWithLocalFallback(
+        traktEntries: List<WatchProgressEntry>,
+        localEntries: List<WatchProgressEntry>,
+        hasLoadedRemoteProgress: Boolean,
+    ): List<WatchProgressEntry> {
+        val mergedByVideoId = traktEntries.associateBy { it.videoId }.toMutableMap()
+        localEntries.forEach { localEntry ->
+            val remoteEntry = mergedByVideoId[localEntry.videoId]
+            if (remoteEntry == null) {
+                val canUseAsFallback = !hasLoadedRemoteProgress || localEntry.source == WatchProgressSourceLocal
+                if (canUseAsFallback) {
+                    mergedByVideoId[localEntry.videoId] = localEntry
+                }
+                return@forEach
+            }
+            if (shouldKeepLocalProgressOverRemote(localEntry, remoteEntry)) {
+                mergedByVideoId[localEntry.videoId] = localEntry
+            }
+        }
+        return mergedByVideoId.values
+            .toList()
+            .sortedByDescending { it.lastUpdatedEpochMs }
+    }
+
+    internal fun shouldKeepLocalProgressOverRemote(
+        local: WatchProgressEntry,
+        remote: WatchProgressEntry,
+    ): Boolean {
+        if (local.isEffectivelyCompleted && !remote.isEffectivelyCompleted) return true
+        if (local.lastUpdatedEpochMs < remote.lastUpdatedEpochMs) return false
+        return local.progressFraction > remote.progressFraction
     }
 
 }

@@ -97,4 +97,28 @@ class WatchedRepositoryTest {
 
         assertTrue(merged.isEmpty())
     }
+
+    @Test
+    fun mergeWatchedItemsPreservingUnsynced_keeps_local_items_when_no_push_has_succeeded_yet() {
+        val localUnsyncedItem = WatchedItem(
+            id = "show",
+            type = "series",
+            name = "Episode 1",
+            season = 1,
+            episode = 1,
+            markedAtEpochMs = 1_000L,
+        )
+
+        val merged = mergeWatchedItemsPreservingUnsynced(
+            serverItems = emptyList(),
+            localItems = listOf(localUnsyncedItem),
+            lastSuccessfulPushEpochMs = 0L,
+            pullStartedEpochMs = 2_000L,
+        )
+
+        assertEquals(
+            setOf("series:show:1:1"),
+            merged.keys,
+        )
+    }
 }

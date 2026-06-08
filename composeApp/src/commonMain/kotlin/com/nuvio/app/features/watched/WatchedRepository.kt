@@ -341,9 +341,10 @@ internal fun mergeWatchedItemsPreservingUnsynced(
             val key = watchedItemKey(localItem.type, localItem.id, localItem.season, localItem.episode)
             if (key in merged) return@forEach
             val markedAt = localItem.markedAtEpochMs
+            val hasNeverSuccessfullyPushed = lastSuccessfulPushEpochMs <= 0L
             val wasMarkedAfterLastPush = lastSuccessfulPushEpochMs > 0L && markedAt > lastSuccessfulPushEpochMs
             val wasMarkedDuringPull = pullStartedEpochMs > 0L && markedAt >= pullStartedEpochMs
-            if (wasMarkedAfterLastPush || wasMarkedDuringPull) {
+            if (hasNeverSuccessfullyPushed || wasMarkedAfterLastPush || wasMarkedDuringPull) {
                 merged[key] = localItem
             }
         }
