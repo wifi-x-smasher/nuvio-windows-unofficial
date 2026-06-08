@@ -294,6 +294,11 @@ fun PlayerScreen(
         val displayedPositionMs = scrubbingPositionMs ?: playbackSnapshot.positionMs
         val isEpisode = activeSeasonNumber != null && activeEpisodeNumber != null
         val currentGestureFeedback = liveGestureFeedback ?: gestureFeedback
+        val openingOverlayVisible = shouldShowOpeningOverlay(
+            showLoadingOverlay = playerSettingsUiState.showLoadingOverlay,
+            initialLoadCompleted = initialLoadCompleted,
+            hasError = errorMessage != null,
+        )
 
         LaunchedEffect(currentGestureFeedback) {
             if (currentGestureFeedback != null) {
@@ -328,6 +333,12 @@ fun PlayerScreen(
         var showParentalGuide by remember { mutableStateOf(false) }
         var parentalGuideHasShown by remember { mutableStateOf(false) }
         var playbackStartedForParentalGuide by remember { mutableStateOf(false) }
+        val playerChromeVisible = shouldShowPlayerChrome(
+            initialLoadCompleted = initialLoadCompleted,
+            controlsVisible = controlsVisible,
+            showParentalGuide = showParentalGuide,
+            playerControlsLocked = playerControlsLocked,
+        )
 
         // Next episode state
         var nextEpisodeInfo by remember { mutableStateOf<NextEpisodeInfo?>(null) }
@@ -2255,7 +2266,7 @@ fun PlayerScreen(
             }
 
             AnimatedVisibility(
-                visible = (controlsVisible || showParentalGuide) && !playerControlsLocked,
+                visible = playerChromeVisible,
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
@@ -2338,7 +2349,7 @@ fun PlayerScreen(
             }
 
             AnimatedVisibility(
-                visible = playerSettingsUiState.showLoadingOverlay && !initialLoadCompleted && errorMessage == null,
+                visible = openingOverlayVisible,
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {

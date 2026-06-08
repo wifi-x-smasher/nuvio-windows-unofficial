@@ -5,6 +5,7 @@ import com.nuvio.app.features.addons.httpGetTextWithHeaders
 import com.nuvio.app.features.addons.httpRequestRaw
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.watchprogress.ContinueWatchingPreferencesRepository
+import com.nuvio.app.features.watchprogress.WatchProgressCodec
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watchprogress.WatchProgressSourceTraktHistory
 import com.nuvio.app.features.watchprogress.WatchProgressSourceTraktPlayback
@@ -61,6 +62,7 @@ object TraktProgressRepository {
     private val hiddenProgressShowIds = MutableStateFlow<Set<String>>(emptySet())
 
     private var hasLoaded = false
+    private var hasLoadedSnapshotFromDisk = false
     private var refreshRequestId: Long = 0L
     private val refreshJobMutex = Mutex()
     private var inFlightRefresh: Deferred<Unit>? = null
@@ -68,6 +70,61 @@ object TraktProgressRepository {
     fun ensureLoaded() {
         if (hasLoaded) return
         hasLoaded = true
+        loadPersistedSnapshot()
+    }
+
+    /**
+     * Seeds [_uiState] with the last persisted Trakt snapshot so already-watched / in-progress items
+     * render immediately on a cold launch, before the remote refresh completes. The seed is marked
+     * non-authoritative ([TraktProgressUiState.hasLoadedRemoteProgress] = false) and is overwritten
+     * once the live refresh finishes. (issue #12)
+     */
+    private fun loadPersistedSnapshot() {
+        if (hasLoadedSnapshotFromDisk) return
+        hasLoadedSnapshotFromDisk = true
+        if (_uiState.value.hasLoadedRemoteProgress) return
+        val payload = runCatching { TraktProgressSnapshotStorage.loadPayload() }
+            .getOrNull()
+            .orEmpty()
+            .trim()
+        if (payload.isEmpty()) return
+        val entries = WatchProgressCodec.decodeEntries(payload)
+        if (entries.isEmpty()) return
+        _uiState.value = _uiState.value.copy(
+            entries = entries.sortedByDescending { it.lastUpdatedEpochMs },
+            hasLoadedRemoteProgress = false,
+        )
+    }
+
+    private fun persistSnapshot(entries: List<WatchProgressEntry>) {
+        runCatching {
+            TraktProgressSnapshotStorage.savePayload(WatchProgressCodec.encodeEntries(entries))
+        }.onFailure { error ->
+            log.w { "Failed to persist Trakt progress snapshot: ${error.message}" }
+        }
+    }
+
+    /**
+     * Merges a fresh Trakt fetch with the previous in-memory entries so already-known *watched*
+     * (completed) items don't vanish when a smaller/transient refetch omits them — the source of the
+     * in-session found/not-found flip-flop in issue #12 (the `sync/history` endpoint only returns the
+     * most-recent 250 episodes, so older watched items legitimately fall out of a refetch window).
+     *
+     * The fresh fetch stays authoritative for in-progress items (so finished titles still drop out of
+     * Continue Watching); only completed items are carried forward across refreshes.
+     */
+    internal fun mergeRetainingWatchedEntries(
+        previous: List<WatchProgressEntry>,
+        fresh: List<WatchProgressEntry>,
+    ): List<WatchProgressEntry> {
+        val mergedByVideoId = fresh.associateBy { it.videoId }.toMutableMap()
+        previous.forEach { prior ->
+            if (prior.videoId in mergedByVideoId) return@forEach
+            if (prior.isEffectivelyCompleted) {
+                mergedByVideoId[prior.videoId] = prior
+            }
+        }
+        return mergedByVideoId.values.sortedByDescending { it.lastUpdatedEpochMs }
     }
 
     fun isShowHiddenFromProgress(contentId: String): Boolean {
@@ -86,6 +143,7 @@ object TraktProgressRepository {
     fun onProfileChanged() {
         invalidateInFlightRefreshes()
         hasLoaded = false
+        hasLoadedSnapshotFromDisk = false
         hiddenProgressShowIds.value = emptySet()
         _uiState.value = TraktProgressUiState()
         ensureLoaded()
@@ -94,8 +152,11 @@ object TraktProgressRepository {
     fun clearLocalState() {
         invalidateInFlightRefreshes()
         hasLoaded = false
+        hasLoadedSnapshotFromDisk = false
         hiddenProgressShowIds.value = emptySet()
         _uiState.value = TraktProgressUiState()
+        // Drop the persisted snapshot on logout so stale watched state isn't seeded next launch.
+        persistSnapshot(emptyList())
     }
 
     fun refreshAsync() {
@@ -149,15 +210,22 @@ object TraktProgressRepository {
             return
         }
 
+        // Keep already-known watched items visible while the (slower) history fetch is in flight,
+        // so they don't flicker to "unwatched" between the playback fetch and the full load. (#12)
+        val previousEntries = _uiState.value.entries
+        val intermediateEntries = mergeRetainingWatchedEntries(
+            previous = previousEntries,
+            fresh = playbackEntries,
+        )
         _uiState.value = TraktProgressUiState(
-            entries = playbackEntries,
+            entries = intermediateEntries,
             isLoading = true,
             errorMessage = null,
             hasLoadedRemoteProgress = false,
         )
 
-        if (playbackEntries.isNotEmpty()) {
-            launchHydration(requestId = requestId, entries = playbackEntries)
+        if (intermediateEntries.isNotEmpty()) {
+            launchHydration(requestId = requestId, entries = intermediateEntries)
         }
 
         val completedEntries = runCatching {
@@ -187,15 +255,22 @@ object TraktProgressRepository {
         if (!isLatestRefreshRequest(requestId)) return
 
         val merged = mergeNewestByVideoId(playbackEntries + completedEntries)
+        // Carry forward watched items that fell out of the freshly-fetched window so the set stays
+        // stable across refreshes within a session, then persist it as the cold-launch baseline. (#12)
+        val stableEntries = mergeRetainingWatchedEntries(
+            previous = _uiState.value.entries,
+            fresh = merged,
+        )
         _uiState.value = _uiState.value.copy(
-            entries = merged.sortedByDescending { it.lastUpdatedEpochMs },
+            entries = stableEntries,
             isLoading = false,
             errorMessage = null,
             hasLoadedRemoteProgress = true,
         )
+        persistSnapshot(stableEntries)
 
-        if (merged.isNotEmpty()) {
-            launchHydration(requestId = requestId, entries = merged)
+        if (stableEntries.isNotEmpty()) {
+            launchHydration(requestId = requestId, entries = stableEntries)
         }
     }
 
@@ -217,11 +292,18 @@ object TraktProgressRepository {
                 current = _uiState.value.entries,
                 hydrated = hydrated,
             )
+            val sortedMerged = merged.sortedByDescending { it.lastUpdatedEpochMs }
+            val wasAuthoritative = _uiState.value.hasLoadedRemoteProgress
             _uiState.value = _uiState.value.copy(
-                entries = merged.sortedByDescending { it.lastUpdatedEpochMs },
+                entries = sortedMerged,
                 isLoading = false,
                 errorMessage = null,
             )
+            // Refresh the persisted baseline with hydrated artwork, but only once the authoritative
+            // load has completed (never persist the playback-only intermediate). (#12)
+            if (wasAuthoritative) {
+                persistSnapshot(sortedMerged)
+            }
         }
     }
 

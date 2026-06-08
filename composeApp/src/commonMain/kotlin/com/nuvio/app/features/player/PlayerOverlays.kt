@@ -3,7 +3,6 @@ package com.nuvio.app.features.player
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -100,20 +99,15 @@ internal fun OpeningOverlay(
     horizontalSafePadding: Dp,
     modifier: Modifier = Modifier,
 ) {
-    val contentAlpha by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = tween(durationMillis = 700, delayMillis = 400, easing = LinearEasing),
-        label = "openingOverlayContentAlpha",
-    )
     val pulse = rememberInfiniteTransition(label = "openingOverlayContentPulse")
-    val contentScale by pulse.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.04f,
+    val contentAlpha by pulse.animateFloat(
+        initialValue = 0.42f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2000, easing = LinearEasing),
+            animation = tween(durationMillis = 1600, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse,
         ),
-        label = "openingOverlayContentScale",
+        label = "openingOverlayContentAlpha",
     )
 
     Box(
@@ -173,8 +167,6 @@ internal fun OpeningOverlay(
                         .height(180.dp)
                         .graphicsLayer {
                             alpha = contentAlpha
-                            scaleX = contentScale
-                            scaleY = contentScale
                         },
                     contentScale = ContentScale.Fit,
                 )
@@ -192,8 +184,6 @@ internal fun OpeningOverlay(
                         .padding(horizontal = 24.dp)
                         .graphicsLayer {
                             alpha = contentAlpha
-                            scaleX = contentScale
-                            scaleY = contentScale
                         },
                 )
             } else {

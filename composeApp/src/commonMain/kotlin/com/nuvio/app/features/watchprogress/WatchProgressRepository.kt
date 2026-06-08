@@ -39,6 +39,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 private const val NUVIO_SYNC_PERIODIC_INTERVAL_MS = 5L * 60L * 1000L
 private const val WATCH_PROGRESS_METADATA_RESOLUTION_CONCURRENCY = 4
 
+// Issue #12: a save is treated as a spurious "resume regression" when a substantial stored position
+// is about to be replaced by a near-start one (the signature of a resume seek that fired before the
+// player was seekable). Only positions below the ceiling, well under a quarter of the previous one,
+// over an already-substantial floor, are rejected — deliberate seeks keep working.
+private const val WATCH_PROGRESS_REGRESSION_PREVIOUS_FLOOR_MS = 60_000L
+private const val WATCH_PROGRESS_REGRESSION_NEW_CEILING_MS = 60_000L
+
 private data class RemoteMetadataResolutionResult(
     val key: Pair<String, String>,
     val entries: List<WatchProgressEntry>,
@@ -512,10 +519,16 @@ object WatchProgressRepository {
 
         val useTraktProgress = shouldUseTraktProgress()
 
-        // Diagnostic for issue #10: flags a regressive overwrite (a >60s stored position replaced by
-        // a near-start one) — the signature of a failed resume saving ~0 back over good progress.
+        // Issue #12: reject a spurious near-start save that would erase substantial progress (a resume
+        // seek firing before the player is seekable). This protects the good resume point and prevents
+        // the bad value from being pushed to Trakt / Nuvio Sync. A deliberate restart resumes saving
+        // once it climbs past the early window. (Was an issue #10 diagnostic; now an active guard.)
         val previousPositionMs = entriesByVideoId[session.videoId]?.lastPositionMs ?: 0L
-        if (!isCompleted && previousPositionMs > 60_000L && positionMs in 1L until (previousPositionMs / 2)) {
+        val isRegressiveNearStart = !isCompleted &&
+            previousPositionMs > WATCH_PROGRESS_REGRESSION_PREVIOUS_FLOOR_MS &&
+            positionMs in 1L until WATCH_PROGRESS_REGRESSION_NEW_CEILING_MS &&
+            positionMs * 4 < previousPositionMs
+        if (isRegressiveNearStart) {
             AppDiagnostics.breadcrumb(
                 event = "watchprogress.regression",
                 details = mapOf(
@@ -524,8 +537,10 @@ object WatchProgressRepository {
                     "previousPositionMs" to previousPositionMs.toString(),
                     "durationMs" to durationMs.toString(),
                     "usingTrakt" to useTraktProgress.toString(),
+                    "prevented" to "true",
                 ),
             )
+            return
         }
 
         entriesByVideoId[session.videoId] = entry

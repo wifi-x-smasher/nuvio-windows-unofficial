@@ -97,4 +97,52 @@ class WatchedRepositoryTest {
 
         assertTrue(merged.isEmpty())
     }
+
+    @Test
+    fun mergeWatchedItemsPreservingUnsynced_keeps_pending_local_mark_even_when_old() {
+        // A manual mark that has never been confirmed pushed must survive a pull, regardless of the
+        // push watermark — otherwise it disappears on the next launch (issue #12, symptom 3).
+        val pendingLocalItem = WatchedItem(
+            id = "show",
+            type = "series",
+            name = "Episode 1",
+            season = 1,
+            episode = 1,
+            markedAtEpochMs = 1_000L,
+        )
+
+        val merged = mergeWatchedItemsPreservingUnsynced(
+            serverItems = emptyList(),
+            localItems = listOf(pendingLocalItem),
+            lastSuccessfulPushEpochMs = 5_000L,
+            pullStartedEpochMs = 9_000L,
+            pendingPushKeys = setOf("series:show:1:1"),
+        )
+
+        assertEquals(setOf("series:show:1:1"), merged.keys)
+    }
+
+    @Test
+    fun mergeWatchedItemsPreservingUnsynced_non_pending_local_item_follows_remote_unwatch() {
+        // An item that originated from the server (not pending) and is no longer returned is dropped,
+        // so a remote unwatch still propagates even when nothing has ever been pushed from this device.
+        val mirroredLocalItem = WatchedItem(
+            id = "show",
+            type = "series",
+            name = "Episode 1",
+            season = 1,
+            episode = 1,
+            markedAtEpochMs = 1_000L,
+        )
+
+        val merged = mergeWatchedItemsPreservingUnsynced(
+            serverItems = emptyList(),
+            localItems = listOf(mirroredLocalItem),
+            lastSuccessfulPushEpochMs = 0L,
+            pullStartedEpochMs = 9_000L,
+            pendingPushKeys = emptySet(),
+        )
+
+        assertTrue(merged.isEmpty())
+    }
 }

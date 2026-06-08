@@ -26,6 +26,10 @@ import kotlinx.serialization.json.Json
 private data class StoredWatchedPayload(
     val items: List<WatchedItem> = emptyList(),
     val lastSuccessfulPushEpochMs: Long = 0L,
+    // Issue #12: keys of locally-marked items not yet confirmed pushed to the server. These are
+    // retained across a server pull so a manual mark-as-watched is never dropped before it syncs,
+    // while items that originated from the server (and aren't pending) still follow remote unwatches.
+    val pendingPushKeys: Set<String> = emptySet(),
 )
 
 object WatchedRepository {
@@ -45,6 +49,7 @@ object WatchedRepository {
     private var currentProfileId: Int = 1
     private var itemsByKey: MutableMap<String, WatchedItem> = mutableMapOf()
     private var lastSuccessfulPushEpochMs: Long = 0L
+    private var pendingPushKeys: MutableSet<String> = mutableSetOf()
     internal var syncAdapter: WatchedSyncAdapter = SupabaseWatchedSyncAdapter
 
     private fun activePullSyncAdapter(): WatchedSyncAdapter =
@@ -65,6 +70,7 @@ object WatchedRepository {
         currentProfileId = 1
         itemsByKey.clear()
         lastSuccessfulPushEpochMs = 0L
+        pendingPushKeys.clear()
         _uiState.value = WatchedUiState()
     }
 
@@ -83,8 +89,11 @@ object WatchedRepository {
                 .map(WatchedItem::normalizedMarkedAt)
                 .associateBy { watchedItemKey(it.type, it.id, it.season, it.episode) }
                 .toMutableMap()
+            pendingPushKeys = storedPayload.pendingPushKeys
+                .filterTo(mutableSetOf()) { it in itemsByKey }
         } else {
             lastSuccessfulPushEpochMs = 0L
+            pendingPushKeys = mutableSetOf()
         }
 
         publish()
@@ -110,7 +119,14 @@ object WatchedRepository {
                 localItems = localBeforePull,
                 lastSuccessfulPushEpochMs = lastPushEpochMs,
                 pullStartedEpochMs = pullStartedEpochMs,
+                pendingPushKeys = pendingPushKeys.toSet(),
             ).toMutableMap()
+            // Keys now present on the server are synced; keep only marks still missing remotely. (#12)
+            val serverKeys = serverItems.mapTo(mutableSetOf()) {
+                watchedItemKey(it.type, it.id, it.season, it.episode)
+            }
+            pendingPushKeys.removeAll(serverKeys)
+            pendingPushKeys.retainAll { it in itemsByKey }
             hasLoaded = true
             publish()
             persist()
@@ -143,6 +159,8 @@ object WatchedRepository {
         timestampedItems.forEach { watchedItem ->
             val key = watchedItemKey(watchedItem.type, watchedItem.id, watchedItem.season, watchedItem.episode)
             itemsByKey[key] = watchedItem
+            // Mark as locally-unsynced until a push confirms it (issue #12).
+            pendingPushKeys.add(key)
         }
         publish()
         persist()
@@ -177,7 +195,9 @@ object WatchedRepository {
         ensureLoaded()
         if (items.isEmpty()) return
         val removedItems = items.mapNotNull { watchedItem ->
-            itemsByKey.remove(watchedItemKey(watchedItem.type, watchedItem.id, watchedItem.season, watchedItem.episode))
+            val key = watchedItemKey(watchedItem.type, watchedItem.id, watchedItem.season, watchedItem.episode)
+            pendingPushKeys.remove(key)
+            itemsByKey.remove(key)
         }
         if (removedItems.isNotEmpty()) {
             publish()
@@ -270,6 +290,7 @@ object WatchedRepository {
                         .map(WatchedItem::normalizedMarkedAt)
                         .sortedByDescending { it.markedAtEpochMs },
                     lastSuccessfulPushEpochMs = lastSuccessfulPushEpochMs,
+                    pendingPushKeys = pendingPushKeys.toSet(),
                 ),
             ),
         )
@@ -277,14 +298,21 @@ object WatchedRepository {
 
     private fun recordSuccessfulPush(profileId: Int, items: Collection<WatchedItem>) {
         if (profileId != currentProfileId) return
+        // These items are now confirmed on the server, so they're no longer pending-unsynced (#12).
+        val clearedPending = items.fold(false) { changed, item ->
+            val key = watchedItemKey(item.type, item.id, item.season, item.episode)
+            pendingPushKeys.remove(key) || changed
+        }
         val latestPushed = items
             .asSequence()
             .map { item -> normalizeWatchedMarkedAtEpochMs(item.markedAtEpochMs) }
             .maxOrNull()
-            ?: return
-        if (latestPushed <= lastSuccessfulPushEpochMs) return
-        lastSuccessfulPushEpochMs = latestPushed
-        persist()
+        if (latestPushed != null && latestPushed > lastSuccessfulPushEpochMs) {
+            lastSuccessfulPushEpochMs = latestPushed
+            persist()
+        } else if (clearedPending) {
+            persist()
+        }
     }
 
     private fun shouldUseTraktWatchedSync(): Boolean =
@@ -329,6 +357,7 @@ internal fun mergeWatchedItemsPreservingUnsynced(
     localItems: Collection<WatchedItem>,
     lastSuccessfulPushEpochMs: Long,
     pullStartedEpochMs: Long,
+    pendingPushKeys: Set<String> = emptySet(),
 ): Map<String, WatchedItem> {
     val merged = serverItems
         .map(WatchedItem::normalizedMarkedAt)
@@ -343,7 +372,11 @@ internal fun mergeWatchedItemsPreservingUnsynced(
             val markedAt = localItem.markedAtEpochMs
             val wasMarkedAfterLastPush = lastSuccessfulPushEpochMs > 0L && markedAt > lastSuccessfulPushEpochMs
             val wasMarkedDuringPull = pullStartedEpochMs > 0L && markedAt >= pullStartedEpochMs
-            if (wasMarkedAfterLastPush || wasMarkedDuringPull) {
+            // Issue #12: a manual mark that hasn't been confirmed pushed is kept regardless of the
+            // push watermark, so it survives a pull instead of being dropped before it syncs. Items
+            // that came from the server (never pending) still follow remote unwatches.
+            val isPendingUnsynced = key in pendingPushKeys
+            if (wasMarkedAfterLastPush || wasMarkedDuringPull || isPendingUnsynced) {
                 merged[key] = localItem
             }
         }
