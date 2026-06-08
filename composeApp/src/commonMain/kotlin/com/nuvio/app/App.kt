@@ -128,6 +128,8 @@ import com.nuvio.app.features.catalog.INTERNAL_LIBRARY_MANIFEST_URL
 import com.nuvio.app.features.cloud.CloudLibraryContentType
 import com.nuvio.app.features.cloud.CloudLibraryFile
 import com.nuvio.app.features.cloud.CloudLibraryItem
+import com.nuvio.app.features.commandpalette.CommandPaletteController
+import com.nuvio.app.features.experimental.ExperimentalFeatureSettings
 import com.nuvio.app.features.cloud.CloudLibraryPlaybackResult
 import com.nuvio.app.features.cloud.CloudLibraryPlaybackTargetLookupResult
 import com.nuvio.app.features.cloud.CloudLibraryRepository
@@ -385,9 +387,16 @@ fun App() {
         val authState by AuthRepository.state.collectAsStateWithLifecycle()
         val profileState by ProfileRepository.state.collectAsStateWithLifecycle()
         val profileAvatars by AvatarRepository.avatars.collectAsStateWithLifecycle()
+        val universalSearchEnabled by ExperimentalFeatureSettings.universalSearchEnabled.collectAsStateWithLifecycle()
         val networkStatusUiState by remember {
             NetworkStatusRepository.uiState
         }.collectAsStateWithLifecycle()
+
+        LaunchedEffect(universalSearchEnabled) {
+            if (!universalSearchEnabled) {
+                CommandPaletteController.hide()
+            }
+        }
 
         LaunchedEffect(
             profileState.activeProfile?.profileIndex,
@@ -629,6 +638,7 @@ private fun MainAppContent(
     val networkStatusUiState by remember {
         NetworkStatusRepository.uiState
     }.collectAsStateWithLifecycle()
+    val universalSearchEnabled by ExperimentalFeatureSettings.universalSearchEnabled.collectAsStateWithLifecycle()
     val downloadedProviderLabel = stringResource(Res.string.provider_downloaded)
     val externalPlayerNotConfiguredText = stringResource(Res.string.external_player_not_configured)
     val externalPlayerUnavailableText = stringResource(Res.string.external_player_unavailable)
@@ -2502,7 +2512,7 @@ private fun MainAppContent(
             }
 
             // Command palette (Ctrl+K) — desktop only. Rendered here so it can drive real navigation.
-            if (isDesktop) {
+            if (isDesktop && universalSearchEnabled) {
                 CommandPalette(
                     navController = navController,
                     onSelectTab = { tab ->

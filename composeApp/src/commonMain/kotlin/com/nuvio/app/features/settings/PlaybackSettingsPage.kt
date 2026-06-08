@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.enabledAddons
+import com.nuvio.app.features.experimental.ExperimentalFeatureSettings
+import com.nuvio.app.features.experimental.VideoUpscalerPreset
 import com.nuvio.app.features.player.AudioLanguageOption
 import com.nuvio.app.features.player.AvailableLanguageOptions
 import com.nuvio.app.features.player.ExternalPlayerApp
@@ -182,6 +184,7 @@ private fun PlaybackSettingsSection(
     var showReuseCacheDurationDialog by remember { mutableStateOf(false) }
     var showDecoderPriorityDialog by remember { mutableStateOf(false) }
     var showHoldToSpeedValueDialog by remember { mutableStateOf(false) }
+    var showVideoUpscalerDialog by remember { mutableStateOf(false) }
     var showIosHardwareDecoderDialog by remember { mutableStateOf(false) }
     var showIosTargetPrimariesDialog by remember { mutableStateOf(false) }
     var showIosTargetTransferDialog by remember { mutableStateOf(false) }
@@ -194,6 +197,8 @@ private fun PlaybackSettingsSection(
     val pluginsEnabled = AppFeaturePolicy.pluginsEnabled
     val autoPlayPlayerSettings by PlayerSettingsRepository.uiState.collectAsStateWithLifecycle()
     val discordPresenceEnabled by DiscordPresenceSettings.enabled.collectAsStateWithLifecycle()
+    val universalSearchEnabled by ExperimentalFeatureSettings.universalSearchEnabled.collectAsStateWithLifecycle()
+    val videoUpscalerPreset by ExperimentalFeatureSettings.videoUpscalerPreset.collectAsStateWithLifecycle()
     val availableExternalPlayers = ExternalPlayerPlatform.availablePlayers()
     val selectedExternalPlayer = availableExternalPlayers.firstOrNull {
         it.id == autoPlayPlayerSettings.externalPlayerId
@@ -213,7 +218,7 @@ private fun PlaybackSettingsSection(
     ) {
         if (isDesktop) {
             SettingsSection(
-                title = "Discord",
+                title = "Experimental Features",
                 isTablet = isTablet,
             ) {
                 SettingsGroup(isTablet = isTablet) {
@@ -224,6 +229,21 @@ private fun PlaybackSettingsSection(
                         checked = discordPresenceEnabled,
                         isTablet = isTablet,
                         onCheckedChange = DiscordPresenceSettings::setEnabled,
+                    )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsSwitchRow(
+                        title = "Universal Search",
+                        description = "Enable the Ctrl+K / Ctrl+P command palette and the desktop search shortcut button.",
+                        checked = universalSearchEnabled,
+                        isTablet = isTablet,
+                        onCheckedChange = ExperimentalFeatureSettings::setUniversalSearchEnabled,
+                    )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsNavigationRow(
+                        title = "MPV scaler preset",
+                        description = "${videoUpscalerPreset.displayName} · Applies to new internal playback sessions.",
+                        isTablet = isTablet,
+                        onClick = { showVideoUpscalerDialog = true },
                     )
                 }
             }
@@ -931,6 +951,17 @@ private fun PlaybackSettingsSection(
         )
     }
 
+    if (showVideoUpscalerDialog) {
+        VideoUpscalerPresetDialog(
+            selectedPreset = videoUpscalerPreset,
+            onPresetSelected = { preset ->
+                ExperimentalFeatureSettings.setVideoUpscalerPreset(preset)
+                showVideoUpscalerDialog = false
+            },
+            onDismiss = { showVideoUpscalerDialog = false },
+        )
+    }
+
     if (showHoldToSpeedValueDialog) {
         HoldToSpeedValueDialog(
             selectedSpeed = holdToSpeedValue,
@@ -1421,6 +1452,104 @@ private fun DecoderPriorityDialog(
                                     color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.weight(1f),
                                 )
+                                Box(
+                                    modifier = Modifier.size(24.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(Res.string.settings_playback_dialog_close),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun VideoUpscalerPresetDialog(
+    selectedPreset: VideoUpscalerPreset,
+    onPresetSelected: (VideoUpscalerPreset) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    BasicAlertDialog(
+        onDismissRequest = onDismiss,
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "MPV scaler preset",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "Experimental MPV scaler presets for the internal Windows player. Changes apply when a new stream starts.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 460.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(VideoUpscalerPreset.entries) { preset ->
+                        val isSelected = preset == selectedPreset
+                        val containerColor = if (isSelected) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onPresetSelected(preset) },
+                            shape = RoundedCornerShape(12.dp),
+                            color = containerColor,
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                                    Text(
+                                        text = preset.displayName,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = preset.description,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                                 Box(
                                     modifier = Modifier.size(24.dp),
                                     contentAlignment = Alignment.Center,

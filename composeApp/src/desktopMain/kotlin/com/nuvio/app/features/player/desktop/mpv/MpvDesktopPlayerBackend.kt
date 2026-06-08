@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.nuvio.app.desktop.DesktopPlayerRegistry
 import com.nuvio.app.desktop.DesktopRuntimeLog
+import com.nuvio.app.features.experimental.ExperimentalFeatureSettings
 import com.nuvio.app.features.player.AudioTrack
 import com.nuvio.app.features.player.PlayerEngineController
 import com.nuvio.app.features.player.PlayerAudioLevel
@@ -242,11 +243,12 @@ internal class MpvDesktopPlayerBackend private constructor(
     private fun applyDesktopVideoOutputProfile(reason: String) {
         if (nativeClosed) return
         runCatching {
-            val applied = DesktopMpvVideoOptionProfile.options.mapValues { (name, value) ->
+            val upscalerPreset = ExperimentalFeatureSettings.videoUpscalerPreset.value
+            val applied = DesktopMpvVideoOptionProfile.optionsFor(upscalerPreset).mapValues { (name, value) ->
                 player.impl.setMpvRuntimeOption(name, value)
             }
             DesktopRuntimeLog.info(
-                "MPV video profile reason=$reason applied=$applied " +
+                "MPV video profile reason=$reason upscaler=${upscalerPreset.id} applied=$applied " +
                     "gpuNextAvailable=${DesktopMpvVideoOptionProfile.canRequestGpuNextRenderBackend} " +
                     "note=${DesktopMpvVideoOptionProfile.rendererLimitationNote}",
             )

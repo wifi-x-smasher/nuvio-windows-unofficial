@@ -18,6 +18,7 @@ import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -38,12 +39,14 @@ import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.zIndex
 import com.nuvio.app.desktop.DesktopPlayerRegistry
 import com.nuvio.app.desktop.DesktopRuntimeLog
+import com.nuvio.app.desktop.DesktopExperimentalFeatureSettings
 import com.nuvio.app.desktop.DesktopSystemTray
 import com.nuvio.app.desktop.DesktopWindowChrome
 import com.nuvio.app.desktop.DiscordRichPresence
 import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.core.deeplink.DesktopDeepLinkBridge
 import com.nuvio.app.features.commandpalette.CommandPaletteController
+import com.nuvio.app.features.experimental.ExperimentalFeatureSettings
 import com.nuvio.app.features.player.PlayerKeyboardShortcut
 import com.nuvio.app.features.player.PlayerKeyboardShortcutBridge
 import java.awt.Color
@@ -79,6 +82,7 @@ fun main(args: Array<String>) {
         return
     }
     DesktopDeepLinkBridge.install(args)
+    DesktopExperimentalFeatureSettings.start()
     DiscordRichPresence.start()
 
     application {
@@ -106,7 +110,9 @@ fun main(args: Array<String>) {
                     }
                     event.isControlDown && !event.isAltDown && !event.isMetaDown &&
                         (event.keyCode == KeyEvent.VK_K || event.keyCode == KeyEvent.VK_P) -> {
-                        CommandPaletteController.toggle()
+                        if (ExperimentalFeatureSettings.universalSearchEnabled.value) {
+                            CommandPaletteController.toggle()
+                        }
                         true
                     }
                     !event.isAltDown && !event.isControlDown && !event.isMetaDown -> {
@@ -199,6 +205,8 @@ fun main(args: Array<String>) {
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
+                val universalSearchEnabled by ExperimentalFeatureSettings.universalSearchEnabled.collectAsState()
+
                 App()
 
                 if (!isPlayerScreenActive && !isFullscreen) {
@@ -220,6 +228,7 @@ fun main(args: Array<String>) {
                 if (!isPlayerScreenActive) {
                     DesktopWindowControls(
                         isFullscreen = isFullscreen,
+                        showCommandPalette = universalSearchEnabled,
                         onCommandPalette = { CommandPaletteController.toggle() },
                         onToggleFullscreen = { currentController?.toggle() },
                         onMinimize = {
@@ -332,6 +341,7 @@ private fun setDesktopWindowLocation(window: AwtWindow, x: Int, y: Int) {
 @Composable
 private fun DesktopWindowControls(
     isFullscreen: Boolean,
+    showCommandPalette: Boolean,
     onCommandPalette: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onMinimize: () -> Unit,
@@ -342,7 +352,7 @@ private fun DesktopWindowControls(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (!isFullscreen) {
+        if (!isFullscreen && showCommandPalette) {
             DesktopControlButton(
                 icon = Icons.Rounded.Search,
                 contentDescription = "Command palette (Ctrl+K)",

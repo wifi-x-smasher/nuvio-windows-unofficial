@@ -1,5 +1,7 @@
 package com.nuvio.app.features.player.desktop.mpv
 
+import com.nuvio.app.features.experimental.VideoUpscalerPreset
+
 internal object DesktopMpvVideoOptionProfile {
     val options: Map<String, String> = linkedMapOf(
         "hwdec" to "auto-safe",
@@ -8,6 +10,9 @@ internal object DesktopMpvVideoOptionProfile {
         "video-sync" to "audio",
         "video-timing-offset" to "0.0",
     )
+
+    fun optionsFor(upscalerPreset: VideoUpscalerPreset): Map<String, String> =
+        options + DesktopMpvUpscalerOptions.optionsFor(upscalerPreset)
 
     const val canRequestGpuNextRenderBackend: Boolean = false
 
