@@ -51,6 +51,32 @@ object PlayerNextEpisodeRules {
         }
     }
 
+    fun shouldAutoSkipInterval(
+        interval: SkipInterval?,
+        alreadySkippedKeys: Set<String>,
+        dismissed: Boolean,
+        initialLoadCompleted: Boolean,
+        pausedOverlayVisible: Boolean,
+    ): Boolean {
+        val activeInterval = interval ?: return false
+        if (!initialLoadCompleted || pausedOverlayVisible || dismissed) return false
+        if (!activeInterval.isAutoSkippableType()) return false
+        return activeInterval.autoSkipKey() !in alreadySkippedKeys
+    }
+
+    fun shouldAskStillWatching(
+        autoPlayEnabled: Boolean,
+        nextEpisodeHasAired: Boolean,
+        consecutiveAutoPlayedEpisodes: Int,
+        promptEveryEpisodes: Int = 3,
+    ): Boolean {
+        if (!autoPlayEnabled || !nextEpisodeHasAired) return false
+        return consecutiveAutoPlayedEpisodes >= promptEveryEpisodes
+    }
+
+    fun SkipInterval.autoSkipKey(): String =
+        "${type.lowercase()}:${startTime}:${endTime}"
+
     fun hasEpisodeAired(raw: String?): Boolean {
         val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return true
         val dateStr = when {
@@ -77,6 +103,12 @@ object PlayerNextEpisodeRules {
         return d1.compareTo(d2)
     }
 }
+
+private fun SkipInterval.isAutoSkippableType(): Boolean =
+    when (type.lowercase()) {
+        "intro", "op", "mixed-op", "recap", "outro", "ed", "mixed-ed", "credits" -> true
+        else -> false
+    }
 
 internal expect fun currentDateComponents(): DateComponents
 

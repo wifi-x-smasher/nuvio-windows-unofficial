@@ -8,6 +8,7 @@ import com.nuvio.app.features.cloud.CloudLibraryUiState
 import com.nuvio.app.features.cloud.playbackVideoId
 import com.nuvio.app.features.debrid.DebridProviders
 import com.nuvio.app.features.watchprogress.ContinueWatchingItem
+import com.nuvio.app.features.watchprogress.parseReleaseDateToEpochMs
 import com.nuvio.app.features.watchprogress.WatchProgressEntry
 import com.nuvio.app.features.watched.WatchedItem
 import com.nuvio.app.features.trakt.TRAKT_CONTINUE_WATCHING_DAYS_CAP_ALL
@@ -273,6 +274,46 @@ class HomeScreenTest {
         assertTrue(result.isEmpty())
     }
 
+    @Test
+    fun `Trakt calendar keeps upcoming and recently released next up items`() {
+        val nowEpochMs = parseReleaseDateToEpochMs("2026-06-09")!!
+        val upcomingSoon = continueWatchingItem(
+            videoId = "soon:1:2",
+            subtitle = "Up Next • S1E2",
+            released = "2026-06-10",
+        )
+        val upcomingLater = continueWatchingItem(
+            videoId = "later:1:2",
+            subtitle = "Up Next • S1E2",
+            released = "2026-06-20",
+        )
+        val recentlyReleased = continueWatchingItem(
+            videoId = "recent:1:2",
+            subtitle = "Up Next • S1E2",
+            released = "2026-06-08",
+        )
+        val oldReleased = continueWatchingItem(
+            videoId = "old:1:2",
+            subtitle = "Up Next • S1E2",
+            released = "2026-05-01",
+        )
+
+        val result = buildHomeTraktCalendarItems(
+            nextUpItemsBySeries = mapOf(
+                "old" to (400L to oldReleased),
+                "recent" to (300L to recentlyReleased),
+                "later" to (200L to upcomingLater),
+                "soon" to (100L to upcomingSoon),
+            ),
+            nowEpochMs = nowEpochMs,
+        )
+
+        assertEquals(
+            listOf("soon:1:2", "later:1:2", "recent:1:2"),
+            result.map(ContinueWatchingItem::videoId),
+        )
+    }
+
     private fun progressEntry(
         videoId: String,
         title: String,
@@ -304,6 +345,7 @@ class HomeScreenTest {
         episodeNumber: Int? = 4,
         seedSeasonNumber: Int? = seasonNumber,
         seedEpisodeNumber: Int? = episodeNumber,
+        released: String? = null,
     ): ContinueWatchingItem =
         ContinueWatchingItem(
             parentMetaId = videoId.substringBefore(':'),
@@ -315,6 +357,7 @@ class HomeScreenTest {
             seasonNumber = seasonNumber,
             episodeNumber = episodeNumber,
             episodeTitle = subtitle.substringAfterLast(" • ", "Episode"),
+            released = released,
             isNextUp = true,
             nextUpSeedSeasonNumber = seedSeasonNumber,
             nextUpSeedEpisodeNumber = seedEpisodeNumber,

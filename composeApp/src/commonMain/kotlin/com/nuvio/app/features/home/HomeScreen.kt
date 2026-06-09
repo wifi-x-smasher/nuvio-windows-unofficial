@@ -396,6 +396,19 @@ fun HomeScreen(
             cloudLibraryUiState = cloudLibraryUiState,
         )
     }
+    val traktCalendarItems = remember(
+        effectivNextUpItems,
+        isTraktAuthenticated,
+    ) {
+        if (!isTraktAuthenticated) {
+            emptyList()
+        } else {
+            buildHomeTraktCalendarItems(
+                nextUpItemsBySeries = effectivNextUpItems,
+                nowEpochMs = WatchProgressClock.nowEpochMs(),
+            )
+        }
+    }
     val enabledAddons = remember(addonsUiState.addons) {
         addonsUiState.addons.enabledAddons()
     }
@@ -663,6 +676,22 @@ fun HomeScreen(
                             )
                         }
                     }
+                    if (traktCalendarItems.isNotEmpty()) {
+                        item {
+                            HomeContinueWatchingSection(
+                                items = traktCalendarItems,
+                                style = ContinueWatchingSectionStyle.Poster,
+                                useEpisodeThumbnails = continueWatchingPreferences.useEpisodeThumbnails,
+                                blurNextUp = continueWatchingPreferences.blurNextUp,
+                                title = stringResource(Res.string.home_trakt_calendar),
+                                modifier = Modifier.padding(bottom = 12.dp),
+                                sectionPadding = homeSectionPadding,
+                                layout = continueWatchingLayout,
+                                onItemClick = onContinueWatchingClick,
+                                onItemLongPress = onContinueWatchingLongPress,
+                            )
+                        }
+                    }
                     item {
                         HomeEmptyStateCard(
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -680,6 +709,22 @@ fun HomeScreen(
                                 style = continueWatchingPreferences.style,
                                 useEpisodeThumbnails = continueWatchingPreferences.useEpisodeThumbnails,
                                 blurNextUp = continueWatchingPreferences.blurNextUp,
+                                modifier = Modifier.padding(bottom = 12.dp),
+                                sectionPadding = homeSectionPadding,
+                                layout = continueWatchingLayout,
+                                onItemClick = onContinueWatchingClick,
+                                onItemLongPress = onContinueWatchingLongPress,
+                            )
+                        }
+                    }
+                    if (traktCalendarItems.isNotEmpty()) {
+                        item {
+                            HomeContinueWatchingSection(
+                                items = traktCalendarItems,
+                                style = ContinueWatchingSectionStyle.Poster,
+                                useEpisodeThumbnails = continueWatchingPreferences.useEpisodeThumbnails,
+                                blurNextUp = continueWatchingPreferences.blurNextUp,
+                                title = stringResource(Res.string.home_trakt_calendar),
                                 modifier = Modifier.padding(bottom = 12.dp),
                                 sectionPadding = homeSectionPadding,
                                 layout = continueWatchingLayout,
@@ -728,6 +773,22 @@ fun HomeScreen(
                                 style = continueWatchingPreferences.style,
                                 useEpisodeThumbnails = continueWatchingPreferences.useEpisodeThumbnails,
                                 blurNextUp = continueWatchingPreferences.blurNextUp,
+                                modifier = Modifier.padding(bottom = 12.dp),
+                                sectionPadding = homeSectionPadding,
+                                layout = continueWatchingLayout,
+                                onItemClick = onContinueWatchingClick,
+                                onItemLongPress = onContinueWatchingLongPress,
+                            )
+                        }
+                    }
+                    if (traktCalendarItems.isNotEmpty()) {
+                        item {
+                            HomeContinueWatchingSection(
+                                items = traktCalendarItems,
+                                style = ContinueWatchingSectionStyle.Poster,
+                                useEpisodeThumbnails = continueWatchingPreferences.useEpisodeThumbnails,
+                                blurNextUp = continueWatchingPreferences.blurNextUp,
+                                title = stringResource(Res.string.home_trakt_calendar),
                                 modifier = Modifier.padding(bottom = 12.dp),
                                 sectionPadding = homeSectionPadding,
                                 layout = continueWatchingLayout,
@@ -785,6 +846,8 @@ private const val OPTIMISTIC_NEXT_UP_SEED_WINDOW_MS = 3L * 60L * 1000L
 private const val NEXT_UP_INITIAL_RESOLUTION_LIMIT = ContinueWatchingLimit * 2
 private const val NEXT_UP_RESOLUTION_CONCURRENCY = 8
 private const val NEXT_UP_RESOLUTION_BATCH_SIZE = NEXT_UP_RESOLUTION_CONCURRENCY
+private const val HOME_TRAKT_CALENDAR_LIMIT = 16
+private const val HOME_TRAKT_CALENDAR_RECENT_WINDOW_DAYS = 14
 
 internal fun filterEntriesForTraktContinueWatchingWindow(
     entries: List<WatchProgressEntry>,
@@ -812,6 +875,35 @@ internal fun filterHomeNextUpCandidatesForTraktContinueWatchingWindow(
 
     val cutoffMs = nowEpochMs - (normalizedDaysCap.toLong() * MILLIS_PER_DAY)
     return candidates.filter { candidate -> candidate.markedAtEpochMs >= cutoffMs }
+}
+
+internal fun buildHomeTraktCalendarItems(
+    nextUpItemsBySeries: Map<String, Pair<Long, ContinueWatchingItem>>,
+    nowEpochMs: Long,
+): List<ContinueWatchingItem> {
+    val recentCutoffMs = nowEpochMs - (HOME_TRAKT_CALENDAR_RECENT_WINDOW_DAYS.toLong() * MILLIS_PER_DAY)
+    return nextUpItemsBySeries.values
+        .asSequence()
+        .map { (_, item) -> item }
+        .filter { item -> item.isNextUp && !item.released.isNullOrBlank() }
+        .mapNotNull { item ->
+            val releaseEpoch = com.nuvio.app.features.watchprogress.parseReleaseDateToEpochMs(item.released)
+                ?: return@mapNotNull null
+            val isUpcoming = releaseEpoch > nowEpochMs
+            val isRecentlyReleased = releaseEpoch in recentCutoffMs..nowEpochMs
+            if (!isUpcoming && !isRecentlyReleased) return@mapNotNull null
+            item to releaseEpoch
+        }
+        .sortedWith(
+            compareBy<Pair<ContinueWatchingItem, Long>> { (_, releaseEpoch) ->
+                if (releaseEpoch > nowEpochMs) 0 else 1
+            }.thenBy { (_, releaseEpoch) ->
+                if (releaseEpoch > nowEpochMs) releaseEpoch else -releaseEpoch
+            },
+        )
+        .map { (item, _) -> item }
+        .take(HOME_TRAKT_CALENDAR_LIMIT)
+        .toList()
 }
 
 internal fun buildHomeNextUpSeedCandidates(

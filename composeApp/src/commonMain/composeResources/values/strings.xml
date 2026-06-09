@@ -1003,6 +1003,10 @@
     <string name="player_next_episode_playing_via_countdown">Playing via %1$s in %2$d…</string>
     <string name="player_next_episode_thumbnail">Next episode thumbnail</string>
     <string name="player_next_episode_unaired">Unaired</string>
+    <string name="player_still_watching_title">Still watching?</string>
+    <string name="player_still_watching_message">Ready for %1$s?</string>
+    <string name="player_still_watching_continue">Continue</string>
+    <string name="player_still_watching_stop">Stop</string>
     <string name="player_skip">Skip</string>
     <string name="player_skip_intro">Skip Intro</string>
     <string name="player_skip_outro">Skip Outro</string>
@@ -1131,6 +1135,7 @@
     <string name="episode_mark_previous_seasons_watched">Mark previous seasons as watched</string>
     <string name="episode_mark_unwatched">Mark as unwatched</string>
     <string name="episode_mark_watched">Mark as watched</string>
+    <string name="home_trakt_calendar">Trakt Calendar</string>
     <string name="home_continue_watching_up_next">Up next</string>
     <string name="home_continue_watching_watched">%1$s watched</string>
     <string name="home_empty_no_active_addons_message">Install and validate at least one addon before loading catalog rows on Home.</string>

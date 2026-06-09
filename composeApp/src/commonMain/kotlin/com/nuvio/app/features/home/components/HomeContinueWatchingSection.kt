@@ -134,6 +134,7 @@ internal fun HomeContinueWatchingSection(
     style: ContinueWatchingSectionStyle,
     useEpisodeThumbnails: Boolean = true,
     blurNextUp: Boolean = false,
+    title: String? = null,
     modifier: Modifier = Modifier,
     sectionPadding: Dp? = null,
     layout: ContinueWatchingLayout? = null,
@@ -148,6 +149,7 @@ internal fun HomeContinueWatchingSection(
             style = style,
             useEpisodeThumbnails = useEpisodeThumbnails,
             blurNextUp = blurNextUp,
+            title = title,
             modifier = modifier.fillMaxWidth(),
             sectionPadding = sectionPadding,
             layout = layout,
@@ -161,6 +163,7 @@ internal fun HomeContinueWatchingSection(
                 style = style,
                 useEpisodeThumbnails = useEpisodeThumbnails,
                 blurNextUp = blurNextUp,
+                title = title,
                 modifier = Modifier.fillMaxWidth(),
                 sectionPadding = homeSectionHorizontalPaddingForWidth(maxWidth.value),
                 layout = rememberContinueWatchingLayout(maxWidth.value),
@@ -177,6 +180,7 @@ private fun HomeContinueWatchingSectionContent(
     style: ContinueWatchingSectionStyle,
     useEpisodeThumbnails: Boolean,
     blurNextUp: Boolean,
+    title: String?,
     modifier: Modifier,
     sectionPadding: Dp,
     layout: ContinueWatchingLayout,
@@ -194,7 +198,7 @@ private fun HomeContinueWatchingSectionContent(
 
     key(itemOrderKey) {
         NuvioShelfSection(
-            title = stringResource(Res.string.compose_settings_page_continue_watching),
+            title = title ?: stringResource(Res.string.compose_settings_page_continue_watching),
             entries = items,
             modifier = modifier,
             headerHorizontalPadding = sectionPadding,

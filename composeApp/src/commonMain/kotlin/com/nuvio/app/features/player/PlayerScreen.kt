@@ -8,16 +8,27 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -42,6 +53,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -101,6 +113,8 @@ import org.jetbrains.compose.resources.stringResource
 import kotlin.math.abs
 import kotlin.math.roundToLong
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 private const val PlaybackProgressPersistIntervalMs = 60_000L
 private const val PlayerDoubleTapSeekStepMs = 10_000L
@@ -115,6 +129,11 @@ private const val NEXT_EPISODE_HARD_TIMEOUT_MS = 120_000L
 // stream that exposes no duration — reveal the player anyway after this grace period so the overlay
 // can't get stuck. Normal playback dismisses the overlay far sooner via the media-ready signal.
 private const val PlayerOpeningOverlayMaxWaitMs = 25_000L
+// Desktop pointer behaviors: hide the cursor after this idle period during playback, change volume per
+// mouse-wheel notch, and throttle how often raw pointer-move events reset the idle timers.
+private const val PlayerCursorAutoHideMs = 3_000L
+private const val PlayerScrollVolumeStep = 0.05f
+private val PlayerPointerActivityThrottle = 120.milliseconds
 private val PlayerSliderOverlayGap = 12.dp
 private val PlayerTimeRowHeight = 36.dp
 private val PlayerActionRowHeight = 50.dp
@@ -227,6 +246,9 @@ fun PlayerScreen(
         )
         val gestureController = rememberPlayerGestureController()
         var controlsVisible by rememberSaveable { mutableStateOf(true) }
+        // Bumped on desktop pointer activity (move/scroll) to reset the controls + cursor idle timers.
+        var pointerActivityNonce by remember { mutableStateOf(0) }
+        var cursorIdleHidden by remember { mutableStateOf(false) }
         var playerControlsLocked by rememberSaveable { mutableStateOf(false) }
         // Active playback state (mutable to support source/episode switching)
         var activeSourceUrl by rememberSaveable { mutableStateOf(sourceUrl) }
@@ -340,6 +362,7 @@ fun PlayerScreen(
         var skipIntervals by remember { mutableStateOf<List<SkipInterval>>(emptyList()) }
         var activeSkipInterval by remember { mutableStateOf<SkipInterval?>(null) }
         var skipIntervalDismissed by remember { mutableStateOf(false) }
+        var autoSkippedIntervalKeys by remember(activeSourceUrl) { mutableStateOf<Set<String>>(emptySet()) }
 
         // Parental guide overlay state
         var parentalWarnings by remember { mutableStateOf<List<ParentalWarning>>(emptyList()) }
@@ -360,6 +383,8 @@ fun PlayerScreen(
         var nextEpisodeAutoPlaySourceName by remember { mutableStateOf<String?>(null) }
         var nextEpisodeAutoPlayCountdown by remember { mutableStateOf<Int?>(null) }
         var nextEpisodeAutoPlayJob by remember { mutableStateOf<Job?>(null) }
+        var consecutiveAutoPlayedEpisodes by rememberSaveable(parentMetaId) { mutableStateOf(0) }
+        var showStillWatchingPrompt by rememberSaveable(parentMetaId) { mutableStateOf(false) }
 
         LaunchedEffect(parentMetaType, parentMetaId) {
             playerMetaVideos = MetaDetailsRepository.peek(parentMetaType, parentMetaId)?.videos ?: emptyList()
@@ -1112,6 +1137,7 @@ fun PlayerScreen(
             nextEpisodeAutoPlaySearching = false
             nextEpisodeAutoPlaySourceName = null
             nextEpisodeAutoPlayCountdown = null
+            showStillWatchingPrompt = false
             PlayerStreamsRepository.clearEpisodeStreams()
             flushWatchProgress()
             val epVideoId = episode.id
@@ -1179,6 +1205,7 @@ fun PlayerScreen(
             nextEpisodeAutoPlaySearching = false
             nextEpisodeAutoPlaySourceName = null
             nextEpisodeAutoPlayCountdown = null
+            showStillWatchingPrompt = false
             PlayerStreamsRepository.clearEpisodeStreams()
             flushWatchProgress()
 
@@ -1492,6 +1519,32 @@ fun PlayerScreen(
             }
         }
 
+        fun beginAutoPlayNextEpisode() {
+            consecutiveAutoPlayedEpisodes += 1
+            showStillWatchingPrompt = false
+            playNextEpisode()
+        }
+
+        fun requestAutoPlayNextEpisode() {
+            val nextAutoPlayOrdinal = consecutiveAutoPlayedEpisodes + 1
+            if (
+                PlayerNextEpisodeRules.shouldAskStillWatching(
+                    autoPlayEnabled = playerSettingsUiState.streamAutoPlayNextEpisodeEnabled,
+                    nextEpisodeHasAired = nextEpisodeInfo?.hasAired == true,
+                    consecutiveAutoPlayedEpisodes = nextAutoPlayOrdinal,
+                )
+            ) {
+                nextEpisodeAutoPlayJob?.cancel()
+                nextEpisodeAutoPlaySearching = false
+                nextEpisodeAutoPlaySourceName = null
+                nextEpisodeAutoPlayCountdown = null
+                showNextEpisodeCard = false
+                showStillWatchingPrompt = true
+            } else {
+                beginAutoPlayNextEpisode()
+            }
+        }
+
         fun openSourcesPanel() {
             val type = contentType ?: parentMetaType
             val vid = activeVideoId ?: return
@@ -1568,6 +1621,7 @@ fun PlayerScreen(
             SubtitleRepository.clear()
             selectedAddonSubtitleUrl = null
             appRenderedSubtitleCues = emptyList()
+            showStillWatchingPrompt = false
             WatchProgressRepository.ensureLoaded()
         }
 
@@ -1608,6 +1662,7 @@ fun PlayerScreen(
                 showSourcesPanel -> showSourcesPanel = false
                 showEpisodesPanel -> showEpisodesPanel = false
                 episodeStreamsPanelState.showStreams -> episodeStreamsPanelState = EpisodeStreamsPanelState()
+                showStillWatchingPrompt -> showStillWatchingPrompt = false
                 playerControlsLocked -> unlockPlayerControls()
                 else -> onBackWithProgress()
             }
@@ -1638,6 +1693,19 @@ fun PlayerScreen(
             showVolumeFeedback(updated)
             controlsVisible = true
             return true
+        }
+
+        // Desktop: mouse wheel changes volume (scroll up = louder). Magnitude is clamped so a
+        // high-resolution trackpad doesn't jump the volume, while a wheel notch steps by ~5%.
+        val onPlayerScrollVolume = rememberUpdatedState<(Float) -> Unit> { scrollDeltaY ->
+            adjustVolumeBy((-scrollDeltaY).coerceIn(-1f, 1f) * PlayerScrollVolumeStep)
+        }
+        // Desktop: any pointer movement reveals the controls (unless locked) and resets the idle timers.
+        val onPlayerPointerActivity = rememberUpdatedState {
+            if (!playerControlsLocked) {
+                controlsVisible = true
+            }
+            pointerActivityNonce++
         }
 
         fun handleKeyboardShortcut(shortcut: PlayerKeyboardShortcut): Boolean {
@@ -1825,6 +1893,8 @@ fun PlayerScreen(
             playbackSnapshot.isLoading,
             showParentalGuide,
             errorMessage,
+            // Desktop pointer movement resets this timer so controls stay up while the mouse moves.
+            pointerActivityNonce,
         ) {
             if (
                 !controlsVisible ||
@@ -1838,6 +1908,34 @@ fun PlayerScreen(
             }
             delay(3500)
             controlsVisible = false
+        }
+
+        // Desktop: hide the mouse cursor after an idle period during playback, revealing it again on any
+        // pointer movement (which bumps pointerActivityNonce). No-op on touch platforms.
+        val anyPlayerPanelOpen = showSubtitleModal || showAudioModal || showVideoSettingsModal ||
+            showSubmitIntroModal || showSourcesPanel || showEpisodesPanel ||
+            episodeStreamsPanelState.showStreams || showStillWatchingPrompt
+        LaunchedEffect(
+            pointerActivityNonce,
+            playbackSnapshot.isPlaying,
+            playbackSnapshot.isLoading,
+            anyPlayerPanelOpen,
+            showParentalGuide,
+            errorMessage,
+        ) {
+            cursorIdleHidden = false
+            if (!isDesktop) return@LaunchedEffect
+            if (
+                !playbackSnapshot.isPlaying ||
+                playbackSnapshot.isLoading ||
+                anyPlayerPanelOpen ||
+                showParentalGuide ||
+                errorMessage != null
+            ) {
+                return@LaunchedEffect
+            }
+            delay(PlayerCursorAutoHideMs)
+            cursorIdleHidden = true
         }
 
         LaunchedEffect(playerControlsLocked, lockedOverlayVisible) {
@@ -1924,7 +2022,9 @@ fun PlayerScreen(
             skipIntervals = emptyList()
             activeSkipInterval = null
             skipIntervalDismissed = false
+            autoSkippedIntervalKeys = emptySet()
             showNextEpisodeCard = false
+            showStillWatchingPrompt = false
             nextEpisodeAutoPlayJob?.cancel()
             nextEpisodeAutoPlaySearching = false
 
@@ -1943,6 +2043,34 @@ fun PlayerScreen(
                 )
                 skipIntervals = intervals
             }
+        }
+
+        LaunchedEffect(
+            activeSkipInterval,
+            autoSkippedIntervalKeys,
+            skipIntervalDismissed,
+            initialLoadCompleted,
+            pausedOverlayVisible,
+            playerSettingsUiState.skipIntroEnabled,
+        ) {
+            if (!playerSettingsUiState.skipIntroEnabled) return@LaunchedEffect
+            val interval = activeSkipInterval ?: return@LaunchedEffect
+            if (
+                !PlayerNextEpisodeRules.shouldAutoSkipInterval(
+                    interval = interval,
+                    alreadySkippedKeys = autoSkippedIntervalKeys,
+                    dismissed = skipIntervalDismissed,
+                    initialLoadCompleted = initialLoadCompleted,
+                    pausedOverlayVisible = pausedOverlayVisible,
+                )
+            ) {
+                return@LaunchedEffect
+            }
+            autoSkippedIntervalKeys = autoSkippedIntervalKeys + with(PlayerNextEpisodeRules) {
+                interval.autoSkipKey()
+            }
+            playerController?.seekTo((interval.endTime * 1000).toLong())
+            skipIntervalDismissed = true
         }
 
         // Update active skip interval based on playback position
@@ -2017,7 +2145,7 @@ fun PlayerScreen(
                 showNextEpisodeCard = true
                 // Auto-play if enabled
                 if (playerSettingsUiState.streamAutoPlayNextEpisodeEnabled && nextEpisodeInfo?.hasAired == true) {
-                    playNextEpisode()
+                    requestAutoPlayNextEpisode()
                 }
             } else if (!shouldShow) {
                 showNextEpisodeCard = false
@@ -2029,7 +2157,7 @@ fun PlayerScreen(
             if (playbackSnapshot.isEnded && nextEpisodeInfo != null && !showNextEpisodeCard) {
                 showNextEpisodeCard = true
                 if (playerSettingsUiState.streamAutoPlayNextEpisodeEnabled && nextEpisodeInfo?.hasAired == true) {
-                    playNextEpisode()
+                    requestAutoPlayNextEpisode()
                 }
             }
         }
@@ -2204,7 +2332,42 @@ fun PlayerScreen(
                             clearLiveGestureFeedbackState.value()
                         }
                     }
-                },
+                }
+                .then(
+                    if (isDesktop) {
+                        Modifier.pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                var lastActivityMark = TimeSource.Monotonic.markNow()
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    when (event.type) {
+                                        PointerEventType.Scroll -> {
+                                            val scrollDeltaY = event.changes.fold(0f) { acc, change ->
+                                                acc + change.scrollDelta.y
+                                            }
+                                            if (scrollDeltaY != 0f) {
+                                                onPlayerScrollVolume.value(scrollDeltaY)
+                                                event.changes.forEach { it.consume() }
+                                            }
+                                        }
+
+                                        PointerEventType.Move, PointerEventType.Enter -> {
+                                            if (lastActivityMark.elapsedNow() >= PlayerPointerActivityThrottle) {
+                                                lastActivityMark = TimeSource.Monotonic.markNow()
+                                                onPlayerPointerActivity.value()
+                                            }
+                                        }
+
+                                        else -> Unit
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Modifier
+                    },
+                )
+                .playerHiddenCursor(cursorIdleHidden),
         ) {
             PlatformPlayerSurface(
                 sourceUrl = activeSourceUrl,
@@ -2432,6 +2595,8 @@ fun PlayerScreen(
                     autoPlayCountdownSec = nextEpisodeAutoPlayCountdown,
                     onPlayNext = {
                         nextEpisodeAutoPlayJob?.cancel()
+                        consecutiveAutoPlayedEpisodes = 0
+                        showStillWatchingPrompt = false
                         playNextEpisode()
                     },
                     onDismiss = {
@@ -2440,12 +2605,32 @@ fun PlayerScreen(
                         nextEpisodeAutoPlaySearching = false
                         nextEpisodeAutoPlaySourceName = null
                         nextEpisodeAutoPlayCountdown = null
+                        showStillWatchingPrompt = false
                     },
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = sliderEdgePadding, bottom = overlayBottomPadding),
                 )
             }
+
+            StillWatchingPrompt(
+                visible = showStillWatchingPrompt,
+                nextEpisode = nextEpisodeInfo,
+                onContinue = {
+                    consecutiveAutoPlayedEpisodes = 0
+                    beginAutoPlayNextEpisode()
+                },
+                onStop = {
+                    nextEpisodeAutoPlayJob?.cancel()
+                    showStillWatchingPrompt = false
+                    showNextEpisodeCard = false
+                    nextEpisodeAutoPlaySearching = false
+                    nextEpisodeAutoPlaySourceName = null
+                    nextEpisodeAutoPlayCountdown = null
+                    consecutiveAutoPlayedEpisodes = 0
+                },
+                modifier = Modifier.align(Alignment.Center),
+            )
 
             if (errorMessage != null) {
                 ErrorModal(
@@ -2692,6 +2877,69 @@ private fun StyledSubtitleOverlay(
                 .padding(horizontal = 40.dp)
                 .padding(bottom = bottomPadding + style.bottomOffset.dp),
         )
+    }
+}
+
+@Composable
+private fun StillWatchingPrompt(
+    visible: Boolean,
+    nextEpisode: NextEpisodeInfo?,
+    onContinue: () -> Unit,
+    onStop: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val episode = nextEpisode ?: return
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(220)),
+        exit = fadeOut(tween(160)),
+        modifier = modifier,
+    ) {
+        Surface(
+            modifier = Modifier.widthIn(max = 430.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xFF191919).copy(alpha = 0.94f),
+            tonalElevation = 8.dp,
+            shadowElevation = 12.dp,
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 22.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = stringResource(Res.string.player_still_watching_title),
+                    color = Color.White,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = stringResource(
+                        Res.string.player_still_watching_message,
+                        stringResource(
+                            Res.string.compose_player_episode_title_format,
+                            episode.season,
+                            episode.episode,
+                            episode.title,
+                        ),
+                    ),
+                    color = Color.White.copy(alpha = 0.76f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(onClick = onStop) {
+                        Text(stringResource(Res.string.player_still_watching_stop))
+                    }
+                    Button(onClick = onContinue) {
+                        Text(stringResource(Res.string.player_still_watching_continue))
+                    }
+                }
+            }
+        }
     }
 }
 
