@@ -329,15 +329,17 @@ internal class MpvDesktopPlayerBackend private constructor(
             scope.launch {
                 runCatching {
                     val handle = player.impl
-                    // Nudge a render-only transform (video-zoom) by an imperceptible epsilon and restore
-                    // it. This forces libmpv's render context to redraw the *current* frame into a
-                    // freshly reallocated surface texture (no re-decode, no audio impact) — defeating the
-                    // one-shot black frame on the first fullscreen/resize after playback starts. Reading
-                    // and restoring the original value keeps any active resize-mode zoom intact.
-                    val current = handle.getMpvDoubleProperty("video-zoom") ?: 0.0
-                    handle.setMpvProperty("video-zoom", current + 0.0001)
+                    // The surface logs vo-configured=true after a resize, but MediaMP renders on demand,
+                    // so the freshly reallocated texture stays black until mpv presents a frame into it.
+                    // A geometry-only property nudge (video-zoom) wasn't enough. Briefly toggling pause is:
+                    // pausing makes mpv redraw the current frame (sets the render-update flag), which lands
+                    // it in the new texture and clears the black surface on the first fullscreen/resize
+                    // after playback starts. The original pause state is restored (~one frame, no seek).
+                    val wasPaused = handle.getMpvBooleanProperty("pause") ?: false
+                    handle.setPropertyBoolean("pause", !wasPaused)
                     delay(32)
-                    handle.setMpvProperty("video-zoom", current)
+                    handle.setPropertyBoolean("pause", wasPaused)
+                    DesktopRuntimeLog.info("MPV controller requestRedraw pauseToggle wasPaused=$wasPaused")
                 }.onFailure {
                     DesktopRuntimeLog.error("MPV controller requestRedraw failed", it)
                 }

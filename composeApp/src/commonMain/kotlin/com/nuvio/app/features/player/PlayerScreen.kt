@@ -1938,16 +1938,25 @@ fun PlayerScreen(
             cursorIdleHidden = true
         }
 
-        // Desktop: the bundled MPV surface can show a one-shot black frame on the first texture realloc
-        // after the first frame (e.g. the first fullscreen toggle) — it allocates the new surface texture
-        // but never draws the current frame into it until the next resize. Once the surface size settles,
-        // nudge a redraw so the frame is drawn into the new texture. Debounced via the layoutSize key
-        // (rapid intermediate sizes cancel and restart this effect). No-op on other platforms.
+        // Desktop: the bundled MPV surface shows a one-shot black frame on the first texture realloc after
+        // the first frame (the first fullscreen toggle) — the new texture is configured but no frame is
+        // drawn into it until something forces a present. Nudge a redraw once, on the first surface resize
+        // after the first frame (later resizes already render fine, so we don't touch them). Debounced via
+        // the layoutSize key. No-op on other platforms.
         if (isDesktop) {
+            var redrawBaselineSize by remember(activeSourceUrl) { mutableStateOf<IntSize?>(null) }
+            var hasRedrawNudged by remember(activeSourceUrl) { mutableStateOf(false) }
             LaunchedEffect(layoutSize, initialLoadCompleted) {
                 if (!initialLoadCompleted) return@LaunchedEffect
                 if (layoutSize.width <= 0 || layoutSize.height <= 0) return@LaunchedEffect
+                val baseline = redrawBaselineSize
+                if (baseline == null) {
+                    redrawBaselineSize = layoutSize
+                    return@LaunchedEffect
+                }
+                if (hasRedrawNudged || layoutSize == baseline) return@LaunchedEffect
                 delay(120)
+                hasRedrawNudged = true
                 playerController?.requestRedraw()
             }
         }
