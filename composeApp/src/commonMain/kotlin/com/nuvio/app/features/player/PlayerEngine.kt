@@ -22,6 +22,14 @@ interface PlayerEngineController {
     fun applySubtitleStyle(style: SubtitleStyleState) {}
     fun setSubtitleDelayMillis(delayMillis: Int) {}
     fun configureIosVideoOutput(settings: PlayerSettingsUiState) {}
+
+    /**
+     * Forces the backend to re-render the current frame into its (possibly just-reallocated) surface.
+     * Used to defeat a one-shot black-frame on the first fullscreen/resize after playback starts, where
+     * the desktop MPV surface allocates a new GL texture but never draws the current frame into it until
+     * the next resize. Default no-op; only the desktop MPV backend needs it.
+     */
+    fun requestRedraw() {}
 }
 
 internal fun sanitizePlaybackHeaders(headers: Map<String, String>?): Map<String, String> {

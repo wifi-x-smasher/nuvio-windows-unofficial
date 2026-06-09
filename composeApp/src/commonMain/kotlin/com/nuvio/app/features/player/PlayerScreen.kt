@@ -1938,6 +1938,20 @@ fun PlayerScreen(
             cursorIdleHidden = true
         }
 
+        // Desktop: the bundled MPV surface can show a one-shot black frame on the first texture realloc
+        // after the first frame (e.g. the first fullscreen toggle) — it allocates the new surface texture
+        // but never draws the current frame into it until the next resize. Once the surface size settles,
+        // nudge a redraw so the frame is drawn into the new texture. Debounced via the layoutSize key
+        // (rapid intermediate sizes cancel and restart this effect). No-op on other platforms.
+        if (isDesktop) {
+            LaunchedEffect(layoutSize, initialLoadCompleted) {
+                if (!initialLoadCompleted) return@LaunchedEffect
+                if (layoutSize.width <= 0 || layoutSize.height <= 0) return@LaunchedEffect
+                delay(120)
+                playerController?.requestRedraw()
+            }
+        }
+
         LaunchedEffect(playerControlsLocked, lockedOverlayVisible) {
             if (!playerControlsLocked || !lockedOverlayVisible) {
                 return@LaunchedEffect
@@ -2338,6 +2352,7 @@ fun PlayerScreen(
                         Modifier.pointerInput(Unit) {
                             awaitPointerEventScope {
                                 var lastActivityMark = TimeSource.Monotonic.markNow()
+                                var lastPointerPosition: Offset? = null
                                 while (true) {
                                     val event = awaitPointerEvent()
                                     when (event.type) {
@@ -2352,9 +2367,23 @@ fun PlayerScreen(
                                         }
 
                                         PointerEventType.Move, PointerEventType.Enter -> {
-                                            if (lastActivityMark.elapsedNow() >= PlayerPointerActivityThrottle) {
-                                                lastActivityMark = TimeSource.Monotonic.markNow()
-                                                onPlayerPointerActivity.value()
+                                            // Compose dispatches *synthetic* Move events (same position)
+                                            // whenever the frequently-recomposing player relays out under
+                                            // a still cursor. Only count it as activity if the pointer
+                                            // actually moved, otherwise the idle timers never fire and the
+                                            // controls/cursor never hide.
+                                            val position = event.changes.firstOrNull()?.position
+                                            if (position != null) {
+                                                val previous = lastPointerPosition
+                                                val movedEnough = previous == null ||
+                                                    (position - previous).getDistanceSquared() > 1f
+                                                if (movedEnough) {
+                                                    lastPointerPosition = position
+                                                    if (lastActivityMark.elapsedNow() >= PlayerPointerActivityThrottle) {
+                                                        lastActivityMark = TimeSource.Monotonic.markNow()
+                                                        onPlayerPointerActivity.value()
+                                                    }
+                                                }
                                             }
                                         }
 

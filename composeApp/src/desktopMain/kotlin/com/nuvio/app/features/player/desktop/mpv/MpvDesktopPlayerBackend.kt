@@ -324,6 +324,26 @@ internal class MpvDesktopPlayerBackend private constructor(
             seekTo(player.currentPositionMillis.value.coerceAtLeast(0L) + offsetMs)
         }
 
+        override fun requestRedraw() {
+            if (!canReceiveCommands()) return
+            scope.launch {
+                runCatching {
+                    val handle = player.impl
+                    // Nudge a render-only transform (video-zoom) by an imperceptible epsilon and restore
+                    // it. This forces libmpv's render context to redraw the *current* frame into a
+                    // freshly reallocated surface texture (no re-decode, no audio impact) — defeating the
+                    // one-shot black frame on the first fullscreen/resize after playback starts. Reading
+                    // and restoring the original value keeps any active resize-mode zoom intact.
+                    val current = handle.getMpvDoubleProperty("video-zoom") ?: 0.0
+                    handle.setMpvProperty("video-zoom", current + 0.0001)
+                    delay(32)
+                    handle.setMpvProperty("video-zoom", current)
+                }.onFailure {
+                    DesktopRuntimeLog.error("MPV controller requestRedraw failed", it)
+                }
+            }
+        }
+
         override fun retry() = play()
 
         override fun setPlaybackSpeed(speed: Float) {
