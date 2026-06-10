@@ -245,18 +245,20 @@ internal class MpvDesktopPlayerBackend private constructor(
         if (nativeClosed) return
         runCatching {
             val upscalerPreset = ExperimentalFeatureSettings.videoUpscalerPreset.value
+            val displaySyncEnabled = ExperimentalFeatureSettings.displaySyncEnabled.value
             PlayerSettingsRepository.ensureLoaded()
             val decoderPriority = PlayerSettingsRepository.uiState.value.decoderPriority
             val applied = DesktopMpvVideoOptionProfile.optionsFor(
                 upscalerPreset = upscalerPreset,
                 decoderPriority = decoderPriority,
+                displaySyncEnabled = displaySyncEnabled,
             ).mapValues { (name, value) ->
                 player.impl.setMpvRuntimeOption(name, value)
             }
             DesktopRuntimeLog.info(
                 "MPV video profile reason=$reason upscaler=${upscalerPreset.id} " +
                     "decoder=${DesktopMpvDecoderOptions.labelFor(decoderPriority)} " +
-                    "decoderPriority=$decoderPriority applied=$applied " +
+                    "decoderPriority=$decoderPriority displaySync=$displaySyncEnabled applied=$applied " +
                     "gpuNextAvailable=${DesktopMpvVideoOptionProfile.canRequestGpuNextRenderBackend} " +
                     "note=${DesktopMpvVideoOptionProfile.rendererLimitationNote}",
             )

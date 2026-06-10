@@ -23,6 +23,32 @@ class DesktopMpvHdrOptionsTest {
     }
 
     @Test
+    fun displaySyncEnabledOverridesVideoSyncAndAddsInterpolation() {
+        val options = DesktopMpvVideoOptionProfile.optionsFor(
+            upscalerPreset = VideoUpscalerPreset.OFF,
+            decoderPriority = 1,
+            displaySyncEnabled = true,
+        )
+
+        assertEquals("display-resample", options["video-sync"])
+        assertEquals("yes", options["interpolation"])
+        assertEquals("oversample", options["tscale"])
+    }
+
+    @Test
+    fun displaySyncDisabledKeepsAudioSync() {
+        val options = DesktopMpvVideoOptionProfile.optionsFor(
+            upscalerPreset = VideoUpscalerPreset.OFF,
+            decoderPriority = 1,
+            displaySyncEnabled = false,
+        )
+
+        assertEquals("audio", options["video-sync"])
+        assertFalse(options.containsKey("interpolation"))
+        assertFalse(options.containsKey("tscale"))
+    }
+
+    @Test
     fun documentsCurrentRendererBackendLimitation() {
         assertFalse(DesktopMpvVideoOptionProfile.canRequestGpuNextRenderBackend)
         assertTrue(DesktopMpvVideoOptionProfile.rendererLimitationNote.contains("OpenGL/libmpv"))

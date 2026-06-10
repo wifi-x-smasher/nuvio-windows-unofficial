@@ -15,10 +15,24 @@ internal object DesktopMpvVideoOptionProfile {
         decoderPriority = 1,
     )
 
-    fun optionsFor(upscalerPreset: VideoUpscalerPreset, decoderPriority: Int): Map<String, String> =
-        baseOptions +
+    fun optionsFor(
+        upscalerPreset: VideoUpscalerPreset,
+        decoderPriority: Int,
+        displaySyncEnabled: Boolean = false,
+    ): Map<String, String> {
+        val base = baseOptions +
             DesktopMpvDecoderOptions.optionsFor(decoderPriority) +
             DesktopMpvUpscalerOptions.optionsFor(upscalerPreset)
+        return if (displaySyncEnabled) {
+            base + linkedMapOf(
+                "video-sync" to "display-resample",
+                "interpolation" to "yes",
+                "tscale" to "oversample",
+            )
+        } else {
+            base
+        }
+    }
 
     const val canRequestGpuNextRenderBackend: Boolean = false
 

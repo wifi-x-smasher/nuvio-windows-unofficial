@@ -352,6 +352,11 @@ wglMakeCurrent(old_dc, old_ctx);
 return 0;
 }
 
+// glTexImage2D(nullptr) leaves content undefined; initialize to opaque black
+// so the texture has a consistent known state before the first real frame.
+glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT);
+
 texture_ = new_texture;
 fbo_ = new_fbo;
 
@@ -409,6 +414,17 @@ LOCK(texture_lock);
 if (!render_context_ || !context_ || !device_ || !fbo_ || !texture_ || !width_ || !height_)
 return false;
 
+// Only render when mpv signals a new frame is ready. Calling
+// mpv_render_context_render() while mpv's VO is reconfiguring (e.g. right
+// after a fullscreen resize) causes it to write a blank frame over the FBO,
+// even though render_result is 0 (success). Checking the update flag first
+// lets us skip both the glClear and the render call, so the texture retains
+// its last valid contents until a real frame arrives.
+uint64_t update_flags = mpv_render_context_update(render_context_);
+if (!(update_flags & MPV_RENDER_UPDATE_FRAME)) {
+return false;
+}
+
 HDC old_dc = wglGetCurrentDC();
 HGLRC old_ctx = wglGetCurrentContext();
 if (!wglMakeCurrent(device_, context_)) {
@@ -443,7 +459,6 @@ MPV_RENDER_PARAM_INVALID, nullptr
 },
 };
 
-// 无论是否有新帧，都调用 render（mpv 文档建议）
 int render_result = mpv_render_context_render(render_context_, params);
 if (render_result < 0) {
 LOG("mpv_render_context_render failed: %d", render_result);

@@ -1938,14 +1938,14 @@ fun PlayerScreen(
             cursorIdleHidden = true
         }
 
-        // Desktop: the bundled MPV surface shows a one-shot black frame on the first texture realloc after
-        // the first frame (the first fullscreen toggle) — the new texture is configured but no frame is
-        // drawn into it until something forces a present. Nudge a redraw once, on the first surface resize
-        // after the first frame (later resizes already render fine, so we don't touch them). Debounced via
-        // the layoutSize key. No-op on other platforms.
+        // Desktop: after a fullscreen toggle the MPV surface allocates a new GL texture, but MPV's VO
+        // may not emit a render-update signal immediately (e.g. while its VO is reconfiguring for the
+        // new dimensions). Nudge MPV twice — quickly at T+80 ms and again at T+580 ms as a backup —
+        // so it pushes a frame into the new texture promptly. The effect re-arms on every size change
+        // so repeated fullscreen toggles each get their own nudge. Debounced via the layoutSize key.
+        // No-op on other platforms.
         if (isDesktop) {
             var redrawBaselineSize by remember(activeSourceUrl) { mutableStateOf<IntSize?>(null) }
-            var hasRedrawNudged by remember(activeSourceUrl) { mutableStateOf(false) }
             LaunchedEffect(layoutSize, initialLoadCompleted) {
                 if (!initialLoadCompleted) return@LaunchedEffect
                 if (layoutSize.width <= 0 || layoutSize.height <= 0) return@LaunchedEffect
@@ -1954,9 +1954,11 @@ fun PlayerScreen(
                     redrawBaselineSize = layoutSize
                     return@LaunchedEffect
                 }
-                if (hasRedrawNudged || layoutSize == baseline) return@LaunchedEffect
-                delay(120)
-                hasRedrawNudged = true
+                if (layoutSize == baseline) return@LaunchedEffect
+                delay(80)
+                playerController?.requestRedraw()
+                redrawBaselineSize = layoutSize
+                delay(500)
                 playerController?.requestRedraw()
             }
         }

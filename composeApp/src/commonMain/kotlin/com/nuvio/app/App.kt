@@ -201,6 +201,7 @@ import com.nuvio.app.features.streams.StreamLaunchStore
 import com.nuvio.app.features.streams.StreamLinkCacheRepository
 import com.nuvio.app.features.streams.StreamsRepository
 import com.nuvio.app.features.streams.StreamsScreen
+import com.nuvio.app.features.streams.playbackUnavailableMessage
 import com.nuvio.app.features.tmdb.TmdbService
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.trakt.TraktListTab
@@ -1701,6 +1702,8 @@ private fun MainAppContent(
                         episode = launch.episodeNumber,
                         manualSelection = launch.manualSelection,
                     )
+                    val noDirectStreamLinkText = stringResource(Res.string.streams_no_direct_link)
+                    val torrentNeedsResolverText = stringResource(Res.string.streams_torrent_not_supported)
                     var autoPlayHandled by rememberSaveable(launch.videoId, effectiveVideoId) { mutableStateOf(false) }
                     LaunchedEffect(
                         streamsUiState.autoPlayStream,
@@ -1771,6 +1774,12 @@ private fun MainAppContent(
                                 details = stream.diagnosticsDetails(),
                             )
                             StreamsRepository.skipAutoPlayStream(selectedStream)
+                            NuvioToastController.show(
+                                stream.playbackUnavailableMessage(
+                                    torrentNeedsResolverMessage = torrentNeedsResolverText,
+                                    noDirectLinkMessage = noDirectStreamLinkText,
+                                ),
+                            )
                             return@LaunchedEffect
                         }
                         autoPlayHandled = true
@@ -1926,6 +1935,12 @@ private fun MainAppContent(
                             AppDiagnostics.breadcrumb(
                                 event = "stream.manual.missing_source",
                                 details = stream.diagnosticsDetails(),
+                            )
+                            NuvioToastController.show(
+                                stream.playbackUnavailableMessage(
+                                    torrentNeedsResolverMessage = torrentNeedsResolverText,
+                                    noDirectLinkMessage = noDirectStreamLinkText,
+                                ),
                             )
                             return
                         }
@@ -3228,7 +3243,7 @@ private fun shouldUseExternalPlayback(
 ): Boolean =
     !forceInternal && (
         forceExternal ||
-            (!isDesktop && externalPlayerEnabled) ||
+            externalPlayerEnabled ||
             !InternalPlayerPlatform.isAvailable()
         )
 

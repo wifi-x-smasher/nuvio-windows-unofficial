@@ -809,6 +809,7 @@
     <string name="settings_playback_external_player_description_desktop">Open new playback with a selected installed desktop player.</string>
     <string name="settings_playback_external_player_description_ios">Open new playback with the selected installed player.</string>
     <string name="settings_playback_external_player_none_available">No supported external players installed</string>
+    <string name="settings_playback_mpchc_header_warning">MPC-HC does not support custom HTTP headers (User-Agent, Referer). Some streams may not play correctly — if a stream fails, try VLC or mpv instead.</string>
     <string name="settings_playback_hold_speed">Hold Speed</string>
     <string name="settings_playback_hold_to_speed">Hold To Speed</string>
     <string name="settings_playback_hold_to_speed_description">Long-press anywhere on the player surface to temporarily boost playback speed.</string>
@@ -1239,7 +1240,7 @@
     <string name="streams_resume_from_percent">Resume from %1$d%</string>
     <string name="streams_resume_from_time">Resume from %1$s</string>
     <string name="streams_size">SIZE %1$s</string>
-    <string name="streams_torrent_not_supported">This stream type is not supported</string>
+    <string name="streams_torrent_not_supported">Torrent-only streams need a connected debrid service on Windows.</string>
     <string name="debrid_missing_api_key">Connect an account in Settings.</string>
     <string name="debrid_not_cached">Not cached on Torbox.</string>
     <string name="debrid_stream_stale">This link expired. Refreshing results.</string>

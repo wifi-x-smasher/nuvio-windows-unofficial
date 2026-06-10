@@ -67,6 +67,48 @@ class DesktopExternalPlayerDiscoveryTest {
     }
 
     @Test
+    fun discoversMpcHcFromProgramFiles() {
+        val env = mapOf("ProgramFiles" to "C:\\Program Files")
+        val existing = setOf(
+            Path.of("C:\\Program Files", "MPC-HC", "mpc-hc64.exe"),
+        )
+
+        val players = DesktopExternalPlayerDiscovery.availablePlayers(
+            env = env,
+            exists = { it in existing },
+        )
+
+        assertTrue(players.any { it.id == "mpchc" })
+        assertEquals("mpchc", players.first { it.id == "mpchc" }.id)
+        assertEquals("MPC-HC", players.first { it.id == "mpchc" }.name)
+    }
+
+    @Test
+    fun mpcHcCommandPassesUrlWithoutHeaders() {
+        val player = DesktopExternalPlayer(
+            id = "mpchc",
+            name = "MPC-HC",
+            kind = DesktopExternalPlayerKind.MpcHc,
+            executable = Path.of("C:\\Program Files", "MPC-HC", "mpc-hc64.exe"),
+        )
+        val request = ExternalPlayerPlaybackRequest(
+            sourceUrl = "https://example.test/video.mkv",
+            title = "Movie",
+            sourceHeaders = mapOf(
+                "User-Agent" to "Nuvio Desktop",
+                "Referer" to "https://example.test",
+            ),
+        )
+
+        val command = DesktopExternalPlayerCommandBuilder.build(player, request).orEmpty()
+
+        assertTrue(command.contains("/play"))
+        assertTrue(command.contains("https://example.test/video.mkv"))
+        assertFalse(command.any { it.contains("User-Agent", ignoreCase = true) })
+        assertFalse(command.any { it.contains("Referer", ignoreCase = true) })
+    }
+
+    @Test
     fun mpvCommandPassesHeadersBeforeSourceUrl() {
         val player = DesktopExternalPlayer(
             id = "mpv",

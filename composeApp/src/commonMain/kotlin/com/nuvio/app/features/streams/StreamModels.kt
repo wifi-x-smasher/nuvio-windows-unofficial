@@ -188,6 +188,27 @@ enum class StreamsEmptyStateReason {
     StreamFetchFailed,
 }
 
+enum class StreamPlaybackUnavailableReason {
+    TorrentNeedsResolver,
+    NoDirectLink,
+}
+
+fun StreamItem.playbackUnavailableReason(): StreamPlaybackUnavailableReason =
+    if (isTorrentStream && playableDirectUrl == null) {
+        StreamPlaybackUnavailableReason.TorrentNeedsResolver
+    } else {
+        StreamPlaybackUnavailableReason.NoDirectLink
+    }
+
+fun StreamItem.playbackUnavailableMessage(
+    torrentNeedsResolverMessage: String,
+    noDirectLinkMessage: String,
+): String =
+    when (playbackUnavailableReason()) {
+        StreamPlaybackUnavailableReason.TorrentNeedsResolver -> torrentNeedsResolverMessage
+        StreamPlaybackUnavailableReason.NoDirectLink -> noDirectLinkMessage
+    }
+
 data class StreamsUiState(
     val requestToken: String? = null,
     val groups: List<AddonStreamGroup> = emptyList(),

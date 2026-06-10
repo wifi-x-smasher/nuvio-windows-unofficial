@@ -7,6 +7,7 @@ internal enum class DesktopExternalPlayerKind {
     System,
     Vlc,
     Mpv,
+    MpcHc,
 }
 
 internal data class DesktopExternalPlayer(
@@ -47,6 +48,15 @@ internal object DesktopExternalPlayerDiscovery {
             )
         }
 
+        firstExisting(mpcHcCandidates(env), exists)?.let {
+            players += DesktopExternalPlayer(
+                id = "mpchc",
+                name = "MPC-HC",
+                kind = DesktopExternalPlayerKind.MpcHc,
+                executable = it,
+            )
+        }
+
         players += DesktopExternalPlayer(
             id = "system",
             name = "System default",
@@ -74,6 +84,16 @@ internal object DesktopExternalPlayerDiscovery {
             env["PROGRAMFILES(X86)"]?.let { Path.of(it, "mpv", "mpv.exe") },
         ).distinct()
 
+    private fun mpcHcCandidates(env: Map<String, String>): List<Path> =
+        listOfNotNull(
+            env["ProgramFiles"]?.let { Path.of(it, "MPC-HC", "mpc-hc64.exe") },
+            env["ProgramFiles"]?.let { Path.of(it, "MPC-HC", "mpc-hc.exe") },
+            env["ProgramFiles(x86)"]?.let { Path.of(it, "MPC-HC", "mpc-hc.exe") },
+            env["PROGRAMFILES"]?.let { Path.of(it, "MPC-HC", "mpc-hc64.exe") },
+            env["PROGRAMFILES"]?.let { Path.of(it, "MPC-HC", "mpc-hc.exe") },
+            env["PROGRAMFILES(X86)"]?.let { Path.of(it, "MPC-HC", "mpc-hc.exe") },
+        ).distinct()
+
     private fun firstExisting(
         paths: List<Path>,
         exists: (Path) -> Boolean,
@@ -95,6 +115,7 @@ internal object DesktopExternalPlayerCommandBuilder {
             DesktopExternalPlayerKind.System -> null
             DesktopExternalPlayerKind.Vlc -> buildVlcCommand(executable, request, headers)
             DesktopExternalPlayerKind.Mpv -> buildMpvCommand(executable, request, headers)
+            DesktopExternalPlayerKind.MpcHc -> buildMpcHcCommand(executable, request)
         }
     }
 
@@ -138,6 +159,16 @@ internal object DesktopExternalPlayerCommandBuilder {
                     add("--http-header-fields=$key: $value")
                 }
             }
+            add(request.sourceUrl)
+        }
+
+    private fun buildMpcHcCommand(
+        executable: Path,
+        request: ExternalPlayerPlaybackRequest,
+    ): List<String> =
+        buildList {
+            add(executable.toString())
+            add("/play")
             add(request.sourceUrl)
         }
 

@@ -46,6 +46,7 @@ actual fun MpvMediampPlayerSurface(
     }
 
     var textureId by remember(player) { mutableIntStateOf(0) }
+    var textureHasValidFrame by remember(player) { mutableStateOf(false) }
     var renderContextInitialized by remember(player) { mutableStateOf(false) }
     var lastContextSignature by remember(player) { mutableStateOf<String?>(null) }
     var lastLoggedSurfaceSize by remember(player) { mutableStateOf<String?>(null) }
@@ -219,6 +220,7 @@ actual fun MpvMediampPlayerSurface(
             // after the new FBO is valid, preventing GL from immediately
             // recycling the same texture ID under Skia's cache.
             releaseSkiaTextureResources()
+            textureHasValidFrame = false
 
             // Keep libmpv's render context alive on normal size changes. The
             // render API documents that freeing an active render context
@@ -291,7 +293,37 @@ actual fun MpvMediampPlayerSurface(
                 else -> runCatching { player.renderFrame() }
                     .getOrDefault(false)
             }
-            if (!renderResult) {
+            if (renderResult) {
+                textureHasValidFrame = true
+                if (renderDebugMode == "readpixels") {
+                    val stats = runCatching { player.readTextureStats() }.getOrDefault("readTextureStatsFailed")
+                    if (lastLoggedReadPixels != stats) {
+                        logSurface(
+                            "readPixels stats=$stats mode=$renderDebugMode texture=$textureId " +
+                                "player=${System.identityHashCode(player)}",
+                        )
+                        lastLoggedReadPixels = stats
+                    }
+                }
+                val props = listOf(
+                    "current-vo" to runCatching { player.impl.getPropertyString("current-vo") }.getOrDefault("<err>"),
+                    "vid" to runCatching { player.impl.getPropertyString("vid") }.getOrDefault("<err>"),
+                    "vo-configured" to runCatching { player.impl.getPropertyBoolean("vo-configured").toString() }.getOrDefault("<err>"),
+                    "video-params/w" to runCatching { player.impl.getPropertyInt("video-params/w").toString() }.getOrDefault("<err>"),
+                    "video-params/h" to runCatching { player.impl.getPropertyInt("video-params/h").toString() }.getOrDefault("<err>"),
+                    "hwdec-current" to runCatching { player.impl.getPropertyString("hwdec-current") }.getOrDefault("<err>"),
+                ).joinToString(separator = " ") { (key, value) -> "$key=$value" }
+                val propsLogKey = "$surfaceSizeKey:$props"
+                if (lastLoggedMpvProps != propsLogKey) {
+                    logSurface(
+                        "mpvProps size=$surfaceSizeKey texture=$textureId mode=${renderDebugMode.ifBlank { "normal" }} $props " +
+                            "player=${System.identityHashCode(player)}",
+                    )
+                    lastLoggedMpvProps = propsLogKey
+                }
+                runCatching { components.directContext.resetGLAll() }
+            } else if (!textureHasValidFrame) {
+                // No valid frame yet for this texture — log and skip draw.
                 val failureKey = "$surfaceSizeKey:$textureId:$currentContextSignature"
                 if (lastLoggedRenderFailure != failureKey) {
                     logSurface(
@@ -302,33 +334,9 @@ actual fun MpvMediampPlayerSurface(
                 }
                 return@Canvas
             }
-            if (renderDebugMode == "readpixels") {
-                val stats = runCatching { player.readTextureStats() }.getOrDefault("readTextureStatsFailed")
-                if (lastLoggedReadPixels != stats) {
-                    logSurface(
-                        "readPixels stats=$stats mode=$renderDebugMode texture=$textureId " +
-                            "player=${System.identityHashCode(player)}",
-                    )
-                    lastLoggedReadPixels = stats
-                }
-            }
-            val props = listOf(
-                "current-vo" to runCatching { player.impl.getPropertyString("current-vo") }.getOrDefault("<err>"),
-                "vid" to runCatching { player.impl.getPropertyString("vid") }.getOrDefault("<err>"),
-                "vo-configured" to runCatching { player.impl.getPropertyBoolean("vo-configured").toString() }.getOrDefault("<err>"),
-                "video-params/w" to runCatching { player.impl.getPropertyInt("video-params/w").toString() }.getOrDefault("<err>"),
-                "video-params/h" to runCatching { player.impl.getPropertyInt("video-params/h").toString() }.getOrDefault("<err>"),
-                "hwdec-current" to runCatching { player.impl.getPropertyString("hwdec-current") }.getOrDefault("<err>"),
-            ).joinToString(separator = " ") { (key, value) -> "$key=$value" }
-            val propsLogKey = "$surfaceSizeKey:$props"
-            if (lastLoggedMpvProps != propsLogKey) {
-                logSurface(
-                    "mpvProps size=$surfaceSizeKey texture=$textureId mode=${renderDebugMode.ifBlank { "normal" }} $props " +
-                        "player=${System.identityHashCode(player)}",
-                )
-                lastLoggedMpvProps = propsLogKey
-            }
-            runCatching { components.directContext.resetGLAll() }
+            // else: renderResult == false AND textureHasValidFrame == true
+            // MPV reported no new frame (e.g. between video frames or during VO
+            // setup) — fall through to drawImageRect to show the retained last frame.
         }
         player.image?.let {
             skiaCanvas.drawImageRect(it, Rect.makeWH(logicalWidth, logicalHeight))

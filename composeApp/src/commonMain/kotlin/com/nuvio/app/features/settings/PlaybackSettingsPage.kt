@@ -199,6 +199,7 @@ private fun PlaybackSettingsSection(
     val discordPresenceEnabled by DiscordPresenceSettings.enabled.collectAsStateWithLifecycle()
     val universalSearchEnabled by ExperimentalFeatureSettings.universalSearchEnabled.collectAsStateWithLifecycle()
     val videoUpscalerPreset by ExperimentalFeatureSettings.videoUpscalerPreset.collectAsStateWithLifecycle()
+    val displaySyncEnabled by ExperimentalFeatureSettings.displaySyncEnabled.collectAsStateWithLifecycle()
     val availableExternalPlayers = ExternalPlayerPlatform.availablePlayers()
     val selectedExternalPlayer = availableExternalPlayers.firstOrNull {
         it.id == autoPlayPlayerSettings.externalPlayerId
@@ -245,6 +246,39 @@ private fun PlaybackSettingsSection(
                         isTablet = isTablet,
                         onClick = { showVideoUpscalerDialog = true },
                     )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsSwitchRow(
+                        title = "Display sync (reduce tearing)",
+                        description = "Syncs frame delivery to your display's refresh rate and enables motion interpolation. " +
+                            "Reduces screen tearing and 24fps judder — most noticeable with anime. " +
+                            "May cause A/V drift on some sources. Takes effect on the next stream.",
+                        checked = displaySyncEnabled,
+                        isTablet = isTablet,
+                        onCheckedChange = ExperimentalFeatureSettings::setDisplaySyncEnabled,
+                    )
+                    if (selectedExternalPlayer?.id == "mpchc" && autoPlayPlayerSettings.externalPlayerEnabled) {
+                        SettingsGroupDivider(isTablet = isTablet)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    horizontal = if (isTablet) 18.dp else 16.dp,
+                                    vertical = 12.dp,
+                                ),
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Text(
+                                text = "MPC-HC (active as external player)",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = stringResource(Res.string.settings_playback_mpchc_header_warning),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1177,12 +1211,25 @@ private fun ExternalPlayerSelectionDialog(
                                         .padding(horizontal = 14.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Text(
-                                        text = player.name,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.weight(1f),
-                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(end = 8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                                    ) {
+                                        Text(
+                                            text = player.name,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                        )
+                                        if (player.id == "mpchc") {
+                                            Text(
+                                                text = stringResource(Res.string.settings_playback_mpchc_header_warning),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                            )
+                                        }
+                                    }
                                     Box(
                                         modifier = Modifier.size(24.dp),
                                         contentAlignment = Alignment.Center,

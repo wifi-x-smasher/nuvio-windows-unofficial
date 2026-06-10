@@ -161,6 +161,7 @@ fun StreamsScreen(
     val clipboardManager = LocalClipboardManager.current
     val streamLinkCopiedText = stringResource(Res.string.streams_link_copied)
     val noDirectStreamLinkText = stringResource(Res.string.streams_no_direct_link)
+    val torrentNeedsResolverText = stringResource(Res.string.streams_torrent_not_supported)
     var streamActionsTarget by remember(videoId) { mutableStateOf<StreamItem?>(null) }
     var preferredFilterApplied by remember(videoId) { mutableStateOf(false) }
     val storedProgress = if (startFromBeginning) {
@@ -270,6 +271,14 @@ fun StreamsScreen(
                 onStreamSelected = { stream, positionMs, progressFraction ->
                     onStreamSelected(stream, positionMs, progressFraction)
                 },
+                onUnavailableStreamSelected = { stream ->
+                    NuvioToastController.show(
+                        stream.playbackUnavailableMessage(
+                            torrentNeedsResolverMessage = torrentNeedsResolverText,
+                            noDirectLinkMessage = noDirectStreamLinkText,
+                        ),
+                    )
+                },
                 onStreamLongPress = { stream -> streamActionsTarget = stream },
             )
         } else {
@@ -289,6 +298,14 @@ fun StreamsScreen(
                 resumeProgressFraction = effectiveResumeProgressFraction,
                 onStreamSelected = { stream, positionMs, progressFraction ->
                     onStreamSelected(stream, positionMs, progressFraction)
+                },
+                onUnavailableStreamSelected = { stream ->
+                    NuvioToastController.show(
+                        stream.playbackUnavailableMessage(
+                            torrentNeedsResolverMessage = torrentNeedsResolverText,
+                            noDirectLinkMessage = noDirectStreamLinkText,
+                        ),
+                    )
                 },
                 onStreamLongPress = { stream -> streamActionsTarget = stream },
             )
@@ -437,6 +454,7 @@ private fun MobileStreamsLayout(
     resumePositionMs: Long?,
     resumeProgressFraction: Float?,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
+    onUnavailableStreamSelected: (StreamItem) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -518,6 +536,7 @@ private fun MobileStreamsLayout(
                         appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                         showFileSizeBadges = showFileSizeBadges,
                         onStreamSelected = onStreamSelected,
+                        onUnavailableStreamSelected = onUnavailableStreamSelected,
                         onStreamLongPress = onStreamLongPress,
                         resumePositionMs = resumePositionMs,
                         resumeProgressFraction = resumeProgressFraction,
@@ -822,6 +841,7 @@ internal fun StreamList(
     appendInstantServiceToDefaultName: Boolean,
     showFileSizeBadges: Boolean,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
+    onUnavailableStreamSelected: (StreamItem) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
     resumePositionMs: Long?,
     resumeProgressFraction: Float?,
@@ -864,6 +884,7 @@ internal fun StreamList(
                         appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                         showFileSizeBadges = showFileSizeBadges,
                         onStreamSelected = onStreamSelected,
+                        onUnavailableStreamSelected = onUnavailableStreamSelected,
                         onStreamLongPress = onStreamLongPress,
                         resumePositionMs = resumePositionMs,
                         resumeProgressFraction = resumeProgressFraction,
@@ -891,6 +912,7 @@ private fun LazyListScope.streamSection(
     appendInstantServiceToDefaultName: Boolean,
     showFileSizeBadges: Boolean,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit,
+    onUnavailableStreamSelected: (StreamItem) -> Unit,
     onStreamLongPress: (StreamItem) -> Unit,
     resumePositionMs: Long?,
     resumeProgressFraction: Float?,
@@ -935,15 +957,19 @@ private fun LazyListScope.streamSection(
                 )
             },
         ) { _, stream ->
+            val isSelectable = stream.isSelectableForPlayback(debridEnabled)
             StreamCard(
                 stream = stream,
-                enabled = stream.isSelectableForPlayback(debridEnabled),
+                enabled = isSelectable,
+                clickableEnabled = true,
                 appendInstantServiceToDefaultName = appendInstantServiceToDefaultName,
                 showFileSizeBadges = showFileSizeBadges,
                 desktopScale = desktopScale,
                 onClick = {
-                    if (stream.isSelectableForPlayback(debridEnabled)) {
+                    if (isSelectable) {
                         onStreamSelected(stream, resumePositionMs, resumeProgressFraction)
+                    } else {
+                        onUnavailableStreamSelected(stream)
                     }
                 },
                 onLongClick = {
@@ -1047,6 +1073,7 @@ private fun StreamSourceHeader(
 private fun StreamCard(
     stream: StreamItem,
     enabled: Boolean,
+    clickableEnabled: Boolean = enabled,
     appendInstantServiceToDefaultName: Boolean,
     showFileSizeBadges: Boolean,
     desktopScale: Float = 1f,
@@ -1077,7 +1104,7 @@ private fun StreamCard(
                 onSecondaryClick = onLongClick,
             )
             .combinedClickable(
-                enabled = enabled,
+                enabled = clickableEnabled,
                 onClick = onClick,
                 onLongClick = onLongClick,
             )

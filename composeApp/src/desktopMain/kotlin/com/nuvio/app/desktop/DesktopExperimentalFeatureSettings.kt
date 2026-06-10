@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 internal object DesktopExperimentalFeatureSettings {
     private const val PREF_UNIVERSAL_SEARCH_ENABLED = "universal_search_enabled"
     private const val PREF_VIDEO_UPSCALER_PRESET = "video_upscaler_preset"
+    private const val PREF_DISPLAY_SYNC_ENABLED = "display_sync_enabled"
 
     private val prefs by lazy { DesktopPreferences("experimental_features") }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -25,6 +26,7 @@ internal object DesktopExperimentalFeatureSettings {
             videoUpscalerPreset = VideoUpscalerPreset.fromId(
                 prefs.getString(PREF_VIDEO_UPSCALER_PRESET),
             ),
+            displaySyncEnabled = prefs.getBoolean(PREF_DISPLAY_SYNC_ENABLED) ?: false,
         )
 
         scope.launch {
@@ -35,6 +37,11 @@ internal object DesktopExperimentalFeatureSettings {
         scope.launch {
             ExperimentalFeatureSettings.videoUpscalerPreset.collect { preset ->
                 prefs.putString(PREF_VIDEO_UPSCALER_PRESET, preset.id)
+            }
+        }
+        scope.launch {
+            ExperimentalFeatureSettings.displaySyncEnabled.collect { enabled ->
+                prefs.putBoolean(PREF_DISPLAY_SYNC_ENABLED, enabled)
             }
         }
     }

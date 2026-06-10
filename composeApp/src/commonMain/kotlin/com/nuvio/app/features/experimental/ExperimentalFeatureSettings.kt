@@ -53,12 +53,17 @@ object ExperimentalFeatureSettings {
     private val _videoUpscalerPreset = MutableStateFlow(VideoUpscalerPreset.OFF)
     val videoUpscalerPreset: StateFlow<VideoUpscalerPreset> = _videoUpscalerPreset.asStateFlow()
 
+    private val _displaySyncEnabled = MutableStateFlow(false)
+    val displaySyncEnabled: StateFlow<Boolean> = _displaySyncEnabled.asStateFlow()
+
     fun seed(
         universalSearchEnabled: Boolean,
         videoUpscalerPreset: VideoUpscalerPreset,
+        displaySyncEnabled: Boolean = false,
     ) {
         _universalSearchEnabled.value = universalSearchEnabled
         _videoUpscalerPreset.value = videoUpscalerPreset
+        _displaySyncEnabled.value = displaySyncEnabled
     }
 
     fun setUniversalSearchEnabled(enabled: Boolean) {
@@ -69,5 +74,10 @@ object ExperimentalFeatureSettings {
     fun setVideoUpscalerPreset(preset: VideoUpscalerPreset) {
         if (_videoUpscalerPreset.value == preset) return
         _videoUpscalerPreset.value = preset
+    }
+
+    fun setDisplaySyncEnabled(enabled: Boolean) {
+        if (_displaySyncEnabled.value == enabled) return
+        _displaySyncEnabled.value = enabled
     }
 }
