@@ -222,20 +222,15 @@ actual fun MpvMediampPlayerSurface(
             releaseSkiaTextureResources()
             textureHasValidFrame = false
 
-            // Keep libmpv's render context alive on normal size changes. The
-            // render API documents that freeing an active render context
-            // disables video; resize only needs a fresh GL render target.
-            //
-            // Do NOT call resetGLAll() here. MPV renders in its own separate
-            // WGL context and does not touch Skia's per-context GL state, so
-            // there is nothing stale to reset. Calling resetGLAll() before the
-            // new Skia image is created puts freshly-adopted GrGLTextures into
-            // an uninitialised state that causes the very first drawImageRect
-            // to render black — the first-fullscreen black-screen bug.
-
             val newTextureId = player.createTexture(targetWidth, targetHeight)
 
             if (newTextureId != 0) {
+                // Flush Skia's cached GL state BEFORE wrapping the new texture.
+                // resetGLAll() called here (after old wrappers are released but
+                // before Image.adoptTextureFrom) gives the new GrGLTexture a
+                // clean registration — avoids the first-draw black frame that
+                // occurs when resetGLAll is called after adoption.
+                runCatching { components.directContext.resetGLAll() }
                 val backendTexture = runCatching {
                     BackendTexture.makeGL(
                         width = targetWidth,
@@ -327,10 +322,6 @@ actual fun MpvMediampPlayerSurface(
                     )
                     lastLoggedMpvProps = propsLogKey
                 }
-                // resetGLAll() is intentionally omitted here. MPV renders in
-                // a separate WGL context so Skia's GL state is untouched; the
-                // call is unnecessary and causes freshly-adopted textures to
-                // black-out on their first draw (first-fullscreen bug).
             } else if (!textureHasValidFrame) {
                 // No valid frame yet for this texture — log and skip draw.
                 val failureKey = "$surfaceSizeKey:$textureId:$currentContextSignature"
@@ -349,6 +340,10 @@ actual fun MpvMediampPlayerSurface(
         }
         player.image?.let {
             skiaCanvas.drawImageRect(it, Rect.makeWH(logicalWidth, logicalHeight))
+            // Flush Skia's GL state after drawing the MPV-rendered texture.
+            // Called AFTER drawImageRect (not before) so the fresh texture's
+            // first draw is never interrupted by a state reset.
+            runCatching { components.directContext.resetGLAll() }
         }
     }
 }
