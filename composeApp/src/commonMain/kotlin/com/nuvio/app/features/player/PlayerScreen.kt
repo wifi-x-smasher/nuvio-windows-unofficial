@@ -1938,12 +1938,10 @@ fun PlayerScreen(
             cursorIdleHidden = true
         }
 
-        // Desktop: after a fullscreen toggle the MPV surface allocates a new GL texture, but MPV's VO
-        // may not emit a render-update signal immediately (e.g. while its VO is reconfiguring for the
-        // new dimensions). Nudge MPV twice — quickly at T+80 ms and again at T+580 ms as a backup —
-        // so it pushes a frame into the new texture promptly. The effect re-arms on every size change
-        // so repeated fullscreen toggles each get their own nudge. Debounced via the layoutSize key.
-        // No-op on other platforms.
+        // Desktop: after a fullscreen toggle the MPV surface allocates a new GL texture; nudge MPV
+        // once so it emits a render-update signal and populates the new texture promptly. Re-arms on
+        // every size change so repeated fullscreen toggles each get their own nudge. Debounced via
+        // the layoutSize key. No-op on other platforms.
         if (isDesktop) {
             var redrawBaselineSize by remember(activeSourceUrl) { mutableStateOf<IntSize?>(null) }
             LaunchedEffect(layoutSize, initialLoadCompleted) {
@@ -1958,8 +1956,6 @@ fun PlayerScreen(
                 delay(80)
                 playerController?.requestRedraw()
                 redrawBaselineSize = layoutSize
-                delay(500)
-                playerController?.requestRedraw()
             }
         }
 

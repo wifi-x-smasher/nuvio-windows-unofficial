@@ -225,7 +225,13 @@ actual fun MpvMediampPlayerSurface(
             // Keep libmpv's render context alive on normal size changes. The
             // render API documents that freeing an active render context
             // disables video; resize only needs a fresh GL render target.
-            runCatching { components.directContext.resetGLAll() }
+            //
+            // Do NOT call resetGLAll() here. MPV renders in its own separate
+            // WGL context and does not touch Skia's per-context GL state, so
+            // there is nothing stale to reset. Calling resetGLAll() before the
+            // new Skia image is created puts freshly-adopted GrGLTextures into
+            // an uninitialised state that causes the very first drawImageRect
+            // to render black — the first-fullscreen black-screen bug.
 
             val newTextureId = player.createTexture(targetWidth, targetHeight)
 
@@ -321,7 +327,10 @@ actual fun MpvMediampPlayerSurface(
                     )
                     lastLoggedMpvProps = propsLogKey
                 }
-                runCatching { components.directContext.resetGLAll() }
+                // resetGLAll() is intentionally omitted here. MPV renders in
+                // a separate WGL context so Skia's GL state is untouched; the
+                // call is unnecessary and causes freshly-adopted textures to
+                // black-out on their first draw (first-fullscreen bug).
             } else if (!textureHasValidFrame) {
                 // No valid frame yet for this texture — log and skip draw.
                 val failureKey = "$surfaceSizeKey:$textureId:$currentContextSignature"
