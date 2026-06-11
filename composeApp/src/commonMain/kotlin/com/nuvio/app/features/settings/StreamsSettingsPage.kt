@@ -81,6 +81,14 @@ internal fun LazyListScope.streamsSettingsContent(isTablet: Boolean) {
                     onCheckedChange = StreamBadgeSettingsRepository::setShowFileSizeBadges,
                 )
                 SettingsGroupDivider(isTablet = isTablet)
+                SettingsSwitchRow(
+                    title = stringResource(Res.string.settings_stream_addon_logo_title),
+                    description = stringResource(Res.string.settings_stream_addon_logo_description),
+                    checked = currentSettings.showAddonLogo,
+                    isTablet = isTablet,
+                    onCheckedChange = StreamBadgeSettingsRepository::setShowAddonLogo,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
                 SettingsNavigationRow(
                     title = stringResource(Res.string.settings_stream_badge_urls_title),
                     description = badgeRulesPreview(currentRules),

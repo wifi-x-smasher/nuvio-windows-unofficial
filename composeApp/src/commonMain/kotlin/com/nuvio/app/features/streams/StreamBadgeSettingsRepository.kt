@@ -15,6 +15,7 @@ import kotlinx.serialization.json.Json
 data class StreamBadgeSettingsUiState(
     val rules: StreamBadgeRules = StreamBadgeRules(),
     val showFileSizeBadges: Boolean = true,
+    val showAddonLogo: Boolean = false,
 )
 
 object StreamBadgeSettingsRepository {
@@ -30,6 +31,7 @@ object StreamBadgeSettingsRepository {
     private var hasLoaded = false
     private var streamBadgeRules = StreamBadgeRules()
     private var showFileSizeBadges = true
+    private var showAddonLogo = false
 
     fun ensureLoaded() {
         if (hasLoaded) return
@@ -44,6 +46,7 @@ object StreamBadgeSettingsRepository {
         hasLoaded = false
         streamBadgeRules = StreamBadgeRules()
         showFileSizeBadges = true
+        showAddonLogo = false
         _uiState.value = StreamBadgeSettingsUiState()
     }
 
@@ -120,6 +123,14 @@ object StreamBadgeSettingsRepository {
         StreamBadgeSettingsStorage.saveShowFileSizeBadges(enabled)
     }
 
+    fun setShowAddonLogo(enabled: Boolean) {
+        ensureLoaded()
+        if (showAddonLogo == enabled) return
+        showAddonLogo = enabled
+        publish()
+        StreamBadgeSettingsStorage.saveShowAddonLogo(enabled)
+    }
+
     private fun loadFromDisk() {
         hasLoaded = true
         val storedRules = parseStreamBadgeRules(StreamBadgeSettingsStorage.loadStreamBadgeRules())
@@ -130,6 +141,7 @@ object StreamBadgeSettingsRepository {
         }
         streamBadgeRules = storedRules ?: legacyRules ?: StreamBadgeRules()
         showFileSizeBadges = StreamBadgeSettingsStorage.loadShowFileSizeBadges() ?: true
+        showAddonLogo = StreamBadgeSettingsStorage.loadShowAddonLogo() ?: false
         if (legacyRules != null) {
             saveStreamBadgeRules()
             StreamBadgeSettingsStorage.clearLegacyDebridStreamBadgeRules()
@@ -141,6 +153,7 @@ object StreamBadgeSettingsRepository {
         _uiState.value = StreamBadgeSettingsUiState(
             rules = streamBadgeRules,
             showFileSizeBadges = showFileSizeBadges,
+            showAddonLogo = showAddonLogo,
         )
     }
 

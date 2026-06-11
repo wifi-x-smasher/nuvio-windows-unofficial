@@ -1,6 +1,7 @@
 package com.nuvio.app.features.addons
 
 import com.nuvio.app.core.desktop.DesktopPreferences
+import com.nuvio.app.core.network.IPv4FirstDns
 import com.nuvio.app.desktop.DesktopRuntimeLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -44,6 +45,10 @@ internal actual object AddonStorage {
 }
 
 private val addonHttpClient = OkHttpClient.Builder()
+    // Mirror the Android addon client: prefer IPv4 to avoid IPv6-stall on hosts with broken AAAA
+    // records, and bypass any system proxy/PAC that could silently break addon/plugin fetches.
+    .dns(IPv4FirstDns())
+    .proxy(java.net.Proxy.NO_PROXY)
     .connectTimeout(60, TimeUnit.SECONDS)
     .readTimeout(60, TimeUnit.SECONDS)
     .writeTimeout(60, TimeUnit.SECONDS)

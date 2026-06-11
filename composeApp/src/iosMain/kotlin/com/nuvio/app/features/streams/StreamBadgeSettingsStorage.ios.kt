@@ -11,8 +11,9 @@ import platform.Foundation.NSUserDefaults
 actual object StreamBadgeSettingsStorage {
     private const val streamBadgeRulesKey = "stream_badge_rules"
     private const val showFileSizeBadgesKey = "show_file_size_badges"
+    private const val showAddonLogoKey = "show_addon_logo"
     private const val legacyDebridStreamBadgeRulesKey = "debrid_stream_badge_rules"
-    private val syncKeys = listOf(streamBadgeRulesKey, showFileSizeBadgesKey)
+    private val syncKeys = listOf(streamBadgeRulesKey, showFileSizeBadgesKey, showAddonLogoKey)
 
     actual fun loadStreamBadgeRules(): String? = loadString(streamBadgeRulesKey)
 
@@ -33,6 +34,19 @@ actual object StreamBadgeSettingsStorage {
         NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(showFileSizeBadgesKey))
     }
 
+    actual fun loadShowAddonLogo(): Boolean? {
+        val key = ProfileScopedKey.of(showAddonLogoKey)
+        return if (NSUserDefaults.standardUserDefaults.objectForKey(key) != null) {
+            NSUserDefaults.standardUserDefaults.boolForKey(key)
+        } else {
+            null
+        }
+    }
+
+    actual fun saveShowAddonLogo(enabled: Boolean) {
+        NSUserDefaults.standardUserDefaults.setBool(enabled, forKey = ProfileScopedKey.of(showAddonLogoKey))
+    }
+
     actual fun loadLegacyDebridStreamBadgeRules(): String? =
         loadString(legacyDebridStreamBadgeRulesKey)
 
@@ -50,6 +64,7 @@ actual object StreamBadgeSettingsStorage {
     actual fun exportToSyncPayload(): JsonObject = buildJsonObject {
         loadStreamBadgeRules()?.let { put(streamBadgeRulesKey, encodeSyncString(it)) }
         loadShowFileSizeBadges()?.let { put(showFileSizeBadgesKey, it) }
+        loadShowAddonLogo()?.let { put(showAddonLogoKey, it) }
     }
 
     actual fun replaceFromSyncPayload(payload: JsonObject) {
@@ -60,6 +75,9 @@ actual object StreamBadgeSettingsStorage {
         payload.decodeSyncString(streamBadgeRulesKey)?.let(::saveStreamBadgeRules)
         payload[showFileSizeBadgesKey]?.let { element ->
             runCatching { element.toString().toBooleanStrictOrNull() }.getOrNull()?.let(::saveShowFileSizeBadges)
+        }
+        payload[showAddonLogoKey]?.let { element ->
+            runCatching { element.toString().toBooleanStrictOrNull() }.getOrNull()?.let(::saveShowAddonLogo)
         }
     }
 }

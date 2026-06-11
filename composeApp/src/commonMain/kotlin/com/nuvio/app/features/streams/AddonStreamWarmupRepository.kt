@@ -184,6 +184,7 @@ object AddonStreamWarmupRepository {
                 payload = payload,
                 addonName = target.addonName,
                 addonId = target.addonId,
+                addonLogo = target.manifest.logoUrl,
             )
         }.fold(
             onSuccess = { streams ->

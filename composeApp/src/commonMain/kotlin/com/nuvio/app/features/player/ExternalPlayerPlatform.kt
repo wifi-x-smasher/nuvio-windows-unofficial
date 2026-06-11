@@ -10,6 +10,9 @@ data class ExternalPlayerPlaybackRequest(
     val title: String,
     val streamTitle: String? = null,
     val sourceHeaders: Map<String, String> = emptyMap(),
+    // Remote URL of the subtitle the user has active in the internal player. Platforms that
+    // support external subtitle handoff (desktop) download it locally before launch.
+    val subtitleUrl: String? = null,
 )
 
 enum class ExternalPlayerOpenResult {

@@ -74,7 +74,21 @@ internal actual object ExternalPlayerPlatform {
             }.getOrDefault(ExternalPlayerOpenResult.Failed)
         }
 
-        val command = DesktopExternalPlayerCommandBuilder.build(selectedPlayer, request)
+        // Download the active addon subtitle to a temp file so the external player can load it.
+        // MPC-HC does not reliably accept a subtitle path via CLI, so skip it there.
+        val subtitleFile = request.subtitleUrl
+            ?.takeIf { it.isNotBlank() && selectedPlayer.kind != DesktopExternalPlayerKind.MpcHc }
+            ?.let { url ->
+                downloadSubtitleToTemp(url).also { path ->
+                    AppDiagnostics.breadcrumb(
+                        event = "player.external.open.subtitle",
+                        details = externalRequestDetails(request, playerId) +
+                            mapOf("subtitleDownloaded" to (path != null).toString()),
+                    )
+                }
+            }
+
+        val command = DesktopExternalPlayerCommandBuilder.build(selectedPlayer, request, subtitleFile)
             ?: run {
                 AppDiagnostics.breadcrumb(
                     event = "player.external.open.command_unavailable",
@@ -96,6 +110,38 @@ internal actual object ExternalPlayerPlatform {
         }.getOrDefault(ExternalPlayerOpenResult.Failed)
     }
 
+}
+
+private fun downloadSubtitleToTemp(url: String): java.nio.file.Path? = runCatching {
+    val tempFile = File.createTempFile("nuvio_sub_", ".${subtitleExtension(url)}")
+    tempFile.deleteOnExit()
+    val connection = URI(url).toURL().openConnection()
+    connection.setRequestProperty(
+        "User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    )
+    connection.connectTimeout = 15_000
+    connection.readTimeout = 15_000
+    connection.getInputStream().use { input ->
+        tempFile.outputStream().use { output -> input.copyTo(output) }
+    }
+    if (tempFile.length() <= 0L) {
+        tempFile.delete()
+        null
+    } else {
+        tempFile.toPath()
+    }
+}.getOrNull()
+
+private fun subtitleExtension(url: String): String {
+    val path = runCatching { URI(url).path.orEmpty() }.getOrDefault("")
+    return when {
+        path.endsWith(".vtt", ignoreCase = true) -> "vtt"
+        path.endsWith(".ass", ignoreCase = true) -> "ass"
+        path.endsWith(".ssa", ignoreCase = true) -> "ssa"
+        path.endsWith(".sub", ignoreCase = true) -> "sub"
+        else -> "srt"
+    }
 }
 
 private fun externalRequestDetails(

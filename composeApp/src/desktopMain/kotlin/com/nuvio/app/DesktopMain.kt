@@ -503,6 +503,8 @@ internal fun desktopPlayerKeyboardShortcutFor(keyCode: Int): PlayerKeyboardShort
     KeyEvent.VK_UP -> PlayerKeyboardShortcut.VolumeUp
     KeyEvent.VK_DOWN -> PlayerKeyboardShortcut.VolumeDown
     KeyEvent.VK_M -> PlayerKeyboardShortcut.ToggleMute
+    KeyEvent.VK_B -> PlayerKeyboardShortcut.CycleAudioTrack
+    KeyEvent.VK_V -> PlayerKeyboardShortcut.CycleSubtitleTrack
     KeyEvent.VK_ESCAPE,
     KeyEvent.VK_BACK_SPACE -> PlayerKeyboardShortcut.CloseOrBack
     else -> null

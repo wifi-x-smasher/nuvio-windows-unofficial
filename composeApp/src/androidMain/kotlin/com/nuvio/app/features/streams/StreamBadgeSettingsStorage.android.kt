@@ -14,9 +14,10 @@ actual object StreamBadgeSettingsStorage {
     private const val legacyDebridPreferencesName = "nuvio_debrid_settings"
     private const val streamBadgeRulesKey = "stream_badge_rules"
     private const val showFileSizeBadgesKey = "show_file_size_badges"
+    private const val showAddonLogoKey = "show_addon_logo"
     private const val legacyDebridStreamBadgeRulesKey = "debrid_stream_badge_rules"
 
-    private val syncKeys = listOf(streamBadgeRulesKey, showFileSizeBadgesKey)
+    private val syncKeys = listOf(streamBadgeRulesKey, showFileSizeBadgesKey, showAddonLogoKey)
 
     private var preferences: SharedPreferences? = null
     private var legacyDebridPreferences: SharedPreferences? = null
@@ -48,6 +49,22 @@ actual object StreamBadgeSettingsStorage {
             ?.apply()
     }
 
+    actual fun loadShowAddonLogo(): Boolean? =
+        preferences?.let { sharedPreferences ->
+            if (sharedPreferences.contains(ProfileScopedKey.of(showAddonLogoKey))) {
+                sharedPreferences.getBoolean(ProfileScopedKey.of(showAddonLogoKey), false)
+            } else {
+                null
+            }
+        }
+
+    actual fun saveShowAddonLogo(enabled: Boolean) {
+        preferences
+            ?.edit()
+            ?.putBoolean(ProfileScopedKey.of(showAddonLogoKey), enabled)
+            ?.apply()
+    }
+
     actual fun loadLegacyDebridStreamBadgeRules(): String? =
         legacyDebridPreferences?.getString(ProfileScopedKey.of(legacyDebridStreamBadgeRulesKey), null)
 
@@ -71,6 +88,7 @@ actual object StreamBadgeSettingsStorage {
     actual fun exportToSyncPayload(): JsonObject = buildJsonObject {
         loadStreamBadgeRules()?.let { put(streamBadgeRulesKey, encodeSyncString(it)) }
         loadShowFileSizeBadges()?.let { put(showFileSizeBadgesKey, it) }
+        loadShowAddonLogo()?.let { put(showAddonLogoKey, it) }
     }
 
     actual fun replaceFromSyncPayload(payload: JsonObject) {
@@ -81,6 +99,9 @@ actual object StreamBadgeSettingsStorage {
         payload.decodeSyncString(streamBadgeRulesKey)?.let(::saveStreamBadgeRules)
         payload[showFileSizeBadgesKey]?.let { element ->
             runCatching { element.toString().toBooleanStrictOrNull() }.getOrNull()?.let(::saveShowFileSizeBadges)
+        }
+        payload[showAddonLogoKey]?.let { element ->
+            runCatching { element.toString().toBooleanStrictOrNull() }.getOrNull()?.let(::saveShowAddonLogo)
         }
     }
 }

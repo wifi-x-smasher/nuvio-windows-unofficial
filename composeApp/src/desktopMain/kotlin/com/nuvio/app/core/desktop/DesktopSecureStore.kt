@@ -4,6 +4,9 @@ import com.sun.jna.platform.win32.Crypt32Util
 import java.util.Base64
 import java.util.Properties
 
+// Encrypted API keys only — a few KB at most. Past this it is corrupt; quarantine rather than OOM.
+private const val MAX_SECURE_STORE_BYTES = 8L * 1024 * 1024
+
 internal object DesktopSecureStore {
     private val store = DesktopJsonStore(DesktopAppPaths.dataFile("secure-store.properties"))
     private val encoder = Base64.getEncoder()
@@ -39,7 +42,7 @@ internal object DesktopSecureStore {
 
     private fun properties(): Properties {
         val props = Properties()
-        store.readTextOrNull()?.byteInputStream()?.use(props::load)
+        store.readTextOrNull(MAX_SECURE_STORE_BYTES)?.byteInputStream()?.use(props::load)
         return props
     }
 

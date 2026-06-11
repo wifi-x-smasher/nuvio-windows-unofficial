@@ -9,6 +9,8 @@ internal enum class PlayerKeyboardShortcut {
     VolumeUp,
     VolumeDown,
     ToggleMute,
+    CycleAudioTrack,
+    CycleSubtitleTrack,
     CloseOrBack,
 }
 
@@ -23,6 +25,8 @@ internal fun playerKeyboardShortcutFor(key: Key): PlayerKeyboardShortcut? = when
     Key.DirectionUp -> PlayerKeyboardShortcut.VolumeUp
     Key.DirectionDown -> PlayerKeyboardShortcut.VolumeDown
     Key.M -> PlayerKeyboardShortcut.ToggleMute
+    Key.B -> PlayerKeyboardShortcut.CycleAudioTrack
+    Key.V -> PlayerKeyboardShortcut.CycleSubtitleTrack
     Key.Escape,
     Key.Backspace -> PlayerKeyboardShortcut.CloseOrBack
     else -> null

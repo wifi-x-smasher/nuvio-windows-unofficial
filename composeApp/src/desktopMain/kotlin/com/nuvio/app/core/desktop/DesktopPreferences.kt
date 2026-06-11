@@ -4,6 +4,10 @@ import java.io.StringWriter
 import java.util.Base64
 import java.util.Properties
 
+// Settings files are only ever a few KB. Anything past this is corruption (see issue #21, where a
+// ballooned debrid settings file OOM-crashed the app on startup); the store quarantines it instead.
+private const val MAX_PREFS_FILE_BYTES = 8L * 1024 * 1024
+
 internal class DesktopPreferences(
     fileName: String,
 ) {
@@ -90,7 +94,7 @@ internal class DesktopPreferences(
 
     private fun properties(): Properties {
         val props = Properties()
-        store.readTextOrNull()?.byteInputStream()?.use(props::load)
+        store.readTextOrNull(MAX_PREFS_FILE_BYTES)?.byteInputStream()?.use(props::load)
         return props
     }
 

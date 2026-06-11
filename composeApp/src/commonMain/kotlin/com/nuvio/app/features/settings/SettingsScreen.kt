@@ -514,6 +514,7 @@ private fun MobileSettingsScreen(
                             onSupportersContributorsClick = onSupportersContributorsClick,
                             onLicensesAttributionsClick = onLicensesAttributionsClick,
                             onDiagnosticsClick = { onPageChange(SettingsPage.Diagnostics) },
+                            onAdvancedClick = { onPageChange(SettingsPage.Advanced) },
                             onCheckForUpdatesClick = onCheckForUpdatesClick,
                             onDownloadsClick = onDownloadsClick,
                             onAccountClick = onAccountClick,
@@ -531,6 +532,9 @@ private fun MobileSettingsScreen(
                     isTablet = false,
                 )
                 SettingsPage.Diagnostics -> diagnosticsSettingsContent(
+                    isTablet = false,
+                )
+                SettingsPage.Advanced -> advancedSettingsContent(
                     isTablet = false,
                 )
                 SettingsPage.Playback -> playbackSettingsContent(
@@ -924,6 +928,7 @@ private fun TabletSettingsScreen(
                                 onSupportersContributorsClick = { openInlinePage(SettingsPage.SupportersContributors) },
                                 onLicensesAttributionsClick = { openInlinePage(SettingsPage.LicensesAttributions) },
                                 onDiagnosticsClick = { openInlinePage(SettingsPage.Diagnostics) },
+                                onAdvancedClick = { openInlinePage(SettingsPage.Advanced) },
                                 onCheckForUpdatesClick = onCheckForUpdatesClick,
                                 onDownloadsClick = onDownloadsClick,
                                 onAccountClick = { openInlinePage(SettingsPage.Account) },
@@ -944,6 +949,9 @@ private fun TabletSettingsScreen(
                         isTablet = true,
                     )
                     SettingsPage.Diagnostics -> diagnosticsSettingsContent(
+                        isTablet = true,
+                    )
+                    SettingsPage.Advanced -> advancedSettingsContent(
                         isTablet = true,
                     )
                     SettingsPage.Playback -> playbackSettingsContent(

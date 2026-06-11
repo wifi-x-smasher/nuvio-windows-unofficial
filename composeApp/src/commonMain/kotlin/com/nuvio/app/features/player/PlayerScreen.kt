@@ -229,6 +229,7 @@ fun PlayerScreen(
         val resizeModeFillLabel = stringResource(Res.string.compose_player_resize_fill)
         val resizeModeZoomLabel = stringResource(Res.string.compose_player_resize_zoom)
         val downloadedLabel = stringResource(Res.string.compose_player_downloaded)
+        val subtitlesOffFeedbackText = stringResource(Res.string.compose_player_subtitles_off)
         val airsPrefix = stringResource(Res.string.compose_player_airs_prefix)
         val tbaLabel = stringResource(Res.string.compose_player_tba)
         val externalPlayerNotConfiguredText = stringResource(Res.string.external_player_not_configured)
@@ -1578,6 +1579,7 @@ fun PlayerScreen(
                     title = title,
                     streamTitle = activeStreamTitle,
                     sourceHeaders = activeSourceHeaders,
+                    subtitleUrl = selectedAddonSubtitleUrl?.takeIf { useCustomSubtitles && it.isNotBlank() },
                 ),
                 playerId = playerSettingsUiState.externalPlayerId,
             )
@@ -1708,6 +1710,59 @@ fun PlayerScreen(
             pointerActivityNonce++
         }
 
+        fun cycleAudioTrack(): Boolean {
+            if (audioTracks.isEmpty()) return false
+            val currentPos = audioTracks.indexOfFirst { it.index == selectedAudioIndex }
+            val nextPos = if (currentPos < 0) 0 else (currentPos + 1) % audioTracks.size
+            val next = audioTracks[nextPos]
+            selectedAudioIndex = next.index
+            manualAudioTrackSignature = next.audioTrackPreferenceSignature()
+            playerController?.selectAudioTrack(next.index)
+            val label = next.label.ifBlank { next.language.orEmpty().ifBlank { "Audio ${nextPos + 1}" } }
+            showGestureFeedback(GestureFeedbackState(message = label, icon = GestureFeedbackIcon.Audio))
+            controlsVisible = true
+            return true
+        }
+
+        // Cycle: Off -> built-in track 1 -> ... -> last -> Off (VLC's V behaviour). Built-in tracks
+        // only; selecting any moves off an active add-on subtitle, mirroring the subtitle modal.
+        fun cycleSubtitleTrack(): Boolean {
+            val total = subtitleTracks.size + 1 // +1 for the "off" slot
+            if (total <= 1 && !useCustomSubtitles) return false
+            val currentPos = when {
+                useCustomSubtitles -> 0
+                selectedSubtitleIndex < 0 -> 0
+                else -> subtitleTracks.indexOfFirst { it.index == selectedSubtitleIndex }
+                    .let { if (it < 0) 0 else it + 1 }
+            }
+            val nextPos = (currentPos + 1) % total
+            val wasCustom = useCustomSubtitles
+            selectedAddonSubtitleId = null
+            selectedAddonSubtitleUrl = null
+            appRenderedSubtitleCues = emptyList()
+            useCustomSubtitles = false
+            preferredAddonSubtitleSelectionApplied = true
+            if (nextPos == 0) {
+                selectedSubtitleIndex = -1
+                if (wasCustom) playerController?.clearExternalSubtitle() else playerController?.selectSubtitleTrack(-1)
+                showGestureFeedback(
+                    GestureFeedbackState(message = subtitlesOffFeedbackText, icon = GestureFeedbackIcon.Subtitles),
+                )
+            } else {
+                val track = subtitleTracks[nextPos - 1]
+                selectedSubtitleIndex = track.index
+                if (wasCustom) {
+                    playerController?.clearExternalSubtitleAndSelect(track.index)
+                } else {
+                    playerController?.selectSubtitleTrack(track.index)
+                }
+                val label = track.label.ifBlank { track.language.orEmpty().ifBlank { "Subtitle $nextPos" } }
+                showGestureFeedback(GestureFeedbackState(message = label, icon = GestureFeedbackIcon.Subtitles))
+            }
+            controlsVisible = true
+            return true
+        }
+
         fun handleKeyboardShortcut(shortcut: PlayerKeyboardShortcut): Boolean {
             val panelVisible = showSubtitleModal || showAudioModal || showVideoSettingsModal ||
                 showSubmitIntroModal || showSourcesPanel || showEpisodesPanel || episodeStreamsPanelState.showStreams
@@ -1735,6 +1790,8 @@ fun PlayerScreen(
                 PlayerKeyboardShortcut.VolumeUp -> adjustVolumeBy(0.05f)
                 PlayerKeyboardShortcut.VolumeDown -> adjustVolumeBy(-0.05f)
                 PlayerKeyboardShortcut.ToggleMute -> toggleMute()
+                PlayerKeyboardShortcut.CycleAudioTrack -> cycleAudioTrack()
+                PlayerKeyboardShortcut.CycleSubtitleTrack -> cycleSubtitleTrack()
                 PlayerKeyboardShortcut.CloseOrBack -> {
                     closeTopPlayerPanelOrBack()
                     true

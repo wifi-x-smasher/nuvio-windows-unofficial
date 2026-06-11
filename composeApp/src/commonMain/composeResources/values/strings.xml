@@ -356,6 +356,7 @@
     <string name="compose_player_subs">Subs</string>
     <string name="compose_player_sync">Sync</string>
     <string name="compose_player_subtitles">Subtitles</string>
+    <string name="compose_player_subtitles_off">Subtitles off</string>
     <string name="compose_player_subtitle_delay">Subtitle delay</string>
     <string name="compose_player_subtitle_delay_value">Current offset: %1$s</string>
     <string name="compose_player_subtitle_delay_early">-250 ms</string>
@@ -416,6 +417,17 @@
     <string name="compose_settings_root_check_updates_title">Check for updates</string>
     <string name="compose_settings_root_content_discovery_description">Manage addons and discovery sources.</string>
     <string name="compose_settings_root_diagnostics_description">View local logs and support details.</string>
+    <string name="settings_advanced_title">Advanced</string>
+    <string name="settings_advanced_description">Startup behavior and cached data.</string>
+    <string name="settings_advanced_section_startup">STARTUP</string>
+    <string name="settings_advanced_remember_last_profile">Remember last profile</string>
+    <string name="settings_advanced_remember_last_profile_description">Skip the profile picker on launch and open the last profile you used. PIN-protected profiles still ask for the PIN.</string>
+    <string name="settings_advanced_section_cache">CACHE</string>
+    <string name="settings_advanced_clear_cw_cache">Clear Continue Watching cache</string>
+    <string name="settings_advanced_clear_cw_cache_subtitle">Remove cached Continue Watching artwork and metadata for this profile.</string>
+    <string name="settings_advanced_clear_cw_cache_done">Cleared.</string>
+    <string name="settings_stream_addon_logo_title">Show add-on logos</string>
+    <string name="settings_stream_addon_logo_description">Display the source add-on\'s logo on each stream in the stream list.</string>
     <string name="compose_settings_root_downloads_description">Manage your downloaded movies and episodes.</string>
     <string name="compose_settings_root_downloads_title">Downloads</string>
     <string name="compose_settings_root_general_section">GENERAL</string>

@@ -7,6 +7,8 @@ internal expect object StreamBadgeSettingsStorage {
     fun saveStreamBadgeRules(rules: String)
     fun loadShowFileSizeBadges(): Boolean?
     fun saveShowFileSizeBadges(enabled: Boolean)
+    fun loadShowAddonLogo(): Boolean?
+    fun saveShowAddonLogo(enabled: Boolean)
     fun loadLegacyDebridStreamBadgeRules(): String?
     fun clearLegacyDebridStreamBadgeRules()
     fun exportToSyncPayload(): JsonObject

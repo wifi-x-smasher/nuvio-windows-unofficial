@@ -1082,6 +1082,8 @@ private fun StreamCard(
     modifier: Modifier = Modifier,
 ) {
     val cardShape = RoundedCornerShape(12.dp)
+    val streamBadgeSettings by StreamBadgeSettingsRepository.uiState.collectAsStateWithLifecycle()
+    val showAddonLogo = streamBadgeSettings.showAddonLogo && !stream.addonLogo.isNullOrBlank()
     val cardBackground = if (isDesktop) {
         MaterialTheme.colorScheme.surface.copy(alpha = if (enabled) 0.88f else 0.48f)
     } else {
@@ -1111,6 +1113,16 @@ private fun StreamCard(
             .padding(if (isDesktop) 16.dp * desktopScale else 14.dp),
         verticalAlignment = Alignment.Top,
     ) {
+        if (showAddonLogo) {
+            AsyncImage(
+                model = stream.addonLogo,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .padding(end = if (isDesktop) 10.dp * desktopScale else 8.dp)
+                    .size(if (isDesktop) 28.dp * desktopScale else 24.dp),
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             StreamNameWithInstantService(
                 stream = stream,

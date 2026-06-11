@@ -7,6 +7,7 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.settings_advanced_title
 import nuvio.composeapp.generated.resources.compose_settings_category_about
 import nuvio.composeapp.generated.resources.compose_settings_category_general
 import nuvio.composeapp.generated.resources.compose_settings_page_account
@@ -70,6 +71,11 @@ internal enum class SettingsPage(
     Diagnostics(
         titleRes = Res.string.compose_settings_page_diagnostics,
         category = SettingsCategory.About,
+        parentPage = Root,
+    ),
+    Advanced(
+        titleRes = Res.string.settings_advanced_title,
+        category = SettingsCategory.General,
         parentPage = Root,
     ),
     Playback(

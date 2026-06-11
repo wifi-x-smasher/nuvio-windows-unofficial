@@ -16,6 +16,7 @@ import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Style
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
@@ -56,6 +57,8 @@ import nuvio.composeapp.generated.resources.compose_settings_page_trakt
 import nuvio.composeapp.generated.resources.settings_playback_subtitle
 import nuvio.composeapp.generated.resources.about_supporters_contributors_subtitle
 import nuvio.composeapp.generated.resources.about_licenses_attributions_subtitle
+import nuvio.composeapp.generated.resources.settings_advanced_title
+import nuvio.composeapp.generated.resources.settings_advanced_description
 import org.jetbrains.compose.resources.stringResource
 
 internal fun LazyListScope.settingsRootContent(
@@ -70,6 +73,7 @@ internal fun LazyListScope.settingsRootContent(
     onSupportersContributorsClick: () -> Unit,
     onLicensesAttributionsClick: () -> Unit,
     onDiagnosticsClick: () -> Unit,
+    onAdvancedClick: () -> Unit,
     onCheckForUpdatesClick: (() -> Unit)? = null,
     onDownloadsClick: () -> Unit,
     onAccountClick: () -> Unit,
@@ -175,6 +179,14 @@ internal fun LazyListScope.settingsRootContent(
                         icon = Icons.Rounded.Notifications,
                         isTablet = isTablet,
                         onClick = onNotificationsClick,
+                    )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsNavigationRow(
+                        title = stringResource(Res.string.settings_advanced_title),
+                        description = stringResource(Res.string.settings_advanced_description),
+                        icon = Icons.Rounded.Tune,
+                        isTablet = isTablet,
+                        onClick = onAdvancedClick,
                     )
                 }
             }

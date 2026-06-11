@@ -424,10 +424,35 @@ fun App() {
         var isNewProfile by remember { mutableStateOf(false) }
         var autoSkipProfileSelection by rememberSaveable { mutableStateOf(false) }
 
+        fun rememberedStartupProfile(profiles: List<NuvioProfile>): NuvioProfile? {
+            val currentProfileState = ProfileRepository.state.value
+            if (
+                !currentProfileState.rememberLastProfileEnabled ||
+                !currentProfileState.hasEverSelectedProfile
+            ) {
+                return null
+            }
+            // Only auto-enter a non-PIN profile; PIN-protected profiles must still
+            // pass through the picker so the PIN is enforced.
+            return profiles
+                .find { it.profileIndex == ProfileRepository.activeProfileId }
+                ?.takeUnless { it.pinEnabled }
+        }
+
         fun enterProfileGate(profiles: List<NuvioProfile>, syncOnEnter: Boolean) {
             if (profiles.isEmpty()) {
                 autoSkipProfileSelection = true
                 gateScreen = AppGateScreen.ProfileSelection.name
+                return
+            }
+
+            rememberedStartupProfile(profiles)?.let { profile ->
+                ProfileRepository.selectProfile(profile.profileIndex)
+                if (syncOnEnter) {
+                    SyncManager.pullAllForProfile(profile.profileIndex)
+                }
+                gateScreen = AppGateScreen.Main.name
+                autoSkipProfileSelection = false
                 return
             }
 

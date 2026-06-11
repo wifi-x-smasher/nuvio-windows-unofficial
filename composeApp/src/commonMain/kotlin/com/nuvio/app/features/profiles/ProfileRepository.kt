@@ -13,6 +13,7 @@ import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.home.HomeCatalogSettingsRepository
 import com.nuvio.app.features.home.HomeRepository
 import com.nuvio.app.core.ui.PosterCardStyleRepository
+import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.library.LibraryRepository
 import com.nuvio.app.features.mdblist.MdbListSettingsRepository
 import com.nuvio.app.features.notifications.EpisodeReleaseNotificationsRepository
@@ -53,6 +54,8 @@ private data class StoredProfilePayload(
     val userId: String,
     val activeProfileIndex: Int = 1,
     val profiles: List<NuvioProfile> = emptyList(),
+    val rememberLastProfileEnabled: Boolean = false,
+    val hasEverSelectedProfile: Boolean = false,
 )
 
 object ProfileRepository {
@@ -68,6 +71,12 @@ object ProfileRepository {
     private var loadedCacheForUserId: String? = null
 
     val activeProfileId: Int get() = activeProfileIndex
+
+    fun setRememberLastProfileEnabled(enabled: Boolean) {
+        if (_state.value.rememberLastProfileEnabled == enabled) return
+        _state.value = _state.value.copy(rememberLastProfileEnabled = enabled)
+        persist()
+    }
 
     fun loadCachedProfiles(): Boolean {
         val stored = decodeStoredPayload() ?: return false
@@ -135,6 +144,7 @@ object ProfileRepository {
         activeProfileIndex = profileIndex
         _state.value = _state.value.copy(
             activeProfile = _state.value.profiles.find { it.profileIndex == profileIndex },
+            hasEverSelectedProfile = true,
         )
         persist()
         WatchedRepository.onProfileChanged(profileIndex)
@@ -148,6 +158,10 @@ object ProfileRepository {
         ThemeSettingsRepository.onProfileChanged()
         PosterCardStyleRepository.onProfileChanged()
         PlayerSettingsRepository.onProfileChanged()
+        // Reload debrid settings under the newly-active profile's scoped keys. Without this the
+        // debrid state (e.g. Torbox connection) stays bound to whatever profile was active at first
+        // load, so the integration intermittently shows "not connected" after a profile switch (#22).
+        DebridSettingsRepository.onProfileChanged()
         StreamBadgeSettingsRepository.onProfileChanged()
         HomeCatalogSettingsRepository.onProfileChanged()
         HomeRepository.clear()
@@ -400,6 +414,8 @@ object ProfileRepository {
             profiles = profiles,
             activeProfile = profiles.find { it.profileIndex == activeProfileIndex } ?: profiles.firstOrNull(),
             isLoaded = profiles.isNotEmpty(),
+            rememberLastProfileEnabled = stored.rememberLastProfileEnabled,
+            hasEverSelectedProfile = stored.hasEverSelectedProfile,
         )
         _state.value.activeProfile?.let { activeProfileIndex = it.profileIndex }
         syncPinCache(profiles)
@@ -494,6 +510,8 @@ object ProfileRepository {
                     userId = authState.userId,
                     activeProfileIndex = activeProfileIndex,
                     profiles = _state.value.profiles,
+                    rememberLastProfileEnabled = _state.value.rememberLastProfileEnabled,
+                    hasEverSelectedProfile = _state.value.hasEverSelectedProfile,
                 ),
             ),
         )

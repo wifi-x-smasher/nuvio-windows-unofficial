@@ -95,6 +95,16 @@ internal object ContinueWatchingEnrichmentCache {
         lastPayloadHash = payloadHash
     }
 
+    fun clearAll() {
+        // Windows storage has no remove op, so overwrite the active profile's
+        // scoped entry with an empty payload. Resets the dedupe hash so the next
+        // save always writes.
+        val empty = CachedEnrichmentPayload(nextUp = emptyList(), inProgress = emptyList())
+        val encoded = runCatching { json.encodeToString(empty) }.getOrNull() ?: return
+        ContinueWatchingEnrichmentStorage.savePayload(ProfileScopedKey.of(storageKey), encoded)
+        lastPayloadHash = null
+    }
+
     private fun loadPayload(): CachedEnrichmentPayload? {
         val raw = ContinueWatchingEnrichmentStorage.loadPayload(ProfileScopedKey.of(storageKey))
             ?: return null

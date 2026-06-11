@@ -20,6 +20,7 @@ data class StreamItem(
     val clientResolve: StreamClientResolve? = null,
     val debridCacheStatus: StreamDebridCacheStatus? = null,
     val badges: List<StreamBadge> = emptyList(),
+    val addonLogo: String? = null,
 ) {
     val streamLabel: String
         get() = (name ?: runBlocking { getString(Res.string.stream_default_name) }).repairMojibake()

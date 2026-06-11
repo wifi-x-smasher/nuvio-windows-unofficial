@@ -108,13 +108,14 @@ internal object DesktopExternalPlayerCommandBuilder {
     fun build(
         player: DesktopExternalPlayer,
         request: ExternalPlayerPlaybackRequest,
+        subtitleFile: Path? = null,
     ): List<String>? {
         val executable = player.executable ?: return null
         val headers = sanitizePlaybackHeaders(request.sourceHeaders)
         return when (player.kind) {
             DesktopExternalPlayerKind.System -> null
-            DesktopExternalPlayerKind.Vlc -> buildVlcCommand(executable, request, headers)
-            DesktopExternalPlayerKind.Mpv -> buildMpvCommand(executable, request, headers)
+            DesktopExternalPlayerKind.Vlc -> buildVlcCommand(executable, request, headers, subtitleFile)
+            DesktopExternalPlayerKind.Mpv -> buildMpvCommand(executable, request, headers, subtitleFile)
             DesktopExternalPlayerKind.MpcHc -> buildMpcHcCommand(executable, request)
         }
     }
@@ -123,11 +124,13 @@ internal object DesktopExternalPlayerCommandBuilder {
         executable: Path,
         request: ExternalPlayerPlaybackRequest,
         headers: Map<String, String>,
+        subtitleFile: Path?,
     ): List<String> =
         buildList {
             add(executable.toString())
             add(request.sourceUrl)
             title(request)?.let { add("--meta-title=$it") }
+            subtitleFile?.let { add("--sub-file=$it") }
             headers.findHeader("User-Agent")?.let { add("--http-user-agent=$it") }
             headers.findHeader("Referer", "Referrer")?.let { add("--http-referrer=$it") }
             headers.forEach { (key, value) ->
@@ -144,11 +147,13 @@ internal object DesktopExternalPlayerCommandBuilder {
         executable: Path,
         request: ExternalPlayerPlaybackRequest,
         headers: Map<String, String>,
+        subtitleFile: Path?,
     ): List<String> =
         buildList {
             add(executable.toString())
             add("--force-window=yes")
             title(request)?.let { add("--force-media-title=$it") }
+            subtitleFile?.let { add("--sub-file=$it") }
             headers.findHeader("User-Agent")?.let { add("--user-agent=$it") }
             headers.findHeader("Referer", "Referrer")?.let { add("--referrer=$it") }
             headers.forEach { (key, value) ->
