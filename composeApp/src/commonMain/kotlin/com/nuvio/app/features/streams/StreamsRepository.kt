@@ -13,6 +13,7 @@ import com.nuvio.app.features.debrid.DebridStreamPresentation
 import com.nuvio.app.features.debrid.LocalDebridAvailabilityService
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.player.PlayerSettingsRepository
+import com.nuvio.app.features.plugins.PluginHealthRepository
 import com.nuvio.app.features.plugins.PluginRepository
 import com.nuvio.app.features.plugins.pluginContentId
 import com.nuvio.app.features.plugins.PluginsUiState
@@ -535,6 +536,7 @@ object StreamsRepository {
                                 ),
                         )
                         val startedAtMs = currentStreamTimeMillis()
+                        PluginHealthRepository.recordStart(scraper.id)
                         val scraperResult = runCatchingUnlessCancelled {
                             PluginRepository.executeScraper(
                                 scraper = scraper,
@@ -559,6 +561,7 @@ object StreamsRepository {
                                             "elapsedMs" to elapsedMs.toString(),
                                         ),
                                 )
+                                PluginHealthRepository.recordSuccess(scraper.id, results.size, elapsedMs)
                                 StreamLoadCompletion.PluginScraper(
                                     addonId = providerGroup.addonId,
                                     streams = results.map { result ->
@@ -585,6 +588,7 @@ object StreamsRepository {
                                             "elapsedMs" to elapsedMs.toString(),
                                         ),
                                 )
+                                PluginHealthRepository.recordFailure(scraper.id, error, elapsedMs)
                                 StreamLoadCompletion.PluginScraper(
                                     addonId = providerGroup.addonId,
                                     streams = emptyList(),

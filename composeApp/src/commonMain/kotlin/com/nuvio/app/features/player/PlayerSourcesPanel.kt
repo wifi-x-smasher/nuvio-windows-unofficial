@@ -11,6 +11,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +57,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.i18n.localizedByteUnit
 import com.nuvio.app.core.ui.NuvioHorizontalScrollControls
 import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
+import com.nuvio.app.core.ui.nuvioHorizontalWheelScroll
+import com.nuvio.app.core.ui.nuvioTvDirectionalFocusTraversal
+import com.nuvio.app.core.ui.nuvioTvSelectKeys
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
 import com.nuvio.app.features.streams.StreamItem
@@ -175,10 +179,16 @@ fun PlayerSourcesPanel(
                         }
                         if (addonNames.size > 1) {
                             val filterScrollState = rememberScrollState()
-                            Box(modifier = Modifier.fillMaxWidth()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusGroup()
+                                    .nuvioTvDirectionalFocusTraversal(),
+                            ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .nuvioHorizontalWheelScroll(filterScrollState)
                                         .horizontalScroll(filterScrollState)
                                         .padding(horizontal = 20.dp)
                                         .padding(end = 56.dp, bottom = 12.dp),
@@ -239,7 +249,10 @@ fun PlayerSourcesPanel(
                             else -> {
                                 val streams = streamsUiState.filteredGroups.flatMap { it.streams }
                                 LazyColumn(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    modifier = Modifier
+                                        .padding(horizontal = 16.dp)
+                                        .focusGroup()
+                                        .nuvioTvDirectionalFocusTraversal(),
                                     verticalArrangement = Arrangement.spacedBy(6.dp),
                                     contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 16.dp),
                                 ) {
@@ -303,6 +316,7 @@ private fun SourceStreamRow(
                 },
             )
             .clickable(enabled = enabled, onClick = onClick)
+            .nuvioTvSelectKeys(enabled = enabled, onSelect = onClick)
             .nuvioDesktopFocusEffect(
                 enabled = enabled,
                 shape = cardShape,
@@ -437,6 +451,7 @@ internal fun AddonFilterChip(
                     Modifier.border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f), shape)
                 },
             )
+            .nuvioTvSelectKeys(onSelect = onClick)
             .clickable(onClick = onClick)
             .nuvioDesktopFocusEffect(
                 enabled = true,
@@ -485,6 +500,7 @@ internal fun PanelChipButton(
             .clip(shape)
             .background(colorScheme.surfaceVariant.copy(alpha = 0.9f))
             .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f), shape)
+            .nuvioTvSelectKeys(onSelect = onClick)
             .clickable(onClick = onClick)
             .nuvioDesktopFocusEffect(
                 enabled = true,

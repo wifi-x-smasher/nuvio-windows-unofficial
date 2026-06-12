@@ -29,4 +29,6 @@ actual object AppDiagnostics {
     actual fun openLogDirectory(): Boolean = false
 
     actual fun recentDiagnosticLines(limit: Int): List<String> = emptyList()
+
+    actual fun exportDiagnosticsBundle(appSummary: Map<String, String>): String? = null
 }

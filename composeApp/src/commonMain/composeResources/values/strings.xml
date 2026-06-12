@@ -463,6 +463,10 @@
     <string name="settings_diagnostics_runtime_log">Desktop runtime log file</string>
     <string name="settings_diagnostics_section_app">APP</string>
     <string name="settings_diagnostics_section_logs">LOGS</string>
+    <string name="settings_diagnostics_bundle_button">Export diagnostics bundle</string>
+    <string name="settings_diagnostics_bundle_description">Saves your logs plus app, system, GPU, and player details into one redacted file you can attach to a bug report.</string>
+    <string name="settings_diagnostics_bundle_saved">Diagnostics bundle saved. Path copied and folder opened.</string>
+    <string name="settings_diagnostics_bundle_failed">Could not create the diagnostics bundle.</string>
     <string name="settings_stream_badges_section">STREAM BADGES</string>
     <string name="settings_stream_size_badges_title">Size badges</string>
     <string name="settings_stream_size_badges_description">Show file size badges in stream results and player source panels.</string>

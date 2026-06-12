@@ -14,7 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,7 +65,11 @@ import com.nuvio.app.core.i18n.localizedSeasonEpisodeCode
 import com.nuvio.app.core.ui.NuvioAnimatedWatchedBadge
 import com.nuvio.app.core.ui.NuvioLazyRowScrollControls
 import com.nuvio.app.core.ui.NuvioProgressBar
+import com.nuvio.app.core.ui.nuvioLazyRowWheelScroll
 import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
+import com.nuvio.app.core.ui.nuvioSecondaryClickAsLongPress
+import com.nuvio.app.core.ui.nuvioTvDirectionalFocusTraversal
+import com.nuvio.app.core.ui.nuvioTvSelectKeys
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaEpisodeCardStyle
 import com.nuvio.app.features.details.MetaVideo
@@ -409,15 +413,23 @@ private fun SeasonTextChipScrollRow(
         }
     }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusGroup()
+            .nuvioTvDirectionalFocusTraversal(),
+    ) {
         LazyRow(
             state = seasonListState,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .nuvioLazyRowWheelScroll(seasonListState),
             horizontalArrangement = Arrangement.spacedBy(sizing.seasonChipGap),
         ) {
             items(seasons, key = { season -> season }) { season ->
                 val isSelected = season == currentSeason
                 val shape = RoundedCornerShape(sizing.seasonChipRadius)
+                val onSeasonLongClick = onLongPress?.let { handler -> { handler(season) } }
                 Box(
                     modifier = Modifier
                         .clip(shape)
@@ -428,9 +440,11 @@ private fun SeasonTextChipScrollRow(
                                 Color.Transparent
                             },
                         )
+                        .nuvioSecondaryClickAsLongPress(onSecondaryClick = onSeasonLongClick)
+                        .nuvioTvSelectKeys(onSelect = { onSelect(season) })
                         .combinedClickable(
                             onClick = { onSelect(season) },
-                            onLongClick = onLongPress?.let { handler -> { handler(season) } },
+                            onLongClick = onSeasonLongClick,
                         )
                         .nuvioDesktopFocusEffect(
                             enabled = true,
@@ -488,10 +502,17 @@ private fun SeasonPosterScrollRow(
         }
     }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusGroup()
+            .nuvioTvDirectionalFocusTraversal(),
+    ) {
         LazyRow(
             state = seasonListState,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .nuvioLazyRowWheelScroll(seasonListState),
             horizontalArrangement = Arrangement.spacedBy(sizing.seasonChipGap),
         ) {
             items(seasons, key = { season -> season }) { season ->
@@ -527,6 +548,8 @@ private fun SeasonPosterButton(
     Column(
         modifier = Modifier
             .width(sizing.seasonPosterWidth)
+            .nuvioSecondaryClickAsLongPress(onSecondaryClick = onLongClick)
+            .nuvioTvSelectKeys(onSelect = onClick)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -636,10 +659,17 @@ private fun EpisodeHorizontalRow(
         }
     }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusGroup()
+            .nuvioTvDirectionalFocusTraversal(),
+    ) {
         LazyRow(
             state = listState,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .nuvioLazyRowWheelScroll(listState),
             contentPadding = PaddingValues(horizontal = rowMetrics.rowHorizontalPadding, vertical = rowMetrics.rowVerticalPadding),
             horizontalArrangement = Arrangement.spacedBy(rowMetrics.itemSpacing),
         ) {
@@ -704,10 +734,24 @@ private fun EpisodeHorizontalCard(
                 color = Color.White.copy(alpha = 0.12f),
                 shape = cardShape,
             )
+            .nuvioSecondaryClickAsLongPress(
+                enabled = onClick != null || onLongPress != null,
+                onSecondaryClick = onLongPress,
+            )
+            .nuvioTvSelectKeys(
+                enabled = onClick != null,
+                onSelect = onClick,
+            )
             .combinedClickable(
                 enabled = onClick != null || onLongPress != null,
                 onClick = { onClick?.invoke() },
                 onLongClick = onLongPress,
+            )
+            .nuvioDesktopFocusEffect(
+                enabled = onClick != null || onLongPress != null,
+                shape = cardShape,
+                focusedScale = 1.012f,
+                focusedShadowElevation = 10.dp,
             ),
     ) {
         val imageUrl = video.thumbnail ?: fallbackImage

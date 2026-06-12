@@ -118,6 +118,7 @@ import com.nuvio.app.core.ui.localizedContinueWatchingSubtitle
 import com.nuvio.app.core.ui.nuvioDesktopTvMetrics
 import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.core.ui.nuvioDesktopUiScale
+import com.nuvio.app.core.ui.nuvioTvBackKeys
 import com.nuvio.app.core.ui.scaledByDesktop
 import com.nuvio.app.features.auth.AuthScreen
 import com.nuvio.app.features.addons.AddonRepository
@@ -703,6 +704,18 @@ private fun MainAppContent(
         }
     }
 
+    fun handleDesktopBackKey() {
+        if (navController.currentDestination?.hasRoute<TabsRoute>() == true) {
+            if (selectedTab != AppScreenTab.Home) {
+                selectedTab = AppScreenTab.Home
+            } else {
+                showExitConfirmation = !showExitConfirmation
+            }
+        } else {
+            navController.popBackStack()
+        }
+    }
+
     LaunchedEffect(liquidGlassNativeTabBarSupported, liquidGlassNativeTabBarEnabled) {
         NativeTabBridge.requestedTabs.collectLatest { requestedTab ->
             if (liquidGlassNativeTabBarSupported && liquidGlassNativeTabBarEnabled) {
@@ -1224,7 +1237,8 @@ private fun MainAppContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
+                .background(MaterialTheme.colorScheme.background)
+                .nuvioTvBackKeys(onBack = ::handleDesktopBackKey),
         ) {
             SharedTransitionLayout {
                 NavHost(

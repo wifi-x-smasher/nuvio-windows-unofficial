@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.core.ui.nuvioDesktopUiScale
 import com.nuvio.app.core.ui.NuvioProgressBar
 import com.nuvio.app.core.ui.NuvioShelfSection
@@ -532,18 +533,25 @@ private fun ContinueWatchingPosterCard(
         modifier = Modifier.width(layout.posterCardWidth),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        val cardShape = RoundedCornerShape(layout.cardRadius)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(layout.posterCardHeight)
-                .clip(RoundedCornerShape(layout.cardRadius))
+                .clip(cardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(
                     width = 1.5.dp,
                     color = Color.White.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(layout.cardRadius),
+                    shape = cardShape,
                 )
-                .posterCardClickable(onClick = onClick, onLongClick = onLongClick),
+                .posterCardClickable(onClick = onClick, onLongClick = onLongClick)
+                .nuvioDesktopFocusEffect(
+                    enabled = onClick != null || onLongClick != null,
+                    shape = cardShape,
+                    focusedScale = 1.025f,
+                    focusedShadowElevation = 18.dp,
+                ),
         ) {
             val imageUrl = item.continueWatchingPosterArtworkUrl(useEpisodeThumbnails)
             val shouldBlurArtwork = blurNextUp &&

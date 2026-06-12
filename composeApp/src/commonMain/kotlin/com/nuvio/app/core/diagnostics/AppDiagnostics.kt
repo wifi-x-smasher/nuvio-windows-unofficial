@@ -29,4 +29,11 @@ expect object AppDiagnostics {
     fun openLogDirectory(): Boolean
 
     fun recentDiagnosticLines(limit: Int): List<String>
+
+    /**
+     * Builds a single shareable, redacted diagnostics file (logs + system/runtime details) and
+     * returns its absolute path, or null if unsupported on this platform / the write failed.
+     * [appSummary] carries app-level info the caller already knows (version, release channel).
+     */
+    fun exportDiagnosticsBundle(appSummary: Map<String, String>): String?
 }

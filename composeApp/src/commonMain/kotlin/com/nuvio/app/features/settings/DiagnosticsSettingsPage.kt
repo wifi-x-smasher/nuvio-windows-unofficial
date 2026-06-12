@@ -26,7 +26,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.build.AppVersionConfig
 import com.nuvio.app.core.diagnostics.AppDiagnostics
+import com.nuvio.app.features.updater.AppUpdaterPlatform
 import nuvio.composeapp.generated.resources.Res
+import nuvio.composeapp.generated.resources.settings_diagnostics_bundle_button
+import nuvio.composeapp.generated.resources.settings_diagnostics_bundle_description
+import nuvio.composeapp.generated.resources.settings_diagnostics_bundle_failed
+import nuvio.composeapp.generated.resources.settings_diagnostics_bundle_saved
 import nuvio.composeapp.generated.resources.compose_about_version_format
 import nuvio.composeapp.generated.resources.settings_diagnostics_config_health_description
 import nuvio.composeapp.generated.resources.settings_diagnostics_config_health_title
@@ -94,12 +99,53 @@ internal fun LazyListScope.diagnosticsSettingsContent(
             logDirectoryPath?.let { "Nuvio: $it" },
             runtimeLogDirectoryPath?.let { "Runtime: $it" },
         ).takeIf { it.isNotEmpty() }?.joinToString(separator = "\n") ?: unavailableLogsMessage
+        val bundleSavedMessage = stringResource(Res.string.settings_diagnostics_bundle_saved)
+        val bundleFailedMessage = stringResource(Res.string.settings_diagnostics_bundle_failed)
+        val appVersionLabel = stringResource(
+            Res.string.compose_about_version_format,
+            AppVersionConfig.VERSION_NAME,
+            AppVersionConfig.VERSION_CODE,
+        )
 
         SettingsSection(
             title = stringResource(Res.string.settings_diagnostics_section_logs),
             isTablet = isTablet,
         ) {
             SettingsGroup(isTablet = isTablet) {
+                if (logFilePath != null) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = if (isTablet) 20.dp else 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.settings_diagnostics_bundle_description),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Button(
+                            onClick = {
+                                val path = AppDiagnostics.exportDiagnosticsBundle(
+                                    mapOf(
+                                        "App version" to appVersionLabel,
+                                        "Release channel" to AppUpdaterPlatform.releaseChannel,
+                                    ),
+                                )
+                                actionMessage = if (path != null) {
+                                    clipboardManager.setText(AnnotatedString(path))
+                                    AppDiagnostics.openLogDirectory()
+                                    bundleSavedMessage
+                                } else {
+                                    bundleFailedMessage
+                                }
+                            },
+                        ) {
+                            Text(stringResource(Res.string.settings_diagnostics_bundle_button))
+                        }
+                    }
+                    SettingsGroupDivider(isTablet = isTablet)
+                }
                 DiagnosticsValueRow(
                     title = stringResource(Res.string.settings_diagnostics_nuvio_log),
                     value = logFilePath ?: unavailableLogsMessage,

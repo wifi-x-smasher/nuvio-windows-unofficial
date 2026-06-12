@@ -5,8 +5,6 @@ import java.util.Locale
 
 internal object DesktopDiagnosticFormatter {
     private val sensitiveKeyFragments = listOf("authorization", "token", "secret", "password", "key")
-    private val bearerPattern = Regex("""Bearer\s+[A-Za-z0-9._~+/=-]+""", RegexOption.IGNORE_CASE)
-    private val queryPattern = Regex("""(\bhttps?://[^\s?]+)\?[^}\s]+""")
 
     fun format(
         level: String,
@@ -42,10 +40,6 @@ internal object DesktopDiagnosticFormatter {
         if (sensitiveKeyFragments.any { key.contains(it, ignoreCase = true) }) {
             return "<redacted>"
         }
-        return value
-            .replace('\n', ' ')
-            .replace('\r', ' ')
-            .replace(bearerPattern, "Bearer <redacted>")
-            .replace(queryPattern, "$1?<redacted>")
+        return AppDiagnosticsRedactor.redact(value, collapseLineBreaks = true)
     }
 }

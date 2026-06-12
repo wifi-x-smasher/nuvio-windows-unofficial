@@ -162,6 +162,14 @@ fun PluginsSettingsPageContent(
             }
         }
 
+        if (sortedScrapers.isNotEmpty()) {
+            NuvioSectionLabel("PLUGIN HEALTH")
+            PluginHealthDashboardCard(
+                scrapers = uiState.scrapers,
+                repositories = uiState.repositories,
+            )
+        }
+
         NuvioSectionLabel("ADD REPOSITORY")
         NuvioSurfaceCard {
             NuvioInputField(

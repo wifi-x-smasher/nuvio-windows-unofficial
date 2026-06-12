@@ -12,6 +12,7 @@ import kotlin.io.path.absolutePathString
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 import kotlin.io.path.readLines
+import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
 actual object AppDiagnostics {
@@ -94,6 +95,18 @@ actual object AppDiagnostics {
             activePath.readLines(StandardCharsets.UTF_8).takeLast(limit.coerceAtLeast(0))
         }.getOrDefault(emptyList())
 
+    actual fun exportDiagnosticsBundle(appSummary: Map<String, String>): String? =
+        runCatching {
+            synchronized(lock) {
+                ensureLogFile()
+                val stamp = java.time.LocalDateTime.now()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
+                val target = logDirectory.resolve("nuvio-diagnostics-$stamp.txt")
+                target.writeText(redactBundle(buildDiagnosticsBundle(appSummary)), StandardCharsets.UTF_8)
+                target.absolutePathString()
+            }
+        }.getOrNull()
+
     private fun append(
         level: String,
         event: String,
@@ -123,6 +136,36 @@ actual object AppDiagnostics {
             true
         }.getOrDefault(false)
 }
+
+private fun buildDiagnosticsBundle(appSummary: Map<String, String>): String = buildString {
+    appendLine("===== Nuvio Diagnostics Bundle =====")
+    appendLine("Generated: ${Instant.now()}")
+    appSummary.forEach { (key, value) -> appendLine("$key: $value") }
+    appendLine("OS: ${System.getProperty("os.name")} ${System.getProperty("os.version")} (${System.getProperty("os.arch")})")
+    appendLine("JVM: ${System.getProperty("java.version")} (${System.getProperty("java.vendor")})")
+    appendLine(
+        "Renderer: skiko=${System.getProperty("skiko.renderApi")} " +
+            "composeLayers=${System.getProperty("compose.layers.type")}",
+    )
+    appendLine("GPU/Display: ${desktopGraphicsDeviceSummary()}")
+    appendLine()
+    appendLine("===== nuvio.log =====")
+    appendLine(readBundleFile(AppDiagnostics.logFilePath()))
+    appendLine()
+    appendLine("===== desktop-runtime.log =====")
+    appendLine(readBundleFile(AppDiagnostics.runtimeLogFilePath()))
+}
+
+private fun readBundleFile(pathString: String?): String {
+    if (pathString.isNullOrBlank()) return "(not available)"
+    return runCatching {
+        val path = Path.of(pathString)
+        if (path.exists()) path.readText(StandardCharsets.UTF_8) else "(not available)"
+    }.getOrElse { "(unreadable: ${it.message ?: it::class.simpleName})" }
+}
+
+private fun redactBundle(text: String): String =
+    AppDiagnosticsRedactor.redact(text)
 
 private fun desktopGraphicsDeviceSummary(): String =
     runCatching {

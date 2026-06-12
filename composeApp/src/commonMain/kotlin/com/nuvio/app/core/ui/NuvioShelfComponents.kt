@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -96,6 +97,11 @@ fun <T> NuvioShelfSection(
         }
         LazyRow(
             state = listState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusGroup()
+                .nuvioTvDirectionalFocusTraversal()
+                .nuvioLazyRowWheelScroll(listState, allowVerticalWheel = false),
             contentPadding = rowContentPadding.scaledByDesktop(desktopScale),
             horizontalArrangement = Arrangement.spacedBy(itemSpacing.scaledByDesktop(desktopScale)),
         ) {
@@ -447,15 +453,19 @@ private fun NuvioPosterShape.cardWidth(basePosterWidthDp: Int): Dp =
     }
 
 @OptIn(ExperimentalFoundationApi::class)
+@Composable
 internal fun Modifier.posterCardClickable(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
 ): Modifier =
     if (onClick != null || onLongClick != null) {
-        combinedClickable(
-            onClick = { onClick?.invoke() },
-            onLongClick = onLongClick,
-        )
+        this
+            .nuvioSecondaryClickAsLongPress(onSecondaryClick = onLongClick)
+            .nuvioTvSelectKeys(onSelect = onClick)
+            .combinedClickable(
+                onClick = { onClick?.invoke() },
+                onLongClick = onLongClick,
+            )
     } else {
         this
     }

@@ -11,6 +11,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -65,6 +66,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.NuvioHorizontalScrollControls
 import com.nuvio.app.core.ui.NuvioLazyRowScrollControls
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
+import com.nuvio.app.core.ui.nuvioHorizontalWheelScroll
+import com.nuvio.app.core.ui.nuvioLazyRowWheelScroll
+import com.nuvio.app.core.ui.nuvioTvDirectionalFocusTraversal
+import com.nuvio.app.core.ui.nuvioTvSelectKeys
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.details.MetaVideo
 import com.nuvio.app.features.streams.StreamItem
@@ -291,11 +297,17 @@ private fun EpisodesListSubView(
 
         // Season tabs
         if (availableSeasons.size > 1) {
-            Box(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusGroup()
+                    .nuvioTvDirectionalFocusTraversal(),
+            ) {
                 LazyRow(
                     state = seasonListState,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .nuvioLazyRowWheelScroll(seasonListState)
                         .padding(horizontal = 20.dp)
                         .padding(end = 56.dp, bottom = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -337,7 +349,10 @@ private fun EpisodesListSubView(
         } else {
             LazyColumn(
                 state = episodeListState,
-                modifier = Modifier.padding(horizontal = 12.dp),
+                modifier = Modifier
+                    .padding(horizontal = 12.dp)
+                    .focusGroup()
+                    .nuvioTvDirectionalFocusTraversal(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 16.dp),
             ) {
@@ -382,22 +397,30 @@ private fun EpisodeRow(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val shouldBlurArtwork = blurUnwatchedEpisodes && !isWatched && !isCurrent
+    val rowShape = RoundedCornerShape(12.dp)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(rowShape)
             .background(
                 if (isCurrent) colorScheme.primaryContainer.copy(alpha = 0.55f) else Color.Transparent,
             )
             .then(
                 if (isCurrent) {
-                    Modifier.border(1.dp, colorScheme.primary.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                    Modifier.border(1.dp, colorScheme.primary.copy(alpha = 0.45f), rowShape)
                 } else {
                     Modifier
                 },
             )
+            .nuvioTvSelectKeys(onSelect = onClick)
             .clickable(onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = rowShape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 8.dp,
+            )
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -566,10 +589,16 @@ private fun EpisodeStreamsSubView(
         }
         if (addonNames.size > 1) {
             val filterScrollState = rememberScrollState()
-            Box(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusGroup()
+                    .nuvioTvDirectionalFocusTraversal(),
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .nuvioHorizontalWheelScroll(filterScrollState)
                         .horizontalScroll(filterScrollState)
                         .padding(horizontal = 20.dp)
                         .padding(end = 56.dp, bottom = 12.dp),
@@ -630,7 +659,10 @@ private fun EpisodeStreamsSubView(
             else -> {
                 val streams = streamsUiState.filteredGroups.flatMap { it.streams }
                 LazyColumn(
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .focusGroup()
+                        .nuvioTvDirectionalFocusTraversal(),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 16.dp),
                 ) {
@@ -657,13 +689,21 @@ private fun EpisodeSourceStreamRow(
     onClick: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val rowShape = RoundedCornerShape(12.dp)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(rowShape)
             .background(colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .nuvioTvSelectKeys(enabled = enabled, onSelect = onClick)
             .clickable(enabled = enabled, onClick = onClick)
+            .nuvioDesktopFocusEffect(
+                enabled = enabled,
+                shape = rowShape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 8.dp,
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

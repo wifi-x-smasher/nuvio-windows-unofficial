@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,9 +67,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.isSecondaryPressed
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -87,12 +85,17 @@ import com.nuvio.app.core.ui.NuvioHorizontalScrollControls
 import com.nuvio.app.core.ui.NuvioModalBottomSheet
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.dismissNuvioBottomSheet
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
+import com.nuvio.app.core.ui.nuvioHorizontalWheelScroll
 import com.nuvio.app.features.downloads.DownloadsRepository
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
+import com.nuvio.app.core.ui.nuvioSecondaryClickAsLongPress
+import com.nuvio.app.core.ui.nuvioTvDirectionalFocusTraversal
+import com.nuvio.app.core.ui.nuvioTvSelectKeys
 import com.nuvio.app.features.debrid.DebridProviders
 import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.player.PlayerSettingsRepository
@@ -742,10 +745,16 @@ internal fun ProviderFilterRow(
     if (addonGroups.isEmpty()) return
 
     val scrollState = rememberScrollState()
-    Box(modifier = modifier.fillMaxWidth()) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .focusGroup()
+            .nuvioTvDirectionalFocusTraversal(),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .nuvioHorizontalWheelScroll(scrollState)
                 .horizontalScroll(scrollState)
                 .padding(horizontal = 12.dp, vertical = 8.dp)
                 .padding(end = 56.dp),
@@ -802,18 +811,26 @@ private fun FilterChip(
         animationSpec = tween(durationMillis = 180),
         label = "filter_chip_content",
     )
+    val chipShape = RoundedCornerShape(16.dp)
     Box(
         modifier = Modifier
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
-            .clip(RoundedCornerShape(16.dp))
+            .clip(chipShape)
             .background(containerColor)
+            .nuvioTvSelectKeys(onSelect = onClick)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
+            )
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = chipShape,
+                focusedScale = 1.035f,
+                focusedShadowElevation = 8.dp,
             )
             .padding(horizontal = 14.dp * desktopScale, vertical = 8.dp * desktopScale),
     ) {
@@ -854,7 +871,10 @@ internal fun StreamList(
     val anyLoading = filteredGroups.any { it.isLoading }
 
     LazyColumn(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .focusGroup()
+            .nuvioTvDirectionalFocusTraversal(),
         contentPadding = PaddingValues(
             horizontal = if (isDesktop) 8.dp * desktopScale else 12.dp,
             vertical = if (isDesktop) 8.dp * desktopScale else 12.dp,
@@ -1101,14 +1121,24 @@ private fun StreamCard(
             )
             .clip(cardShape)
             .background(cardBackground)
-            .secondaryClickAsLongPress(
+            .nuvioSecondaryClickAsLongPress(
                 enabled = enabled,
                 onSecondaryClick = onLongClick,
+            )
+            .nuvioTvSelectKeys(
+                enabled = clickableEnabled,
+                onSelect = onClick,
             )
             .combinedClickable(
                 enabled = clickableEnabled,
                 onClick = onClick,
                 onLongClick = onLongClick,
+            )
+            .nuvioDesktopFocusEffect(
+                enabled = clickableEnabled,
+                shape = cardShape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 10.dp,
             )
             .padding(if (isDesktop) 16.dp * desktopScale else 14.dp),
         verticalAlignment = Alignment.Top,
@@ -1159,24 +1189,6 @@ private fun StreamCard(
                     if (showFileSizeBadges) {
                         StreamFileSizeBadge(stream = stream)
                     }
-                }
-            }
-        }
-    }
-}
-
-private fun Modifier.secondaryClickAsLongPress(
-    enabled: Boolean,
-    onSecondaryClick: (() -> Unit)?,
-): Modifier {
-    if (!isDesktop || !enabled || onSecondaryClick == null) return this
-    return pointerInput(onSecondaryClick) {
-        awaitPointerEventScope {
-            while (true) {
-                val event = awaitPointerEvent()
-                if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
-                    event.changes.forEach { change -> change.consume() }
-                    onSecondaryClick()
                 }
             }
         }

@@ -48,6 +48,7 @@ import coil3.compose.AsyncImage
 import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.NuvioPosterWatchedOverlay
+import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.posterCardClickable
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
@@ -328,6 +329,7 @@ private fun CatalogPosterTile(
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
+    val cardShape = RoundedCornerShape(cornerRadiusDp.dp)
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -335,9 +337,15 @@ private fun CatalogPosterTile(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(item.posterShape.catalogAspectRatio())
-                .clip(RoundedCornerShape(cornerRadiusDp.dp))
+                .clip(cardShape)
                 .background(MaterialTheme.colorScheme.surface)
-                .posterCardClickable(onClick = onClick, onLongClick = onLongClick),
+                .posterCardClickable(onClick = onClick, onLongClick = onLongClick)
+                .nuvioDesktopFocusEffect(
+                    enabled = onClick != null || onLongClick != null,
+                    shape = cardShape,
+                    focusedScale = if (item.posterShape == PosterShape.Landscape) 1.025f else 1.04f,
+                    focusedShadowElevation = 22.dp,
+                ),
         ) {
             if (item.poster != null) {
                 AsyncImage(
