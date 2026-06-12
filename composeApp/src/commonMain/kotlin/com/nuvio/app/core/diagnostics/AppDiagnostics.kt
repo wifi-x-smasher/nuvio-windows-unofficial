@@ -16,7 +16,15 @@ expect object AppDiagnostics {
 
     fun logFilePath(): String?
 
+    fun runtimeLogFilePath(): String?
+
     fun logDirectoryPath(): String?
+
+    fun runtimeLogDirectoryPath(): String?
+
+    fun openLogFile(): Boolean
+
+    fun openRuntimeLogFile(): Boolean
 
     fun openLogDirectory(): Boolean
 

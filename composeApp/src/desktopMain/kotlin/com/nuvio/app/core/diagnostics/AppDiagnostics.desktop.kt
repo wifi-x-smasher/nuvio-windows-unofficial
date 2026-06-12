@@ -1,5 +1,6 @@
 package com.nuvio.app.core.diagnostics
 
+import com.nuvio.app.desktop.DesktopRuntimeLog
 import java.awt.Desktop
 import java.awt.GraphicsEnvironment
 import java.io.PrintWriter
@@ -64,8 +65,20 @@ actual object AppDiagnostics {
     actual fun logFilePath(): String? =
         runCatching { logFile.activePath().absolutePathString() }.getOrNull()
 
+    actual fun runtimeLogFilePath(): String? =
+        runCatching { DesktopRuntimeLog.path().absolutePathString() }.getOrNull()
+
     actual fun logDirectoryPath(): String? =
         runCatching { logDirectory.absolutePathString() }.getOrNull()
+
+    actual fun runtimeLogDirectoryPath(): String? =
+        runCatching { DesktopRuntimeLog.path().parent.absolutePathString() }.getOrNull()
+
+    actual fun openLogFile(): Boolean =
+        openFile(logFile.activePath())
+
+    actual fun openRuntimeLogFile(): Boolean =
+        openFile(DesktopRuntimeLog.path())
 
     actual fun openLogDirectory(): Boolean =
         runCatching {
@@ -102,6 +115,13 @@ actual object AppDiagnostics {
             logFile.activePath().writeText("", StandardCharsets.UTF_8)
         }
     }
+
+    private fun openFile(path: Path): Boolean =
+        runCatching {
+            if (!Desktop.isDesktopSupported() || !path.exists()) return false
+            Desktop.getDesktop().open(path.toFile())
+            true
+        }.getOrDefault(false)
 }
 
 private fun desktopGraphicsDeviceSummary(): String =

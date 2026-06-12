@@ -46,6 +46,38 @@ enum class VideoUpscalerPreset(
     }
 }
 
+enum class VideoDecoderBackend(
+    val id: String,
+    val displayName: String,
+    val description: String,
+) {
+    AUTO(
+        id = "auto",
+        displayName = "Auto",
+        description = "Use Nuvio's current decoder priority behavior.",
+    ),
+    D3D11VA_COPY(
+        id = "d3d11va_copy",
+        displayName = "D3D11VA copy",
+        description = "Use Windows Direct3D hardware decoding with copy-back.",
+    ),
+    NVDEC_COPY(
+        id = "nvdec_copy",
+        displayName = "NVDEC copy",
+        description = "Use NVIDIA hardware decoding with copy-back.",
+    ),
+    SOFTWARE(
+        id = "software",
+        displayName = "Software",
+        description = "Disable hardware decoding for compatibility testing.",
+    );
+
+    companion object {
+        fun fromId(id: String?): VideoDecoderBackend =
+            entries.firstOrNull { it.id == id } ?: AUTO
+    }
+}
+
 object ExperimentalFeatureSettings {
     private val _universalSearchEnabled = MutableStateFlow(true)
     val universalSearchEnabled: StateFlow<Boolean> = _universalSearchEnabled.asStateFlow()
@@ -53,16 +85,21 @@ object ExperimentalFeatureSettings {
     private val _videoUpscalerPreset = MutableStateFlow(VideoUpscalerPreset.OFF)
     val videoUpscalerPreset: StateFlow<VideoUpscalerPreset> = _videoUpscalerPreset.asStateFlow()
 
+    private val _videoDecoderBackend = MutableStateFlow(VideoDecoderBackend.AUTO)
+    val videoDecoderBackend: StateFlow<VideoDecoderBackend> = _videoDecoderBackend.asStateFlow()
+
     private val _displaySyncEnabled = MutableStateFlow(false)
     val displaySyncEnabled: StateFlow<Boolean> = _displaySyncEnabled.asStateFlow()
 
     fun seed(
         universalSearchEnabled: Boolean,
         videoUpscalerPreset: VideoUpscalerPreset,
+        videoDecoderBackend: VideoDecoderBackend = VideoDecoderBackend.AUTO,
         displaySyncEnabled: Boolean = false,
     ) {
         _universalSearchEnabled.value = universalSearchEnabled
         _videoUpscalerPreset.value = videoUpscalerPreset
+        _videoDecoderBackend.value = videoDecoderBackend
         _displaySyncEnabled.value = displaySyncEnabled
     }
 
@@ -74,6 +111,11 @@ object ExperimentalFeatureSettings {
     fun setVideoUpscalerPreset(preset: VideoUpscalerPreset) {
         if (_videoUpscalerPreset.value == preset) return
         _videoUpscalerPreset.value = preset
+    }
+
+    fun setVideoDecoderBackend(backend: VideoDecoderBackend) {
+        if (_videoDecoderBackend.value == backend) return
+        _videoDecoderBackend.value = backend
     }
 
     fun setDisplaySyncEnabled(enabled: Boolean) {

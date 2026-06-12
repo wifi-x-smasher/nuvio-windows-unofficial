@@ -1,5 +1,6 @@
 package com.nuvio.app.features.player.desktop.mpv
 
+import com.nuvio.app.features.experimental.VideoDecoderBackend
 import com.nuvio.app.features.experimental.VideoUpscalerPreset
 
 internal object DesktopMpvVideoOptionProfile {
@@ -18,10 +19,14 @@ internal object DesktopMpvVideoOptionProfile {
     fun optionsFor(
         upscalerPreset: VideoUpscalerPreset,
         decoderPriority: Int,
+        decoderBackend: VideoDecoderBackend = VideoDecoderBackend.AUTO,
         displaySyncEnabled: Boolean = false,
     ): Map<String, String> {
         val base = baseOptions +
-            DesktopMpvDecoderOptions.optionsFor(decoderPriority) +
+            DesktopMpvDecoderOptions.optionsForBackend(
+                backend = decoderBackend,
+                decoderPriority = decoderPriority,
+            ) +
             DesktopMpvUpscalerOptions.optionsFor(upscalerPreset)
         return if (displaySyncEnabled) {
             base + linkedMapOf(

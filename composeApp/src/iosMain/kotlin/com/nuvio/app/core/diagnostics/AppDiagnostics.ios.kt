@@ -16,7 +16,15 @@ actual object AppDiagnostics {
 
     actual fun logFilePath(): String? = null
 
+    actual fun runtimeLogFilePath(): String? = null
+
     actual fun logDirectoryPath(): String? = null
+
+    actual fun runtimeLogDirectoryPath(): String? = null
+
+    actual fun openLogFile(): Boolean = false
+
+    actual fun openRuntimeLogFile(): Boolean = false
 
     actual fun openLogDirectory(): Boolean = false
 

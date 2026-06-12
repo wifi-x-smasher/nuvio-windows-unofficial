@@ -68,7 +68,7 @@ actual object AppUpdaterPlatform {
         check(Files.isRegularFile(installer)) { "Downloaded update file is missing." }
         check(isSupportedInstaller(installer)) { "Downloaded update file is not a Windows installer." }
 
-        ProcessBuilder(windowsElevatedInstallerCommand(installer))
+        ProcessBuilder(windowsInstallerCommand(installer))
             .directory(installer.parent.toFile())
             .start()
         exitProcess(0)
@@ -82,35 +82,15 @@ actual object AppUpdaterPlatform {
             .trim()
             .replace(Regex("[^A-Za-z0-9._-]"), "_")
             .takeIf(String::isNotBlank)
-            ?: "nuvio-update.exe"
+            ?: "nuvio-update.msi"
 
     private fun isSupportedInstaller(path: Path): Boolean {
         val name = path.fileName.toString()
         return getSupportedAssetExtensions().any { extension -> name.endsWith(".$extension", ignoreCase = true) }
     }
 
-    private fun windowsElevatedInstallerCommand(installer: Path): List<String> {
-        val installerPath = installer.toString().powershellSingleQuoted()
-        val currentProcessId = ProcessHandle.current().pid()
-        val command = if (installer.fileName.toString().endsWith(".msi", ignoreCase = true)) {
-            "Wait-Process -Id $currentProcessId -ErrorAction SilentlyContinue; " +
-                "Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', '$installerPath') -Verb RunAs"
-        } else {
-            "Wait-Process -Id $currentProcessId -ErrorAction SilentlyContinue; " +
-                "Start-Process -FilePath '$installerPath' -Verb RunAs"
-        }
-        return listOf(
-            "powershell.exe",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            command,
-        )
-    }
-
-    private fun String.powershellSingleQuoted(): String =
-        replace("'", "''")
+    internal fun windowsInstallerCommand(installer: Path): List<String> =
+        listOf("msiexec.exe", "/i", installer.toString())
 
     private fun downloadFile(
         assetUrl: String,

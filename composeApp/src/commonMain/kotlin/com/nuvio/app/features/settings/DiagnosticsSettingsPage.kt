@@ -27,21 +27,27 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.build.AppVersionConfig
 import com.nuvio.app.core.diagnostics.AppDiagnostics
 import nuvio.composeapp.generated.resources.Res
-import nuvio.composeapp.generated.resources.action_copy
-import nuvio.composeapp.generated.resources.action_open
 import nuvio.composeapp.generated.resources.compose_about_version_format
 import nuvio.composeapp.generated.resources.settings_diagnostics_config_health_description
 import nuvio.composeapp.generated.resources.settings_diagnostics_config_health_title
-import nuvio.composeapp.generated.resources.settings_diagnostics_copied_log_path
+import nuvio.composeapp.generated.resources.settings_diagnostics_copy_log_folder_path
+import nuvio.composeapp.generated.resources.settings_diagnostics_copy_nuvio_log_path
+import nuvio.composeapp.generated.resources.settings_diagnostics_copy_runtime_log_path
 import nuvio.composeapp.generated.resources.settings_diagnostics_copied_log_folder
-import nuvio.composeapp.generated.resources.settings_diagnostics_latest_log
+import nuvio.composeapp.generated.resources.settings_diagnostics_copied_log_path
+import nuvio.composeapp.generated.resources.settings_diagnostics_log_file_open_failed
+import nuvio.composeapp.generated.resources.settings_diagnostics_log_file_opened
 import nuvio.composeapp.generated.resources.settings_diagnostics_local_only_description
 import nuvio.composeapp.generated.resources.settings_diagnostics_log_folder
 import nuvio.composeapp.generated.resources.settings_diagnostics_log_folder_open_failed
 import nuvio.composeapp.generated.resources.settings_diagnostics_log_folder_opened
 import nuvio.composeapp.generated.resources.settings_diagnostics_logs_unavailable
+import nuvio.composeapp.generated.resources.settings_diagnostics_nuvio_log
+import nuvio.composeapp.generated.resources.settings_diagnostics_open_nuvio_log
+import nuvio.composeapp.generated.resources.settings_diagnostics_open_runtime_log
 import nuvio.composeapp.generated.resources.settings_diagnostics_recent_empty
 import nuvio.composeapp.generated.resources.settings_diagnostics_recent_section
+import nuvio.composeapp.generated.resources.settings_diagnostics_runtime_log
 import nuvio.composeapp.generated.resources.settings_diagnostics_section_app
 import nuvio.composeapp.generated.resources.settings_diagnostics_section_logs
 import org.jetbrains.compose.resources.stringResource
@@ -73,12 +79,21 @@ internal fun LazyListScope.diagnosticsSettingsContent(
     item {
         val clipboardManager = LocalClipboardManager.current
         val logFilePath = AppDiagnostics.logFilePath()
+        val runtimeLogFilePath = AppDiagnostics.runtimeLogFilePath()
         val logDirectoryPath = AppDiagnostics.logDirectoryPath()
+        val runtimeLogDirectoryPath = AppDiagnostics.runtimeLogDirectoryPath()
         val copiedLogPathMessage = stringResource(Res.string.settings_diagnostics_copied_log_path)
         val copiedLogFolderMessage = stringResource(Res.string.settings_diagnostics_copied_log_folder)
+        val openedLogFileMessage = stringResource(Res.string.settings_diagnostics_log_file_opened)
+        val openLogFileFailedMessage = stringResource(Res.string.settings_diagnostics_log_file_open_failed)
         val openedLogFolderMessage = stringResource(Res.string.settings_diagnostics_log_folder_opened)
         val openLogFolderFailedMessage = stringResource(Res.string.settings_diagnostics_log_folder_open_failed)
         var actionMessage by remember { mutableStateOf<String?>(null) }
+        val unavailableLogsMessage = stringResource(Res.string.settings_diagnostics_logs_unavailable)
+        val logFolderValue = listOfNotNull(
+            logDirectoryPath?.let { "Nuvio: $it" },
+            runtimeLogDirectoryPath?.let { "Runtime: $it" },
+        ).takeIf { it.isNotEmpty() }?.joinToString(separator = "\n") ?: unavailableLogsMessage
 
         SettingsSection(
             title = stringResource(Res.string.settings_diagnostics_section_logs),
@@ -86,14 +101,20 @@ internal fun LazyListScope.diagnosticsSettingsContent(
         ) {
             SettingsGroup(isTablet = isTablet) {
                 DiagnosticsValueRow(
-                    title = stringResource(Res.string.settings_diagnostics_latest_log),
-                    value = logFilePath ?: stringResource(Res.string.settings_diagnostics_logs_unavailable),
+                    title = stringResource(Res.string.settings_diagnostics_nuvio_log),
+                    value = logFilePath ?: unavailableLogsMessage,
+                    isTablet = isTablet,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                DiagnosticsValueRow(
+                    title = stringResource(Res.string.settings_diagnostics_runtime_log),
+                    value = runtimeLogFilePath ?: unavailableLogsMessage,
                     isTablet = isTablet,
                 )
                 SettingsGroupDivider(isTablet = isTablet)
                 DiagnosticsValueRow(
                     title = stringResource(Res.string.settings_diagnostics_log_folder),
-                    value = logDirectoryPath ?: stringResource(Res.string.settings_diagnostics_logs_unavailable),
+                    value = logFolderValue,
                     isTablet = isTablet,
                 )
                 Column(
@@ -108,7 +129,22 @@ internal fun LazyListScope.diagnosticsSettingsContent(
                         ) {
                             DiagnosticsLogActions(
                                 logFilePath = logFilePath,
+                                runtimeLogFilePath = runtimeLogFilePath,
                                 logDirectoryPath = logDirectoryPath,
+                                onOpenLogFile = {
+                                    actionMessage = if (AppDiagnostics.openLogFile()) {
+                                        openedLogFileMessage
+                                    } else {
+                                        openLogFileFailedMessage
+                                    }
+                                },
+                                onOpenRuntimeLogFile = {
+                                    actionMessage = if (AppDiagnostics.openRuntimeLogFile()) {
+                                        openedLogFileMessage
+                                    } else {
+                                        openLogFileFailedMessage
+                                    }
+                                },
                                 onCopy = { value, copiedMessage ->
                                     clipboardManager.setText(AnnotatedString(value))
                                     actionMessage = copiedMessage
@@ -130,7 +166,22 @@ internal fun LazyListScope.diagnosticsSettingsContent(
                         ) {
                             DiagnosticsLogActions(
                                 logFilePath = logFilePath,
+                                runtimeLogFilePath = runtimeLogFilePath,
                                 logDirectoryPath = logDirectoryPath,
+                                onOpenLogFile = {
+                                    actionMessage = if (AppDiagnostics.openLogFile()) {
+                                        openedLogFileMessage
+                                    } else {
+                                        openLogFileFailedMessage
+                                    }
+                                },
+                                onOpenRuntimeLogFile = {
+                                    actionMessage = if (AppDiagnostics.openRuntimeLogFile()) {
+                                        openedLogFileMessage
+                                    } else {
+                                        openLogFileFailedMessage
+                                    }
+                                },
                                 onCopy = { value, copiedMessage ->
                                     clipboardManager.setText(AnnotatedString(value))
                                     actionMessage = copiedMessage
@@ -199,17 +250,32 @@ internal fun LazyListScope.diagnosticsSettingsContent(
 @Composable
 private fun DiagnosticsLogActions(
     logFilePath: String?,
+    runtimeLogFilePath: String?,
     logDirectoryPath: String?,
+    onOpenLogFile: () -> Unit,
+    onOpenRuntimeLogFile: () -> Unit,
     onCopy: (String, String) -> Unit,
     onOpen: () -> Unit,
     copiedLogPathMessage: String,
     copiedLogFolderMessage: String,
 ) {
     Button(
+        enabled = logFilePath != null,
+        onClick = onOpenLogFile,
+    ) {
+        Text(stringResource(Res.string.settings_diagnostics_open_nuvio_log))
+    }
+    Button(
+        enabled = runtimeLogFilePath != null,
+        onClick = onOpenRuntimeLogFile,
+    ) {
+        Text(stringResource(Res.string.settings_diagnostics_open_runtime_log))
+    }
+    TextButton(
         enabled = logDirectoryPath != null,
         onClick = onOpen,
     ) {
-        Text(stringResource(Res.string.action_open))
+        Text(stringResource(Res.string.settings_diagnostics_log_folder))
     }
     TextButton(
         enabled = logDirectoryPath != null,
@@ -219,7 +285,7 @@ private fun DiagnosticsLogActions(
             }
         },
     ) {
-        Text(stringResource(Res.string.settings_diagnostics_log_folder))
+        Text(stringResource(Res.string.settings_diagnostics_copy_log_folder_path))
     }
     TextButton(
         enabled = logFilePath != null,
@@ -229,7 +295,17 @@ private fun DiagnosticsLogActions(
             }
         },
     ) {
-        Text(stringResource(Res.string.action_copy))
+        Text(stringResource(Res.string.settings_diagnostics_copy_nuvio_log_path))
+    }
+    TextButton(
+        enabled = runtimeLogFilePath != null,
+        onClick = {
+            runtimeLogFilePath?.let {
+                onCopy(it, copiedLogPathMessage)
+            }
+        },
+    ) {
+        Text(stringResource(Res.string.settings_diagnostics_copy_runtime_log_path))
     }
 }
 

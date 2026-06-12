@@ -53,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.enabledAddons
 import com.nuvio.app.features.experimental.ExperimentalFeatureSettings
+import com.nuvio.app.features.experimental.VideoDecoderBackend
 import com.nuvio.app.features.experimental.VideoUpscalerPreset
 import com.nuvio.app.features.player.AudioLanguageOption
 import com.nuvio.app.features.player.AvailableLanguageOptions
@@ -185,6 +186,7 @@ private fun PlaybackSettingsSection(
     var showDecoderPriorityDialog by remember { mutableStateOf(false) }
     var showHoldToSpeedValueDialog by remember { mutableStateOf(false) }
     var showVideoUpscalerDialog by remember { mutableStateOf(false) }
+    var showVideoDecoderBackendDialog by remember { mutableStateOf(false) }
     var showIosHardwareDecoderDialog by remember { mutableStateOf(false) }
     var showIosTargetPrimariesDialog by remember { mutableStateOf(false) }
     var showIosTargetTransferDialog by remember { mutableStateOf(false) }
@@ -199,6 +201,7 @@ private fun PlaybackSettingsSection(
     val discordPresenceEnabled by DiscordPresenceSettings.enabled.collectAsStateWithLifecycle()
     val universalSearchEnabled by ExperimentalFeatureSettings.universalSearchEnabled.collectAsStateWithLifecycle()
     val videoUpscalerPreset by ExperimentalFeatureSettings.videoUpscalerPreset.collectAsStateWithLifecycle()
+    val videoDecoderBackend by ExperimentalFeatureSettings.videoDecoderBackend.collectAsStateWithLifecycle()
     val displaySyncEnabled by ExperimentalFeatureSettings.displaySyncEnabled.collectAsStateWithLifecycle()
     val availableExternalPlayers = ExternalPlayerPlatform.availablePlayers()
     val selectedExternalPlayer = availableExternalPlayers.firstOrNull {
@@ -245,6 +248,13 @@ private fun PlaybackSettingsSection(
                         description = "${videoUpscalerPreset.displayName} · Applies to new internal playback sessions.",
                         isTablet = isTablet,
                         onClick = { showVideoUpscalerDialog = true },
+                    )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsNavigationRow(
+                        title = "Decoder backend",
+                        description = "${videoDecoderBackend.displayName} · Try NVDEC copy on NVIDIA systems if HEVC stays on software decoding.",
+                        isTablet = isTablet,
+                        onClick = { showVideoDecoderBackendDialog = true },
                     )
                     SettingsGroupDivider(isTablet = isTablet)
                     SettingsSwitchRow(
@@ -996,6 +1006,17 @@ private fun PlaybackSettingsSection(
         )
     }
 
+    if (showVideoDecoderBackendDialog) {
+        VideoDecoderBackendDialog(
+            selectedBackend = videoDecoderBackend,
+            onBackendSelected = { backend ->
+                ExperimentalFeatureSettings.setVideoDecoderBackend(backend)
+                showVideoDecoderBackendDialog = false
+            },
+            onDismiss = { showVideoDecoderBackendDialog = false },
+        )
+    }
+
     if (showHoldToSpeedValueDialog) {
         HoldToSpeedValueDialog(
             selectedSpeed = holdToSpeedValue,
@@ -1593,6 +1614,104 @@ private fun VideoUpscalerPresetDialog(
                                     )
                                     Text(
                                         text = preset.description,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier.size(24.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(Res.string.settings_playback_dialog_close),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun VideoDecoderBackendDialog(
+    selectedBackend: VideoDecoderBackend,
+    onBackendSelected: (VideoDecoderBackend) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    BasicAlertDialog(
+        onDismissRequest = onDismiss,
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "Decoder backend",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "Experimental Windows decoder selection for the internal player. Changes apply when a new stream starts.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(VideoDecoderBackend.entries) { backend ->
+                        val isSelected = backend == selectedBackend
+                        val containerColor = if (isSelected) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onBackendSelected(backend) },
+                            shape = RoundedCornerShape(12.dp),
+                            color = containerColor,
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                                    Text(
+                                        text = backend.displayName,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = backend.description,
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )

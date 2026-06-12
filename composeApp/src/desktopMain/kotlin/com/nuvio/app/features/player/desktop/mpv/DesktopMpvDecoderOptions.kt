@@ -1,5 +1,7 @@
 package com.nuvio.app.features.player.desktop.mpv
 
+import com.nuvio.app.features.experimental.VideoDecoderBackend
+
 internal object DesktopMpvDecoderOptions {
     private const val DeviceOnly = 0
     private const val PreferDevice = 1
@@ -32,6 +34,19 @@ internal object DesktopMpvDecoderOptions {
         else -> preferDeviceOptions()
     }
 
+    fun optionsForBackend(
+        backend: VideoDecoderBackend,
+        decoderPriority: Int = PreferDevice,
+    ): Map<String, String> = when (backend) {
+        VideoDecoderBackend.AUTO -> optionsFor(decoderPriority)
+        VideoDecoderBackend.D3D11VA_COPY -> copyBackOptions("d3d11va-copy")
+        VideoDecoderBackend.NVDEC_COPY -> copyBackOptions("nvdec-copy")
+        VideoDecoderBackend.SOFTWARE -> linkedMapOf(
+            "hwdec" to "no",
+            "vd-lavc-software-fallback" to "yes",
+        )
+    }
+
     fun labelFor(priority: Int): String = when (priority) {
         DeviceOnly -> "device-only"
         PreferApp -> "prefer-app"
@@ -39,8 +54,20 @@ internal object DesktopMpvDecoderOptions {
         else -> "prefer-device"
     }
 
-    private fun preferDeviceOptions(): Map<String, String> = linkedMapOf(
-        "hwdec" to "d3d11va-copy",
+    fun labelForBackend(
+        backend: VideoDecoderBackend,
+        decoderPriority: Int = PreferDevice,
+    ): String = when (backend) {
+        VideoDecoderBackend.AUTO -> "auto/${labelFor(decoderPriority)}"
+        VideoDecoderBackend.D3D11VA_COPY -> "d3d11va-copy"
+        VideoDecoderBackend.NVDEC_COPY -> "nvdec-copy"
+        VideoDecoderBackend.SOFTWARE -> "software"
+    }
+
+    private fun preferDeviceOptions(): Map<String, String> = copyBackOptions("d3d11va-copy")
+
+    private fun copyBackOptions(hwdec: String): Map<String, String> = linkedMapOf(
+        "hwdec" to hwdec,
         "vd-lavc-software-fallback" to "yes",
     )
 }

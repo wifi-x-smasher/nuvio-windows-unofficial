@@ -1,5 +1,6 @@
 package com.nuvio.app.features.player
 
+import com.nuvio.app.features.experimental.VideoDecoderBackend
 import com.nuvio.app.features.experimental.VideoUpscalerPreset
 import com.nuvio.app.features.player.desktop.mpv.DesktopMpvDecoderOptions
 import com.nuvio.app.features.player.desktop.mpv.DesktopMpvUpscalerOptions
@@ -87,11 +88,39 @@ class DesktopMpvHdrOptionsTest {
     }
 
     @Test
+    fun experimentalDecoderBackendMapsToSpecificWindowsHwdecOptions() {
+        val auto = DesktopMpvDecoderOptions.optionsForBackend(VideoDecoderBackend.AUTO)
+        assertEquals("d3d11va-copy", auto["hwdec"])
+
+        val d3d11 = DesktopMpvDecoderOptions.optionsForBackend(VideoDecoderBackend.D3D11VA_COPY)
+        assertEquals("d3d11va-copy", d3d11["hwdec"])
+
+        val nvdec = DesktopMpvDecoderOptions.optionsForBackend(VideoDecoderBackend.NVDEC_COPY)
+        assertEquals("nvdec-copy", nvdec["hwdec"])
+
+        val software = DesktopMpvDecoderOptions.optionsForBackend(VideoDecoderBackend.SOFTWARE)
+        assertEquals("no", software["hwdec"])
+        assertEquals("yes", software["vd-lavc-software-fallback"])
+    }
+
+    @Test
     fun upscalerPresetsDoNotOverrideDecoderPriority() {
         val preferAppHighQuality = DesktopMpvVideoOptionProfile.optionsFor(VideoUpscalerPreset.HIGH_QUALITY, 2)
 
         assertEquals("no", preferAppHighQuality["hwdec"])
         assertEquals("yes", preferAppHighQuality["vd-lavc-software-fallback"])
         assertEquals("ewa_lanczossharp", preferAppHighQuality["scale"])
+    }
+
+    @Test
+    fun explicitDecoderBackendOverridesDecoderPriorityInCombinedProfile() {
+        val nvdecProfile = DesktopMpvVideoOptionProfile.optionsFor(
+            upscalerPreset = VideoUpscalerPreset.OFF,
+            decoderPriority = 2,
+            decoderBackend = VideoDecoderBackend.NVDEC_COPY,
+        )
+
+        assertEquals("nvdec-copy", nvdecProfile["hwdec"])
+        assertEquals("yes", nvdecProfile["vd-lavc-software-fallback"])
     }
 }

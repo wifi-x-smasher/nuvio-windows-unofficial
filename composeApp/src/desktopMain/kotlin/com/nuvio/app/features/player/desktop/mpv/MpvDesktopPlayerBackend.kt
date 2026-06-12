@@ -54,6 +54,7 @@ private const val ExternalSubtitleCodepage = "+utf-8"
 private const val EmbeddedSubtitleCodepage = "auto"
 private const val AppControlledSubtitleAssOverride = "force"
 private const val NativeSubtitleAssOverride = "no"
+private val VideoDiagnosticProbeDelaysMs = listOf(750L, 2500L, 6000L)
 
 @OptIn(InternalMediampApi::class)
 internal class MpvDesktopPlayerBackend private constructor(
@@ -131,6 +132,7 @@ internal class MpvDesktopPlayerBackend private constructor(
             }
             DesktopRuntimeLog.info("MPV load success session=${request.sessionKey}")
             logVideoOutputSnapshot("load-success")
+            scheduleVideoOutputDiagnostics(request.sessionKey)
         }.onFailure { throwable ->
             DesktopRuntimeLog.error("MPV load failed source=${request.sourceUrl.redactedMediaUrl()}", throwable)
             fail(DesktopPlayerError.MediaLoadFailed(backendName, "MPV media load failed", throwable))
@@ -245,20 +247,23 @@ internal class MpvDesktopPlayerBackend private constructor(
         if (nativeClosed) return
         runCatching {
             val upscalerPreset = ExperimentalFeatureSettings.videoUpscalerPreset.value
+            val decoderBackend = ExperimentalFeatureSettings.videoDecoderBackend.value
             val displaySyncEnabled = ExperimentalFeatureSettings.displaySyncEnabled.value
             PlayerSettingsRepository.ensureLoaded()
             val decoderPriority = PlayerSettingsRepository.uiState.value.decoderPriority
             val applied = DesktopMpvVideoOptionProfile.optionsFor(
                 upscalerPreset = upscalerPreset,
                 decoderPriority = decoderPriority,
+                decoderBackend = decoderBackend,
                 displaySyncEnabled = displaySyncEnabled,
             ).mapValues { (name, value) ->
                 player.impl.setMpvRuntimeOption(name, value)
             }
             DesktopRuntimeLog.info(
                 "MPV video profile reason=$reason upscaler=${upscalerPreset.id} " +
-                    "decoder=${DesktopMpvDecoderOptions.labelFor(decoderPriority)} " +
-                    "decoderPriority=$decoderPriority displaySync=$displaySyncEnabled applied=$applied " +
+                    "decoder=${DesktopMpvDecoderOptions.labelForBackend(decoderBackend, decoderPriority)} " +
+                    "decoderBackend=${decoderBackend.id} decoderPriority=$decoderPriority " +
+                    "displaySync=$displaySyncEnabled applied=$applied " +
                     "gpuNextAvailable=${DesktopMpvVideoOptionProfile.canRequestGpuNextRenderBackend} " +
                     "note=${DesktopMpvVideoOptionProfile.rendererLimitationNote}",
             )
@@ -273,9 +278,23 @@ internal class MpvDesktopPlayerBackend private constructor(
             val handle = player.impl
             val props = linkedMapOf(
                 "current-vo" to handle.getMpvStringProperty("current-vo"),
+                "hwdec" to handle.getMpvStringProperty("hwdec"),
                 "hwdec-current" to handle.getMpvStringProperty("hwdec-current"),
+                "hwdec-codecs" to handle.getMpvStringProperty("hwdec-codecs"),
+                "vd-lavc-software-fallback" to handle.getMpvStringProperty("vd-lavc-software-fallback"),
+                "file-format" to handle.getMpvStringProperty("file-format"),
                 "video-format" to handle.getMpvStringProperty("video-format"),
                 "video-codec" to handle.getMpvStringProperty("video-codec"),
+                "video-codec-name" to handle.getMpvStringProperty("video-codec-name"),
+                "video-params/w" to handle.getMpvStringProperty("video-params/w"),
+                "video-params/h" to handle.getMpvStringProperty("video-params/h"),
+                "video-params/pixelformat" to handle.getMpvStringProperty("video-params/pixelformat"),
+                "video-params/hw-pixelformat" to handle.getMpvStringProperty("video-params/hw-pixelformat"),
+                "video-dec-params/pixelformat" to handle.getMpvStringProperty("video-dec-params/pixelformat"),
+                "video-dec-params/hw-pixelformat" to handle.getMpvStringProperty("video-dec-params/hw-pixelformat"),
+                "video-out-params/pixelformat" to handle.getMpvStringProperty("video-out-params/pixelformat"),
+                "video-out-params/hw-pixelformat" to handle.getMpvStringProperty("video-out-params/hw-pixelformat"),
+                "video-params/colormatrix" to handle.getMpvStringProperty("video-params/colormatrix"),
                 "video-params/gamma" to handle.getMpvStringProperty("video-params/gamma"),
                 "video-params/primaries" to handle.getMpvStringProperty("video-params/primaries"),
                 "video-params/sig-peak" to handle.getMpvStringProperty("video-params/sig-peak"),
@@ -284,6 +303,16 @@ internal class MpvDesktopPlayerBackend private constructor(
             DesktopRuntimeLog.info("MPV video snapshot reason=$reason props=$props")
         }.onFailure {
             DesktopRuntimeLog.warn("MPV video snapshot failed reason=$reason message=${it.message}")
+        }
+    }
+
+    private fun scheduleVideoOutputDiagnostics(sessionKey: String) {
+        VideoDiagnosticProbeDelaysMs.forEach { delayMs ->
+            scope.launch {
+                delay(delayMs)
+                if (nativeClosed || currentRequest?.sessionKey != sessionKey) return@launch
+                logVideoOutputSnapshot("post-load-${delayMs}ms")
+            }
         }
     }
 
