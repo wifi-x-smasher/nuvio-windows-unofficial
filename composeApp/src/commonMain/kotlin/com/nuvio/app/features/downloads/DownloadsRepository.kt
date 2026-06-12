@@ -18,6 +18,7 @@ object DownloadsRepository {
     val uiState: StateFlow<DownloadsUiState> = _uiState.asStateFlow()
 
     private val activeHandles = mutableMapOf<String, DownloadsTaskHandle>()
+    private val progressSamples = mutableMapOf<String, DownloadProgressSample>()
     private var hasLoaded = false
     private var nextDownloadOrdinal = 0L
 
@@ -33,6 +34,7 @@ object DownloadsRepository {
     fun clearLocalState() {
         activeHandles.values.forEach(DownloadsTaskHandle::cancel)
         activeHandles.clear()
+        progressSamples.clear()
         hasLoaded = false
         _uiState.value = DownloadsUiState()
         notifyLiveStatusPlatform()
@@ -178,9 +180,11 @@ object DownloadsRepository {
             sourceResponseHeaders = sanitizeResponseHeaders(stream.behaviorHints.proxyHeaders?.response),
             localFileUri = null,
             fileName = fileName,
-            status = DownloadStatus.Downloading,
+            status = DownloadStatus.Queued,
             downloadedBytes = 0L,
             totalBytes = null,
+            bytesPerSecond = null,
+            etaSeconds = null,
             errorMessage = null,
             createdAtEpochMs = now,
             updatedAtEpochMs = now,
@@ -189,7 +193,7 @@ object DownloadsRepository {
         currentItems.add(0, item)
         publish(currentItems)
         persist()
-        startDownload(item)
+        scheduleQueuedDownloads()
 
         return if (replacedExisting) {
             DownloadEnqueueResult.Replaced
@@ -201,16 +205,20 @@ object DownloadsRepository {
     fun pauseDownload(downloadId: String) {
         ensureLoaded()
         val item = _uiState.value.items.firstOrNull { it.id == downloadId } ?: return
-        if (item.status != DownloadStatus.Downloading) return
+        if (item.status != DownloadStatus.Downloading && item.status != DownloadStatus.Queued) return
 
         activeHandles.remove(downloadId)?.cancel()
+        progressSamples.remove(downloadId)
         mutateItem(downloadId) { current ->
             current.copy(
                 status = DownloadStatus.Paused,
+                bytesPerSecond = null,
+                etaSeconds = null,
                 updatedAtEpochMs = DownloadsClock.nowEpochMs(),
                 errorMessage = null,
             )
         }
+        scheduleQueuedDownloads()
     }
 
     fun pauseActiveDownloads() {
@@ -227,15 +235,17 @@ object DownloadsRepository {
         if (item.status != DownloadStatus.Paused && item.status != DownloadStatus.Failed) return
 
         val reset = item.copy(
-            status = DownloadStatus.Downloading,
+            status = DownloadStatus.Queued,
             errorMessage = null,
             localFileUri = null,
+            bytesPerSecond = null,
+            etaSeconds = null,
             updatedAtEpochMs = DownloadsClock.nowEpochMs(),
         )
 
         replaceItem(reset)
         persist()
-        startDownload(reset)
+        scheduleQueuedDownloads()
     }
 
     fun retryDownload(downloadId: String) {
@@ -247,11 +257,13 @@ object DownloadsRepository {
         val item = _uiState.value.items.firstOrNull { it.id == downloadId } ?: return
 
         activeHandles.remove(downloadId)?.cancel()
+        progressSamples.remove(downloadId)
         DownloadsPlatformDownloader.removeFile(playableLocalFileUri(item) ?: item.localFileUri)
         DownloadsPlatformDownloader.removePartialFile(item.fileName)
 
         publish(_uiState.value.items.filterNot { it.id == downloadId })
         persist()
+        scheduleQueuedDownloads()
     }
 
     private fun loadFromDisk() {
@@ -269,6 +281,14 @@ object DownloadsRepository {
                 val statusNormalized = if (item.status == DownloadStatus.Downloading) {
                     item.copy(
                         status = DownloadStatus.Paused,
+                        bytesPerSecond = null,
+                        etaSeconds = null,
+                        errorMessage = null,
+                    )
+                } else if (item.status == DownloadStatus.Queued) {
+                    item.copy(
+                        bytesPerSecond = null,
+                        etaSeconds = null,
                         errorMessage = null,
                     )
                 } else {
@@ -287,26 +307,58 @@ object DownloadsRepository {
         if (shouldPersistNormalized) {
             persist()
         }
+        scheduleQueuedDownloads()
     }
 
     private fun startDownload(item: DownloadItem) {
+        val latest = _uiState.value.items.firstOrNull { it.id == item.id } ?: return
+        if (latest.status != DownloadStatus.Queued) return
+
+        val startTime = DownloadsClock.nowEpochMs()
+        progressSamples.remove(item.id)
+        replaceItem(
+            latest.copy(
+                status = DownloadStatus.Downloading,
+                bytesPerSecond = null,
+                etaSeconds = null,
+                errorMessage = null,
+                updatedAtEpochMs = startTime,
+            ),
+        )
+        persist()
+
         val request = DownloadPlatformRequest(
-            sourceUrl = item.sourceUrl,
-            sourceHeaders = item.sourceHeaders,
-            destinationFileName = item.fileName,
+            sourceUrl = latest.sourceUrl,
+            sourceHeaders = latest.sourceHeaders,
+            destinationFileName = latest.fileName,
         )
 
         val handle = DownloadsPlatformDownloader.start(
             request = request,
             onProgress = { downloadedBytes, totalBytes ->
+                val now = DownloadsClock.nowEpochMs()
+                val safeDownloadedBytes = downloadedBytes.coerceAtLeast(0L)
+                val normalizedTotalBytes = totalBytes?.takeIf { it > 0L }
+                val stats = DownloadTransferStats.calculate(
+                    previous = progressSamples[item.id],
+                    currentDownloadedBytes = safeDownloadedBytes,
+                    currentEpochMs = now,
+                    totalBytes = normalizedTotalBytes,
+                )
+                progressSamples[item.id] = DownloadProgressSample(
+                    downloadedBytes = safeDownloadedBytes,
+                    epochMs = now,
+                )
                 mutateItem(item.id) { current ->
                     if (current.status != DownloadStatus.Downloading) {
                         current
                     } else {
                         current.copy(
-                            downloadedBytes = downloadedBytes.coerceAtLeast(0L),
-                            totalBytes = totalBytes?.takeIf { it > 0L },
-                            updatedAtEpochMs = DownloadsClock.nowEpochMs(),
+                            downloadedBytes = safeDownloadedBytes,
+                            totalBytes = normalizedTotalBytes,
+                            bytesPerSecond = stats.bytesPerSecond ?: current.bytesPerSecond,
+                            etaSeconds = stats.etaSeconds,
+                            updatedAtEpochMs = now,
                             errorMessage = null,
                         )
                     }
@@ -314,6 +366,7 @@ object DownloadsRepository {
             },
             onSuccess = { localFileUri, totalBytes ->
                 activeHandles.remove(item.id)
+                progressSamples.remove(item.id)
                 mutateItem(item.id) { current ->
                     current.copy(
                         status = DownloadStatus.Completed,
@@ -324,28 +377,46 @@ object DownloadsRepository {
                             current.downloadedBytes
                         },
                         totalBytes = totalBytes?.takeIf { it > 0L } ?: current.totalBytes,
+                        bytesPerSecond = null,
+                        etaSeconds = null,
                         errorMessage = null,
                         updatedAtEpochMs = DownloadsClock.nowEpochMs(),
                     )
                 }
+                scheduleQueuedDownloads()
             },
             onFailure = { message ->
                 activeHandles.remove(item.id)
+                progressSamples.remove(item.id)
                 mutateItem(item.id) { current ->
                     if (current.status != DownloadStatus.Downloading) {
                         current
                     } else {
                         current.copy(
                             status = DownloadStatus.Failed,
+                            bytesPerSecond = null,
+                            etaSeconds = null,
                             errorMessage = message.ifBlank { runBlocking { getString(Res.string.download_failed) } },
                             updatedAtEpochMs = DownloadsClock.nowEpochMs(),
                         )
                     }
                 }
+                scheduleQueuedDownloads()
             },
         )
 
         activeHandles[item.id] = handle
+    }
+
+    private fun scheduleQueuedDownloads() {
+        val nextIds = DownloadQueuePolicy.nextQueuedIds(
+            items = _uiState.value.items,
+            activeCount = activeHandles.size,
+            maxConcurrent = DEFAULT_MAX_CONCURRENT_DOWNLOADS,
+        )
+        nextIds.forEach { downloadId ->
+            _uiState.value.items.firstOrNull { it.id == downloadId }?.let(::startDownload)
+        }
     }
 
     private fun mutateItem(downloadId: String, transform: (DownloadItem) -> DownloadItem) {

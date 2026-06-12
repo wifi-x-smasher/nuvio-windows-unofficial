@@ -536,6 +536,12 @@
     <string name="downloads_status_downloading">Downloading • %1$s</string>
     <string name="downloads_status_failed">Failed</string>
     <string name="downloads_status_paused">Paused • %1$s</string>
+    <string name="downloads_status_queued">Queued • %1$s</string>
+    <string name="downloads_speed_per_second">%1$s/s</string>
+    <string name="downloads_eta_left">%1$s left</string>
+    <string name="downloads_open_file">Open file</string>
+    <string name="downloads_open_folder">Open folder</string>
+    <string name="downloads_open_failed">Could not open download</string>
     <string name="episodes_cd_watched">Watched</string>
     <string name="episodes_season">Season %1$d</string>
     <string name="episodes_specials">Specials</string>
@@ -1317,6 +1323,7 @@
     <string name="downloads_live_downloading_with_total">Downloading %1$s • %2$s / %3$s</string>
     <string name="downloads_live_failed">Download failed</string>
     <string name="downloads_live_paused">Paused %1$s</string>
+    <string name="downloads_live_queued">Queued %1$s</string>
     <string name="library_remove_confirm">Remove</string>
     <string name="library_remove_from_list_message">Remove %1$s from %2$s?</string>
     <string name="library_remove_message">Remove %1$s from your library?</string>

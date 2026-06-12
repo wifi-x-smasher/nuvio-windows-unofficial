@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
@@ -38,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.i18n.localizedByteUnit
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
+import com.nuvio.app.core.ui.NuvioToastController
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -127,6 +130,8 @@ private fun LazyListScope.downloadsRootContent(
             DownloadRow(
                 item = item,
                 onOpen = { onOpenDownload(item) },
+                onOpenFile = { DownloadsPlatformActions.openDownloadedFile(item) },
+                onOpenFolder = { DownloadsPlatformActions.openContainingFolder(item) },
                 onPause = { DownloadsRepository.pauseDownload(item.id) },
                 onResume = { DownloadsRepository.resumeDownload(item.id) },
                 onRetry = { DownloadsRepository.retryDownload(item.id) },
@@ -146,6 +151,8 @@ private fun LazyListScope.downloadsRootContent(
             DownloadRow(
                 item = item,
                 onOpen = { onOpenDownload(item) },
+                onOpenFile = { DownloadsPlatformActions.openDownloadedFile(item) },
+                onOpenFolder = { DownloadsPlatformActions.openContainingFolder(item) },
                 onPause = { DownloadsRepository.pauseDownload(item.id) },
                 onResume = { DownloadsRepository.resumeDownload(item.id) },
                 onRetry = { DownloadsRepository.retryDownload(item.id) },
@@ -278,6 +285,8 @@ private fun LazyListScope.downloadsShowContent(
             DownloadRow(
                 item = item,
                 onOpen = { onOpenDownload(item) },
+                onOpenFile = { DownloadsPlatformActions.openDownloadedFile(item) },
+                onOpenFolder = { DownloadsPlatformActions.openContainingFolder(item) },
                 onPause = { DownloadsRepository.pauseDownload(item.id) },
                 onResume = { DownloadsRepository.resumeDownload(item.id) },
                 onRetry = { DownloadsRepository.retryDownload(item.id) },
@@ -291,6 +300,8 @@ private fun LazyListScope.downloadsShowContent(
 private fun DownloadRow(
     item: DownloadItem,
     onOpen: () -> Unit,
+    onOpenFile: () -> Boolean,
+    onOpenFolder: () -> Boolean,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onRetry: () -> Unit,
@@ -301,6 +312,7 @@ private fun DownloadRow(
         item = item,
         displayTitle = displayTitle,
     )
+    val openFailedText = stringResource(Res.string.downloads_open_failed)
 
     Surface(
         modifier = Modifier
@@ -349,6 +361,14 @@ private fun DownloadRow(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     when (item.status) {
+                        DownloadStatus.Queued -> {
+                            IconButton(onClick = onPause) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Pause,
+                                    contentDescription = stringResource(Res.string.compose_action_pause),
+                                )
+                            }
+                        }
                         DownloadStatus.Downloading -> {
                             IconButton(onClick = onPause) {
                                 Icon(
@@ -380,6 +400,30 @@ private fun DownloadRow(
                                     contentDescription = stringResource(Res.string.action_play),
                                 )
                             }
+                            IconButton(
+                                onClick = {
+                                    if (!onOpenFile()) {
+                                        NuvioToastController.show(openFailedText)
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.OpenInNew,
+                                    contentDescription = stringResource(Res.string.downloads_open_file),
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (!onOpenFolder()) {
+                                        NuvioToastController.show(openFailedText)
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Folder,
+                                    contentDescription = stringResource(Res.string.downloads_open_folder),
+                                )
+                            }
                         }
                     }
                     IconButton(onClick = onDelete) {
@@ -391,7 +435,7 @@ private fun DownloadRow(
                 }
             }
 
-            if (item.status == DownloadStatus.Downloading) {
+            if (item.status == DownloadStatus.Downloading || item.status == DownloadStatus.Queued) {
                 if (item.totalBytes != null && item.totalBytes > 0L) {
                     LinearProgressIndicator(
                         progress = item.progressFraction,
@@ -457,7 +501,20 @@ private fun statusText(item: DownloadItem): String {
     }
 
     return when (item.status) {
-        DownloadStatus.Downloading -> stringResource(Res.string.downloads_status_downloading, size)
+        DownloadStatus.Queued -> stringResource(Res.string.downloads_status_queued, size)
+        DownloadStatus.Downloading -> {
+            val speed = item.bytesPerSecond
+                ?.takeIf { it > 0L }
+                ?.let { stringResource(Res.string.downloads_speed_per_second, formatBytes(it)) }
+            val eta = item.etaSeconds
+                ?.takeIf { it > 0L }
+                ?.let { stringResource(Res.string.downloads_eta_left, formatDuration(it)) }
+            listOfNotNull(
+                stringResource(Res.string.downloads_status_downloading, size),
+                speed,
+                eta,
+            ).joinToString(" • ")
+        }
         DownloadStatus.Paused -> stringResource(Res.string.downloads_status_paused, size)
         DownloadStatus.Completed -> stringResource(
             Res.string.downloads_status_completed,
@@ -478,5 +535,17 @@ private fun formatBytes(bytes: Long): String {
         value >= mib -> "${((value / mib) * 10.0).toInt() / 10.0} ${localizedByteUnit("MB")}"
         value >= kib -> "${((value / kib) * 10.0).toInt() / 10.0} ${localizedByteUnit("KB")}"
         else -> "$bytes ${localizedByteUnit("B")}"
+    }
+}
+
+private fun formatDuration(totalSeconds: Long): String {
+    val safeSeconds = totalSeconds.coerceAtLeast(0L)
+    val hours = safeSeconds / 3600L
+    val minutes = (safeSeconds % 3600L) / 60L
+    val seconds = safeSeconds % 60L
+    return when {
+        hours > 0L -> "${hours}h ${minutes}m"
+        minutes > 0L -> "${minutes}m ${seconds}s"
+        else -> "${seconds}s"
     }
 }

@@ -11,6 +11,7 @@ import org.jetbrains.compose.resources.getString
 
 @Serializable
 enum class DownloadStatus {
+    Queued,
     Downloading,
     Paused,
     Completed,
@@ -44,6 +45,8 @@ data class DownloadItem(
     val status: DownloadStatus,
     val downloadedBytes: Long = 0L,
     val totalBytes: Long? = null,
+    val bytesPerSecond: Long? = null,
+    val etaSeconds: Long? = null,
     val errorMessage: String? = null,
     val createdAtEpochMs: Long,
     val updatedAtEpochMs: Long,
