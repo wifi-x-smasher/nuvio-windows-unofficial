@@ -16,10 +16,12 @@ internal object DesktopMpvDecoderOptions {
     // decodes, the frame is copied to system memory, then uploaded to the GL texture. No interop
     // required; still hugely faster than CPU software decoding.
     //
-    // We pin d3d11va-copy explicitly rather than auto-copy-safe: the bundled avcodec ships the full
-    // hevc/av1/vp9 d3d11va hwaccels, yet mpv's auto-safe selection was still declining HEVC and
-    // software-decoding 4K HEVC/HDR. Forcing the d3d11va-copy decoder removes mpv's auto-selection
-    // from the path so HEVC (and AV1/VP9) go through the GPU decoder like H.264 already does.
+    // We use auto-copy-safe (not a pinned decoder): it lets mpv choose the best copy-back decoder per
+    // platform/GPU — nvdec-copy on NVIDIA, d3d11va-copy on Intel/AMD. Logs confirmed that on an NVIDIA
+    // dGPU this engages nvdec-copy for H.264 and d3d11va-copy for HEVC. The earlier "4K HEVC software
+    // decodes" symptom was the process running on the integrated GPU, not a decoder-selection issue;
+    // once the app runs on the discrete GPU, auto-copy-safe hardware-decodes correctly. (Dolby Vision
+    // still software-decodes by design — mpv handles the DV RPU on the CPU.)
 
     fun optionsFor(priority: Int): Map<String, String> = when (priority) {
         DeviceOnly -> linkedMapOf(
@@ -64,7 +66,7 @@ internal object DesktopMpvDecoderOptions {
         VideoDecoderBackend.SOFTWARE -> "software"
     }
 
-    private fun preferDeviceOptions(): Map<String, String> = copyBackOptions("d3d11va-copy")
+    private fun preferDeviceOptions(): Map<String, String> = copyBackOptions("auto-copy-safe")
 
     private fun copyBackOptions(hwdec: String): Map<String, String> = linkedMapOf(
         "hwdec" to hwdec,
