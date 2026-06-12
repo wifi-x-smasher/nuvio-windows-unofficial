@@ -14,7 +14,7 @@ class DesktopMpvHdrOptionsTest {
     fun exposesAuditableWindowsHdrOptions() {
         val options = DesktopMpvVideoOptionProfile.options
 
-        assertEquals("auto-copy-safe", options["hwdec"])
+        assertEquals("d3d11va-copy", options["hwdec"])
         assertEquals("yes", options["vd-lavc-software-fallback"])
         assertEquals("rgba8", options["fbo-format"])
         assertEquals("no", options["dither-depth"])
@@ -58,7 +58,7 @@ class DesktopMpvHdrOptionsTest {
     fun exposesFiveExperimentalUpscalerPresets() {
         assertEquals(5, DesktopMpvUpscalerOptions.presetCount)
         val highQuality = DesktopMpvVideoOptionProfile.optionsFor(VideoUpscalerPreset.HIGH_QUALITY, 1)
-        assertEquals("auto-copy-safe", highQuality["hwdec"])
+        assertEquals("d3d11va-copy", highQuality["hwdec"])
         assertEquals("ewa_lanczossharp", highQuality["scale"])
         assertEquals("yes", highQuality["sigmoid-upscaling"])
     }
@@ -78,7 +78,7 @@ class DesktopMpvHdrOptionsTest {
         assertEquals("yes", deviceOnly["vd-lavc-software-fallback"])
 
         val preferDevice = DesktopMpvDecoderOptions.optionsFor(1)
-        assertEquals("auto-copy-safe", preferDevice["hwdec"])
+        assertEquals("d3d11va-copy", preferDevice["hwdec"])
         assertEquals("yes", preferDevice["vd-lavc-software-fallback"])
 
         val preferApp = DesktopMpvDecoderOptions.optionsFor(2)

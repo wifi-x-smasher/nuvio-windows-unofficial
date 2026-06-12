@@ -10,9 +10,14 @@ internal object DesktopMpvDecoderOptions {
     // Windows the default hardware decoder is zero-copy d3d11va, whose D3D11 decode surfaces CANNOT be
     // shared into a native-GL texture (that needs ANGLE/D3D interop, which we don't use). With a
     // zero-copy mode mpv can't map the frame, rejects the hwdec, and falls back to software decoding
-    // (hwdec-current=no) — which murders performance on 4K. So we force *copy-back* modes (auto-copy*):
-    // the GPU still decodes, the frame is copied to system memory, then uploaded to the GL texture.
-    // No interop required; works with any renderer; still hugely faster than CPU software decoding.
+    // (hwdec-current=no) — which murders performance on 4K. So we use a *copy-back* mode: the GPU
+    // decodes, the frame is copied to system memory, then uploaded to the GL texture. No interop
+    // required; still hugely faster than CPU software decoding.
+    //
+    // We pin d3d11va-copy explicitly rather than auto-copy-safe: the bundled avcodec ships the full
+    // hevc/av1/vp9 d3d11va hwaccels, yet mpv's auto-safe selection was still declining HEVC and
+    // software-decoding 4K HEVC/HDR. Forcing the d3d11va-copy decoder removes mpv's auto-selection
+    // from the path so HEVC (and AV1/VP9) go through the GPU decoder like H.264 already does.
 
     fun optionsFor(priority: Int): Map<String, String> = when (priority) {
         DeviceOnly -> linkedMapOf(
@@ -35,7 +40,7 @@ internal object DesktopMpvDecoderOptions {
     }
 
     private fun preferDeviceOptions(): Map<String, String> = linkedMapOf(
-        "hwdec" to "auto-copy-safe",
+        "hwdec" to "d3d11va-copy",
         "vd-lavc-software-fallback" to "yes",
     )
 }
