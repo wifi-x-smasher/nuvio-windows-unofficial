@@ -13,7 +13,6 @@ import com.nuvio.app.features.details.MetaScreenSettingsRepository
 import com.nuvio.app.features.home.HomeCatalogSettingsRepository
 import com.nuvio.app.features.home.HomeRepository
 import com.nuvio.app.core.ui.PosterCardStyleRepository
-import com.nuvio.app.features.debrid.DebridSettingsRepository
 import com.nuvio.app.features.library.LibraryRepository
 import com.nuvio.app.features.mdblist.MdbListSettingsRepository
 import com.nuvio.app.features.notifications.EpisodeReleaseNotificationsRepository
@@ -158,10 +157,11 @@ object ProfileRepository {
         ThemeSettingsRepository.onProfileChanged()
         PosterCardStyleRepository.onProfileChanged()
         PlayerSettingsRepository.onProfileChanged()
-        // Reload debrid settings under the newly-active profile's scoped keys. Without this the
-        // debrid state (e.g. Torbox connection) stays bound to whatever profile was active at first
-        // load, so the integration intermittently shows "not connected" after a profile switch (#22).
-        DebridSettingsRepository.onProfileChanged()
+        // NOTE: do NOT reload DebridSettingsRepository here. selectProfile runs during the startup
+        // profile gate, which can fire before the auth session has finished restoring. Reloading
+        // debrid at that point reads keys under the wrong (signed_out) account scope, marks Torbox/
+        // Real-Debrid as "not connected", and latches hasLoaded=true so the correct post-auth load is
+        // skipped. Debrid is loaded once after auth via ProfileSettingsSync.ensureRepositoriesLoaded.
         StreamBadgeSettingsRepository.onProfileChanged()
         HomeCatalogSettingsRepository.onProfileChanged()
         HomeRepository.clear()
