@@ -70,9 +70,6 @@ import org.jetbrains.compose.resources.painterResource
 private const val DesktopDragMinVisiblePx = 120
 
 fun main(args: Array<String>) {
-    System.setProperty("compose.interop.blending", "true")
-    System.setProperty("compose.swing.render.on.graphics", "true")
-    System.setProperty("compose.layers.type", "COMPONENT")
     val renderApi = configureDesktopRenderer()
     AppDiagnostics.install()
     DesktopRuntimeLog.initialize()
@@ -254,16 +251,23 @@ internal fun configureDesktopRenderer(): String {
     val requested = System.getProperty("nuvio.renderApi")
         ?: System.getenv("NUVIO_RENDER_API")
         ?: System.getProperty("skiko.renderApi")
-        ?: "OPENGL"
-    val normalized = requested.trim().uppercase()
-    val safeValue = when (normalized) {
-        "OPENGL",
-        "SOFTWARE" -> normalized
-        else -> "OPENGL"
+    val safeValue = selectDesktopRenderer(requested)
+    if (safeValue == "OPENGL") {
+        System.setProperty("compose.interop.blending", "true")
+        System.setProperty("compose.swing.render.on.graphics", "true")
+        System.setProperty("compose.layers.type", "COMPONENT")
     }
     System.setProperty("skiko.renderApi", safeValue)
     return safeValue
 }
+
+internal fun selectDesktopRenderer(requested: String?): String =
+    when (requested?.trim()?.uppercase().orEmpty()) {
+        "OPENGL" -> "OPENGL"
+        "DIRECT3D" -> "DIRECT3D"
+        "SOFTWARE" -> "SOFTWARE"
+        else -> "OPENGL"
+    }
 
 @Composable
 private fun DesktopWindowDragGrip(

@@ -137,7 +137,7 @@ class DesktopWindowModeTest {
     }
 
     @Test
-    fun rendererConfigurationDefaultsToOpenGlAndAllowsSoftwareOverride() {
+    fun rendererConfigurationDefaultsToOpenGlAndAllowsExplicitOverrides() {
         val previousNuvioRenderApi = System.getProperty("nuvio.renderApi")
         val previousSkikoRenderApi = System.getProperty("skiko.renderApi")
         try {
@@ -151,8 +151,8 @@ class DesktopWindowModeTest {
             assertEquals("SOFTWARE", System.getProperty("skiko.renderApi"))
 
             System.setProperty("nuvio.renderApi", "DIRECT3D")
-            assertEquals("OPENGL", configureDesktopRenderer())
-            assertEquals("OPENGL", System.getProperty("skiko.renderApi"))
+            assertEquals("DIRECT3D", configureDesktopRenderer())
+            assertEquals("DIRECT3D", System.getProperty("skiko.renderApi"))
         } finally {
             restoreProperty("nuvio.renderApi", previousNuvioRenderApi)
             restoreProperty("skiko.renderApi", previousSkikoRenderApi)
