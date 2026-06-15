@@ -6,6 +6,8 @@ import com.nuvio.app.features.experimental.WindowsInternalPlayerBackend
 import com.nuvio.app.features.player.desktop.mpv.MpvDesktopPlayerBackend
 import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeBootstrap
 import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeLocator
+import com.nuvio.app.features.player.desktop.nativempv.NativeMpvDesktopPlayerBackend
+import com.nuvio.app.features.player.desktop.nativempv.NativeMpvRuntimeLocator
 
 internal object DesktopPlayerBackendFactory {
     private const val BackendProperty = "nuvio.windows.player.backend"
@@ -27,11 +29,21 @@ internal object DesktopPlayerBackendFactory {
     }
 
     private fun createNativeMpvOrFallback(selection: DesktopPlayerBackendSelection): DesktopPlayerBackend {
-        DesktopRuntimeLog.warn(
-            "Experimental native MPV backend requested but not implemented yet; " +
-                "falling back to stable MediaMP backend (source=${selection.source} request=${selection.value})",
-        )
-        return createMpvOrUnavailable(selection.copy(backend = DesktopPlayerBackendKind.Mpv))
+        val runtime = NativeMpvRuntimeLocator.resolve()
+        return NativeMpvDesktopPlayerBackend.create(runtime)
+            .onSuccess {
+                DesktopRuntimeLog.info(
+                    "Selected player backend=${it.backendName} (source=${selection.source} request=${selection.value}) ${runtime.diagnostics}",
+                )
+            }
+            .onFailure {
+                DesktopRuntimeLog.error(
+                    "Experimental native MPV backend unavailable; falling back to stable MediaMP. ${runtime.diagnostics}",
+                    it,
+                )
+            }
+            .getOrNull()
+            ?: createMpvOrUnavailable(selection.copy(backend = DesktopPlayerBackendKind.Mpv))
     }
 
     private fun createMpvOrUnavailable(selection: DesktopPlayerBackendSelection): DesktopPlayerBackend =
