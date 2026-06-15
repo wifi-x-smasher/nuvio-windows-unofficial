@@ -78,6 +78,28 @@ enum class VideoDecoderBackend(
     }
 }
 
+enum class WindowsInternalPlayerBackend(
+    val id: String,
+    val displayName: String,
+    val description: String,
+) {
+    STABLE_MEDIAMP(
+        id = "mediamp",
+        displayName = "Stable MediaMP",
+        description = "Use the current tested Windows internal player.",
+    ),
+    NATIVE_MPV(
+        id = "native-mpv",
+        displayName = "Experimental native MPV window",
+        description = "Use a separate Windows video surface for Direct3D/HDR testing.",
+    );
+
+    companion object {
+        fun fromId(id: String?): WindowsInternalPlayerBackend =
+            entries.firstOrNull { it.id == id } ?: STABLE_MEDIAMP
+    }
+}
+
 object ExperimentalFeatureSettings {
     private val _universalSearchEnabled = MutableStateFlow(true)
     val universalSearchEnabled: StateFlow<Boolean> = _universalSearchEnabled.asStateFlow()
@@ -91,16 +113,22 @@ object ExperimentalFeatureSettings {
     private val _displaySyncEnabled = MutableStateFlow(false)
     val displaySyncEnabled: StateFlow<Boolean> = _displaySyncEnabled.asStateFlow()
 
+    private val _windowsInternalPlayerBackend = MutableStateFlow(WindowsInternalPlayerBackend.STABLE_MEDIAMP)
+    val windowsInternalPlayerBackend: StateFlow<WindowsInternalPlayerBackend> =
+        _windowsInternalPlayerBackend.asStateFlow()
+
     fun seed(
         universalSearchEnabled: Boolean,
         videoUpscalerPreset: VideoUpscalerPreset,
         videoDecoderBackend: VideoDecoderBackend = VideoDecoderBackend.AUTO,
         displaySyncEnabled: Boolean = false,
+        windowsInternalPlayerBackend: WindowsInternalPlayerBackend = WindowsInternalPlayerBackend.STABLE_MEDIAMP,
     ) {
         _universalSearchEnabled.value = universalSearchEnabled
         _videoUpscalerPreset.value = videoUpscalerPreset
         _videoDecoderBackend.value = videoDecoderBackend
         _displaySyncEnabled.value = displaySyncEnabled
+        _windowsInternalPlayerBackend.value = windowsInternalPlayerBackend
     }
 
     fun setUniversalSearchEnabled(enabled: Boolean) {
@@ -121,5 +149,10 @@ object ExperimentalFeatureSettings {
     fun setDisplaySyncEnabled(enabled: Boolean) {
         if (_displaySyncEnabled.value == enabled) return
         _displaySyncEnabled.value = enabled
+    }
+
+    fun setWindowsInternalPlayerBackend(backend: WindowsInternalPlayerBackend) {
+        if (_windowsInternalPlayerBackend.value == backend) return
+        _windowsInternalPlayerBackend.value = backend
     }
 }

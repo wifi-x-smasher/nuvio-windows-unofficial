@@ -1,6 +1,8 @@
 package com.nuvio.app.features.player.desktop
 
 import com.nuvio.app.desktop.DesktopRuntimeLog
+import com.nuvio.app.features.experimental.ExperimentalFeatureSettings
+import com.nuvio.app.features.experimental.WindowsInternalPlayerBackend
 import com.nuvio.app.features.player.desktop.mpv.MpvDesktopPlayerBackend
 import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeBootstrap
 import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeLocator
@@ -17,10 +19,19 @@ internal object DesktopPlayerBackendFactory {
                 technicalMessage = "Windows player backend disabled by configuration.",
                 selection = selection,
             )
+            DesktopPlayerBackendKind.NativeMpv -> createNativeMpvOrFallback(selection)
             DesktopPlayerBackendKind.Mpv,
             DesktopPlayerBackendKind.Auto
             -> createMpvOrUnavailable(selection)
         }
+    }
+
+    private fun createNativeMpvOrFallback(selection: DesktopPlayerBackendSelection): DesktopPlayerBackend {
+        DesktopRuntimeLog.warn(
+            "Experimental native MPV backend requested but not implemented yet; " +
+                "falling back to stable MediaMP backend (source=${selection.source} request=${selection.value})",
+        )
+        return createMpvOrUnavailable(selection.copy(backend = DesktopPlayerBackendKind.Mpv))
     }
 
     private fun createMpvOrUnavailable(selection: DesktopPlayerBackendSelection): DesktopPlayerBackend =
@@ -63,6 +74,7 @@ internal object DesktopPlayerBackendFactory {
     private enum class DesktopPlayerBackendKind {
         Auto,
         Mpv,
+        NativeMpv,
         None,
     }
 
@@ -77,6 +89,10 @@ internal object DesktopPlayerBackendFactory {
                 if (!property.isNullOrBlank()) return fromValue(property, "system-property:$BackendProperty")
                 val env = System.getenv(BackendEnv)?.trim()?.lowercase()
                 if (!env.isNullOrBlank()) return fromValue(env, "env:$BackendEnv")
+                val configured = ExperimentalFeatureSettings.windowsInternalPlayerBackend.value
+                if (configured == WindowsInternalPlayerBackend.NATIVE_MPV) {
+                    return fromValue(configured.id, "settings:experimental_features")
+                }
                 return DesktopPlayerBackendSelection(DesktopPlayerBackendKind.Auto, "auto", "default")
             }
 
@@ -84,6 +100,9 @@ internal object DesktopPlayerBackendFactory {
                 DesktopPlayerBackendSelection(
                     backend = when (value) {
                         "none" -> DesktopPlayerBackendKind.None
+                        "native-mpv" -> DesktopPlayerBackendKind.NativeMpv
+                        "mediamp",
+                        "mpv" -> DesktopPlayerBackendKind.Mpv
                         else -> DesktopPlayerBackendKind.Mpv
                     },
                     value = value,

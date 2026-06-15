@@ -55,6 +55,7 @@ import com.nuvio.app.features.addons.enabledAddons
 import com.nuvio.app.features.experimental.ExperimentalFeatureSettings
 import com.nuvio.app.features.experimental.VideoDecoderBackend
 import com.nuvio.app.features.experimental.VideoUpscalerPreset
+import com.nuvio.app.features.experimental.WindowsInternalPlayerBackend
 import com.nuvio.app.features.player.AudioLanguageOption
 import com.nuvio.app.features.player.AvailableLanguageOptions
 import com.nuvio.app.features.player.ExternalPlayerApp
@@ -187,6 +188,7 @@ private fun PlaybackSettingsSection(
     var showHoldToSpeedValueDialog by remember { mutableStateOf(false) }
     var showVideoUpscalerDialog by remember { mutableStateOf(false) }
     var showVideoDecoderBackendDialog by remember { mutableStateOf(false) }
+    var showWindowsInternalPlayerBackendDialog by remember { mutableStateOf(false) }
     var showIosHardwareDecoderDialog by remember { mutableStateOf(false) }
     var showIosTargetPrimariesDialog by remember { mutableStateOf(false) }
     var showIosTargetTransferDialog by remember { mutableStateOf(false) }
@@ -203,6 +205,7 @@ private fun PlaybackSettingsSection(
     val videoUpscalerPreset by ExperimentalFeatureSettings.videoUpscalerPreset.collectAsStateWithLifecycle()
     val videoDecoderBackend by ExperimentalFeatureSettings.videoDecoderBackend.collectAsStateWithLifecycle()
     val displaySyncEnabled by ExperimentalFeatureSettings.displaySyncEnabled.collectAsStateWithLifecycle()
+    val windowsInternalPlayerBackend by ExperimentalFeatureSettings.windowsInternalPlayerBackend.collectAsStateWithLifecycle()
     val availableExternalPlayers = ExternalPlayerPlatform.availablePlayers()
     val selectedExternalPlayer = availableExternalPlayers.firstOrNull {
         it.id == autoPlayPlayerSettings.externalPlayerId
@@ -265,6 +268,13 @@ private fun PlaybackSettingsSection(
                         checked = displaySyncEnabled,
                         isTablet = isTablet,
                         onCheckedChange = ExperimentalFeatureSettings::setDisplaySyncEnabled,
+                    )
+                    SettingsGroupDivider(isTablet = isTablet)
+                    SettingsNavigationRow(
+                        title = "Windows internal player backend",
+                        description = "${windowsInternalPlayerBackend.displayName} · Changes apply when a new stream starts.",
+                        isTablet = isTablet,
+                        onClick = { showWindowsInternalPlayerBackendDialog = true },
                     )
                     if (selectedExternalPlayer?.id == "mpchc" && autoPlayPlayerSettings.externalPlayerEnabled) {
                         SettingsGroupDivider(isTablet = isTablet)
@@ -1017,6 +1027,17 @@ private fun PlaybackSettingsSection(
         )
     }
 
+    if (showWindowsInternalPlayerBackendDialog) {
+        WindowsInternalPlayerBackendDialog(
+            selectedBackend = windowsInternalPlayerBackend,
+            onBackendSelected = { backend ->
+                ExperimentalFeatureSettings.setWindowsInternalPlayerBackend(backend)
+                showWindowsInternalPlayerBackendDialog = false
+            },
+            onDismiss = { showWindowsInternalPlayerBackendDialog = false },
+        )
+    }
+
     if (showHoldToSpeedValueDialog) {
         HoldToSpeedValueDialog(
             selectedSpeed = holdToSpeedValue,
@@ -1684,6 +1705,104 @@ private fun VideoDecoderBackendDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(VideoDecoderBackend.entries) { backend ->
+                        val isSelected = backend == selectedBackend
+                        val containerColor = if (isSelected) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onBackendSelected(backend) },
+                            shape = RoundedCornerShape(12.dp),
+                            color = containerColor,
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                                    Text(
+                                        text = backend.displayName,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = backend.description,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier.size(24.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(Res.string.settings_playback_dialog_close),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun WindowsInternalPlayerBackendDialog(
+    selectedBackend: WindowsInternalPlayerBackend,
+    onBackendSelected: (WindowsInternalPlayerBackend) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    BasicAlertDialog(
+        onDismissRequest = onDismiss,
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "Windows internal player backend",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "Experimental native MPV uses a separate Windows video surface for HDR and refresh-rate testing. If playback fails, switch back to Stable MediaMP.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(WindowsInternalPlayerBackend.entries) { backend ->
                         val isSelected = backend == selectedBackend
                         val containerColor = if (isSelected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)

@@ -4,6 +4,7 @@ import com.nuvio.app.core.desktop.DesktopPreferences
 import com.nuvio.app.features.experimental.ExperimentalFeatureSettings
 import com.nuvio.app.features.experimental.VideoDecoderBackend
 import com.nuvio.app.features.experimental.VideoUpscalerPreset
+import com.nuvio.app.features.experimental.WindowsInternalPlayerBackend
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,6 +15,7 @@ internal object DesktopExperimentalFeatureSettings {
     private const val PREF_VIDEO_UPSCALER_PRESET = "video_upscaler_preset"
     private const val PREF_VIDEO_DECODER_BACKEND = "video_decoder_backend"
     private const val PREF_DISPLAY_SYNC_ENABLED = "display_sync_enabled"
+    private const val PREF_WINDOWS_INTERNAL_PLAYER_BACKEND = "windows_internal_player_backend"
 
     private val prefs by lazy { DesktopPreferences("experimental_features") }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -32,6 +34,9 @@ internal object DesktopExperimentalFeatureSettings {
                 prefs.getString(PREF_VIDEO_DECODER_BACKEND),
             ),
             displaySyncEnabled = prefs.getBoolean(PREF_DISPLAY_SYNC_ENABLED) ?: false,
+            windowsInternalPlayerBackend = WindowsInternalPlayerBackend.fromId(
+                prefs.getString(PREF_WINDOWS_INTERNAL_PLAYER_BACKEND),
+            ),
         )
 
         scope.launch {
@@ -52,6 +57,11 @@ internal object DesktopExperimentalFeatureSettings {
         scope.launch {
             ExperimentalFeatureSettings.displaySyncEnabled.collect { enabled ->
                 prefs.putBoolean(PREF_DISPLAY_SYNC_ENABLED, enabled)
+            }
+        }
+        scope.launch {
+            ExperimentalFeatureSettings.windowsInternalPlayerBackend.collect { backend ->
+                prefs.putString(PREF_WINDOWS_INTERNAL_PLAYER_BACKEND, backend.id)
             }
         }
     }
