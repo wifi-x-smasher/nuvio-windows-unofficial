@@ -361,7 +361,7 @@ private enum class AppGateScreen {
 fun App() {
     setSingletonImageLoaderFactory { context ->
         ImageLoader.Builder(context)
-            .crossfade(true)
+            .crossfade(!isDesktop)
             .diskCachePolicy(CachePolicy.ENABLED)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .components {

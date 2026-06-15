@@ -55,6 +55,7 @@ import com.nuvio.app.features.watchprogress.ContinueWatchingItem
 import com.nuvio.app.features.watchprogress.ContinueWatchingSectionStyle
 import com.nuvio.app.features.watchprogress.CurrentDateProvider
 import com.nuvio.app.features.watchprogress.computeAirDateBadgeText
+import com.nuvio.app.isDesktop
 import kotlin.math.roundToInt
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
@@ -564,9 +565,12 @@ private fun ContinueWatchingPosterCard(
                     contentDescription = item.title,
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(if (shouldBlurArtwork) Modifier.blur(18.dp) else Modifier),
+                        .then(if (shouldBlurArtwork && !isDesktop) Modifier.blur(18.dp) else Modifier),
                     contentScale = if (item.isCloudLibraryItem()) ContentScale.Fit else ContentScale.Crop,
                 )
+                if (shouldBlurArtwork && isDesktop) {
+                    DesktopSpoilerArtworkMask()
+                }
             }
             if (item.progressFraction <= 0f && item.seasonNumber != null && item.episodeNumber != null) {
                 Box(
@@ -670,11 +674,30 @@ private fun ArtworkPanel(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(if (blurred) Modifier.blur(18.dp) else Modifier),
+                    .then(if (blurred && !isDesktop) Modifier.blur(18.dp) else Modifier),
                 contentScale = contentScale,
             )
+            if (blurred && isDesktop) {
+                DesktopSpoilerArtworkMask()
+            }
         }
     }
+}
+
+@Composable
+private fun DesktopSpoilerArtworkMask() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                    ),
+                ),
+            ),
+    )
 }
 
 @Composable

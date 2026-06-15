@@ -125,33 +125,17 @@ fun HomeHeroSection(
                 }
             }
         }
-        val heroScrollScale = heroBackgroundScrollScale(scrollOffsetPx)
-        val heroScrollTranslationY = heroBackgroundScrollTranslationY(scrollOffsetPx)
-        val currentPage = pagerState.currentPage.coerceIn(items.indices)
-        val visiblePages = listOf(
-            currentPage,
-            (currentPage - 1).coerceIn(items.indices),
-            (currentPage + 1).coerceIn(items.indices),
-        ).distinct()
-            .mapNotNull { index ->
-                val pageOffset = heroPageOffset(pagerState, index)
-                val visibility = (1f - abs(pageOffset)).coerceIn(0f, 1f)
-                if (visibility <= 0f) {
-                    null
-                } else {
-                    HeroPageLayer(
-                        page = index,
-                        visibility = visibility,
-                        offset = pageOffset,
-                    )
-                }
-            }
-            .sortedBy(HeroPageLayer::visibility)
-        val currentItem = visiblePages
-            .lastOrNull()
-            ?.page
-            ?.let(items::get)
-            ?: items[currentPage]
+        val currentPage by remember(pagerState, items.size) {
+            derivedStateOf { pagerState.currentPage.coerceIn(0, items.lastIndex) }
+        }
+        val visiblePages = remember(currentPage, items.size) {
+            listOf(
+                (currentPage - 1).coerceIn(items.indices),
+                (currentPage + 1).coerceIn(items.indices),
+                currentPage,
+            ).distinct().map(::HeroPageLayer)
+        }
+        val currentItem = items[currentPage]
 
         Box(
             modifier = Modifier
@@ -178,9 +162,12 @@ fun HomeHeroSection(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
-                                alpha = layer.visibility
-                                translationX = -layer.offset * heroWidthPx * HERO_BACKGROUND_PARALLAX
-                                translationY = heroScrollTranslationY
+                                val pageOffset = heroPageOffset(pagerState, layer.page)
+                                val visibility = (1f - abs(pageOffset)).coerceIn(0f, 1f)
+                                val heroScrollScale = heroBackgroundScrollScale(scrollOffsetPx)
+                                alpha = visibility
+                                translationX = -pageOffset * heroWidthPx * HERO_BACKGROUND_PARALLAX
+                                translationY = heroBackgroundScrollTranslationY(scrollOffsetPx)
                                 scaleX = HERO_BACKGROUND_SCALE * heroScrollScale
                                 scaleY = HERO_BACKGROUND_SCALE * heroScrollScale
                             },
@@ -238,8 +225,10 @@ fun HomeHeroSection(
                         visiblePages.forEach { layer ->
                             Box(
                                 modifier = Modifier.graphicsLayer {
-                                    alpha = layer.visibility
-                                    translationX = -layer.offset * heroWidthPx * HERO_CONTENT_PARALLAX
+                                    val pageOffset = heroPageOffset(pagerState, layer.page)
+                                    val visibility = (1f - abs(pageOffset)).coerceIn(0f, 1f)
+                                    alpha = visibility
+                                    translationX = -pageOffset * heroWidthPx * HERO_CONTENT_PARALLAX
                                 },
                             ) {
                                 HeroContentBlock(
@@ -281,7 +270,7 @@ fun HomeHeroSection(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             items.forEachIndexed { index, _ ->
-                                val activeFraction = heroPageVisibility(pagerState, index)
+                                val activeFraction = if (index == currentPage) 1f else 0f
                                 Box(
                                     modifier = Modifier
                                         .clickable {
@@ -308,21 +297,12 @@ fun HomeHeroSection(
 
 private data class HeroPageLayer(
     val page: Int,
-    val visibility: Float,
-    val offset: Float,
 )
 
 private fun heroPageOffset(
     pagerState: PagerState,
     page: Int,
 ): Float = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-
-private fun heroPageVisibility(
-    pagerState: PagerState,
-    page: Int,
-): Float {
-    return (1f - abs(heroPageOffset(pagerState, page))).coerceIn(0f, 1f)
-}
 
 @Composable
 fun HomeHeroReservedSpace(
