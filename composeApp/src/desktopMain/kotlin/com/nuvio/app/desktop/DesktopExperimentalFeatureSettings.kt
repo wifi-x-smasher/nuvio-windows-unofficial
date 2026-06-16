@@ -25,6 +25,14 @@ internal object DesktopExperimentalFeatureSettings {
         if (started) return
         started = true
 
+        val storedWindowsBackend = WindowsInternalPlayerBackend.fromId(
+            prefs.getString(PREF_WINDOWS_INTERNAL_PLAYER_BACKEND),
+        )
+        val safeWindowsBackend = when (storedWindowsBackend) {
+            WindowsInternalPlayerBackend.NATIVE_MPV -> WindowsInternalPlayerBackend.STABLE_MEDIAMP
+            else -> storedWindowsBackend
+        }
+
         ExperimentalFeatureSettings.seed(
             universalSearchEnabled = prefs.getBoolean(PREF_UNIVERSAL_SEARCH_ENABLED) ?: true,
             videoUpscalerPreset = VideoUpscalerPreset.fromId(
@@ -34,9 +42,7 @@ internal object DesktopExperimentalFeatureSettings {
                 prefs.getString(PREF_VIDEO_DECODER_BACKEND),
             ),
             displaySyncEnabled = prefs.getBoolean(PREF_DISPLAY_SYNC_ENABLED) ?: false,
-            windowsInternalPlayerBackend = WindowsInternalPlayerBackend.fromId(
-                prefs.getString(PREF_WINDOWS_INTERNAL_PLAYER_BACKEND),
-            ),
+            windowsInternalPlayerBackend = safeWindowsBackend,
         )
 
         scope.launch {

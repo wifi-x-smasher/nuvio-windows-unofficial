@@ -1791,10 +1791,14 @@ private fun WindowsInternalPlayerBackendDialog(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "Experimental native MPV uses a separate Windows video surface for HDR and refresh-rate testing. If playback fails, switch back to Stable MediaMP.",
+                    text = "Stable MediaMP is the supported Windows internal player. The native MPV surface is kept for developer testing only until it is reliable across display setups.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+
+                val selectableBackends = remember {
+                    WindowsInternalPlayerBackend.entries.filterNot { it == WindowsInternalPlayerBackend.NATIVE_MPV }
+                }
 
                 LazyColumn(
                     modifier = Modifier
@@ -1802,7 +1806,7 @@ private fun WindowsInternalPlayerBackendDialog(
                         .heightIn(max = 320.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(WindowsInternalPlayerBackend.entries) { backend ->
+                    items(selectableBackends) { backend ->
                         val isSelected = backend == selectedBackend
                         val containerColor = if (isSelected) {
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)

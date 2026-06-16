@@ -25,13 +25,19 @@ internal object NativeMpvRuntimeLocator {
             ?.takeIf { it.isNotBlank() }
             ?.let(::File)
         val appDir = resourcesDir?.parentFile
+        add("resourcesDir/mpv.exe", resourcesDir?.resolve("mpv.exe"))
         add("resourcesDir/mpv/mpv.exe", resourcesDir?.resolve("mpv/mpv.exe"))
+        add("appDir/resources/mpv.exe", appDir?.resolve("resources/mpv.exe"))
         add("appDir/resources/mpv/mpv.exe", appDir?.resolve("resources/mpv/mpv.exe"))
+        add("appDir/mpv.exe", appDir?.resolve("mpv.exe"))
         add("appDir/mpv/mpv.exe", appDir?.resolve("mpv/mpv.exe"))
 
         currentExecutableDirectory()?.let { exeDir ->
+            add("exeDir/resources/mpv.exe", exeDir.resolve("resources/mpv.exe"))
             add("exeDir/resources/mpv/mpv.exe", exeDir.resolve("resources/mpv/mpv.exe"))
+            add("exeDir/app/resources/mpv.exe", exeDir.resolve("app/resources/mpv.exe"))
             add("exeDir/app/resources/mpv/mpv.exe", exeDir.resolve("app/resources/mpv/mpv.exe"))
+            add("exeDir/mpv.exe", exeDir.resolve("mpv.exe"))
             add("exeDir/mpv/mpv.exe", exeDir.resolve("mpv/mpv.exe"))
         }
 
@@ -42,7 +48,9 @@ internal object NativeMpvRuntimeLocator {
             System.getProperty("user.dir")?.takeIf { it.isNotBlank() }?.let { userDir ->
                 val base = File(userDir)
                 add("dev:compose resources", base.resolve("composeApp/src/desktopMain/resources/mpv/mpv.exe"))
+                add("dev:processed flat resources", base.resolve("composeApp/build/processedResources/desktop/main/mpv.exe"))
                 add("dev:processed resources", base.resolve("composeApp/build/processedResources/desktop/main/mpv/mpv.exe"))
+                add("dev:runtime flat resources", base.resolve("composeApp/build/desktop-runtime-resources/mpv.exe"))
                 add("dev:runtime resources", base.resolve("composeApp/build/desktop-runtime-resources/mpv/mpv.exe"))
                 add("dev:vendor mpv", base.resolve("vendor/mediamp-nuvio/mediamp-mpv/libmpv/lib/windows/x86_64/mpv.exe"))
             }

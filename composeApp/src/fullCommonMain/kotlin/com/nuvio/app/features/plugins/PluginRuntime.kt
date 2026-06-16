@@ -110,10 +110,11 @@ internal object PluginRuntime {
         var resultJson = "[]"
 
         try {
-            // IO dispatcher (not Default): the synchronous __native_fetch binding runs a blocking
-            // runBlocking { httpRequestRaw } on the QuickJS thread, so it must hold an IO-pool thread
-            // rather than starving the small Default pool shared with other app work.
-            quickJs(Dispatchers.IO) {
+            // Keep QuickJS job execution on Default. Running many native QuickJS jobs on the large
+            // IO scheduler has crashed the Windows JVM inside executePendingJob during heavy stream
+            // searches. The outer wrapper still starts from IO; the native runtime itself stays on
+            // the smaller, better-tested dispatcher with a conservative execution gate.
+            quickJs(Dispatchers.Default) {
                 define("console") {
                     function("log") { args ->
                         log.d { "Plugin:$scraperId ${args.joinToString(" ") { it?.toString() ?: "null" }}" }

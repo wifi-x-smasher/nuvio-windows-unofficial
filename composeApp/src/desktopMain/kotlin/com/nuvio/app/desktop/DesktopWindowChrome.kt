@@ -11,6 +11,7 @@ import java.awt.Rectangle
 import java.awt.Toolkit
 import java.awt.Window
 import javax.swing.JFrame
+import kotlin.math.roundToInt
 
 internal object DesktopWindowChrome {
     private const val DWMWA_USE_IMMERSIVE_DARK_MODE = 20
@@ -22,6 +23,12 @@ internal object DesktopWindowChrome {
     private val dwmApi: DwmApi? by lazy {
         runCatching {
             Native.load("dwmapi", DwmApi::class.java, W32APIOptions.DEFAULT_OPTIONS)
+        }.getOrNull()
+    }
+
+    private val user32Api: User32Api? by lazy {
+        runCatching {
+            Native.load("user32", User32Api::class.java, W32APIOptions.DEFAULT_OPTIONS)
         }.getOrNull()
     }
 
@@ -50,8 +57,28 @@ internal object DesktopWindowChrome {
      * Sizes the (undecorated) window to the current monitor's full bounds, including the area
      * behind the taskbar, for immersive fullscreen. Must be called on the AWT event thread.
      */
-    fun applyFullscreenBounds(window: Window) {
-        applyBounds(window, fullScreenBounds(window), label = "fullscreen")
+    fun applyFullscreenBounds(
+        window: Window,
+        strategy: DesktopFullscreenStrategy = DesktopFullscreenStrategy.resolve(),
+    ) {
+        DesktopRuntimeLog.info("desktop.fullscreen.strategy selected=${strategy.configValue}")
+        when (strategy) {
+            DesktopFullscreenStrategy.ManualBorderlessBounds -> {
+                applyBounds(window, fullScreenBounds(window), label = "fullscreen", fullscreen = true)
+            }
+            DesktopFullscreenStrategy.WorkAreaMaximized -> {
+                applyBounds(window, workAreaBounds(window), label = "fullscreen-work-area", fullscreen = true)
+            }
+            DesktopFullscreenStrategy.Win32BorderlessSetWindowPos -> {
+                applyWin32FullscreenBounds(window)
+            }
+            DesktopFullscreenStrategy.PlayerWindowOnly -> {
+                DesktopRuntimeLog.warn(
+                    "desktop.fullscreen.strategy player-window-only unavailable fallback=manual-borderless",
+                )
+                applyBounds(window, fullScreenBounds(window), label = "fullscreen", fullscreen = true)
+            }
+        }
     }
 
     /**
@@ -59,10 +86,15 @@ internal object DesktopWindowChrome {
      * so it reads as a maximized browsing window. Must be called on the AWT event thread.
      */
     fun applyNormalBounds(window: Window) {
-        applyBounds(window, workAreaBounds(window), label = "normal")
+        applyBounds(window, workAreaBounds(window), label = "normal", fullscreen = false)
     }
 
-    private fun applyBounds(window: Window, bounds: Rectangle, label: String) {
+    private fun applyBounds(
+        window: Window,
+        bounds: Rectangle,
+        label: String,
+        fullscreen: Boolean,
+    ) {
         val frame = window as? JFrame
         frame?.extendedState = JFrame.NORMAL
         window.bounds = bounds
@@ -71,6 +103,88 @@ internal object DesktopWindowChrome {
         window.validate()
         window.repaint()
         DesktopRuntimeLog.info("desktop.window.$label bounds=${bounds.toLogString()}")
+        DesktopDisplayDiagnostics.log(
+            event = "window-$label-bounds-applied",
+            window = window,
+            fullscreen = fullscreen,
+        )
+    }
+
+    private fun applyWin32FullscreenBounds(window: Window) {
+        if (!isWindows()) {
+            DesktopRuntimeLog.warn(
+                "desktop.fullscreen.strategy win32-borderless unavailable reason=non-windows fallback=manual-borderless",
+            )
+            applyBounds(window, fullScreenBounds(window), label = "fullscreen", fullscreen = true)
+            return
+        }
+        val targetConfiguration = targetConfiguration(window)
+        val logicalBounds = targetConfiguration.bounds
+        val transform = targetConfiguration.defaultTransform
+        val nativeBounds = toNativePixelBoundsForSetWindowPos(
+            logicalBounds = logicalBounds,
+            scaleX = transform.scaleX,
+            scaleY = transform.scaleY,
+        )
+        val hwnd = runCatching { Native.getWindowPointer(window) }.getOrNull()
+        val user32 = user32Api
+        if (hwnd == null || user32 == null) {
+            DesktopRuntimeLog.warn(
+                "desktop.fullscreen.strategy win32-borderless unavailable reason=user32 fallback=manual-borderless",
+            )
+            applyBounds(window, logicalBounds, label = "fullscreen", fullscreen = true)
+            return
+        }
+
+        val frame = window as? JFrame
+        frame?.extendedState = JFrame.NORMAL
+        window.background = java.awt.Color.BLACK
+        frame?.contentPane?.background = java.awt.Color.BLACK
+        DesktopRuntimeLog.info(
+            "desktop.window.fullscreen-win32.request " +
+                "logical=${logicalBounds.toLogString()} " +
+                "native=${nativeBounds.toLogString()} " +
+                "scale=${transform.scaleX}x${transform.scaleY}",
+        )
+        val ok = runCatching {
+            user32.SetWindowPos(
+                hwnd,
+                null,
+                nativeBounds.x,
+                nativeBounds.y,
+                nativeBounds.width,
+                nativeBounds.height,
+                SWP_NOZORDER or SWP_NOOWNERZORDER or SWP_FRAMECHANGED or SWP_SHOWWINDOW,
+            )
+        }.getOrDefault(false)
+        window.validate()
+        window.repaint()
+        DesktopRuntimeLog.info(
+            "desktop.window.fullscreen-win32 " +
+                "logical=${logicalBounds.toLogString()} " +
+                "native=${nativeBounds.toLogString()} " +
+                "result=$ok",
+        )
+        DesktopDisplayDiagnostics.log(
+            event = "window-fullscreen-win32-bounds-applied",
+            window = window,
+            fullscreen = true,
+        )
+    }
+
+    internal fun toNativePixelBoundsForSetWindowPos(
+        logicalBounds: Rectangle,
+        scaleX: Double,
+        scaleY: Double,
+    ): Rectangle {
+        val safeScaleX = scaleX.takeIf { it.isFinite() && it > 0.0 } ?: 1.0
+        val safeScaleY = scaleY.takeIf { it.isFinite() && it > 0.0 } ?: 1.0
+        return Rectangle(
+            (logicalBounds.x * safeScaleX).roundToInt(),
+            (logicalBounds.y * safeScaleY).roundToInt(),
+            (logicalBounds.width * safeScaleX).roundToInt().coerceAtLeast(1),
+            (logicalBounds.height * safeScaleY).roundToInt().coerceAtLeast(1),
+        )
     }
 
     private fun fullScreenBounds(window: Window): Rectangle =
@@ -158,4 +272,22 @@ internal object DesktopWindowChrome {
             cbAttribute: Int,
         ): Int
     }
+
+    private interface User32Api : Library {
+        @Suppress("FunctionName")
+        fun SetWindowPos(
+            hWnd: Pointer,
+            hWndInsertAfter: Pointer?,
+            x: Int,
+            y: Int,
+            cx: Int,
+            cy: Int,
+            flags: Int,
+        ): Boolean
+    }
+
+    private const val SWP_NOZORDER = 0x0004
+    private const val SWP_FRAMECHANGED = 0x0020
+    private const val SWP_SHOWWINDOW = 0x0040
+    private const val SWP_NOOWNERZORDER = 0x0200
 }

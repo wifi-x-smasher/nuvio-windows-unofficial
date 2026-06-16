@@ -29,6 +29,7 @@ internal fun DesktopPlayerSurfaceHost(
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
+    backendFactory: () -> DesktopPlayerBackend = DesktopPlayerBackendFactory::createWindowsBackend,
 ) {
     val sessionKey = remember(sourceUrl, sourceAudioUrl, sourceHeaders, sourceResponseHeaders) {
         listOf(sourceUrl, sourceAudioUrl.orEmpty(), sourceHeaders.hashCode().toString(), sourceResponseHeaders.hashCode().toString())
@@ -41,7 +42,7 @@ internal fun DesktopPlayerSurfaceHost(
 
     var activeSessionKey by remember { mutableStateOf<String?>(null) }
     val backend = remember {
-        DesktopPlayerBackendFactory.createWindowsBackend()
+        backendFactory()
     }
 
     DisposableEffect(backend) {

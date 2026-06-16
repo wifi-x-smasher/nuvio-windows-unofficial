@@ -1,6 +1,8 @@
 package com.nuvio.app
 
 import com.nuvio.app.desktop.DesktopWindowChrome
+import com.nuvio.app.desktop.DesktopFullscreenStrategy
+import com.nuvio.app.features.player.desktop.DesktopPlayerBackendFactory
 import java.awt.event.KeyEvent
 import java.awt.Rectangle
 import kotlin.test.Test
@@ -125,6 +127,54 @@ class DesktopWindowModeTest {
     }
 
     @Test
+    fun parsesFullscreenStrategyConfigValues() {
+        assertEquals(
+            DesktopFullscreenStrategy.ManualBorderlessBounds,
+            DesktopFullscreenStrategy.fromConfigValue("manual-borderless-bounds"),
+        )
+        assertEquals(
+            DesktopFullscreenStrategy.WorkAreaMaximized,
+            DesktopFullscreenStrategy.fromConfigValue("work_area_maximized"),
+        )
+        assertEquals(
+            DesktopFullscreenStrategy.Win32BorderlessSetWindowPos,
+            DesktopFullscreenStrategy.fromConfigValue("win32-borderless-set-window-pos"),
+        )
+        assertEquals(
+            DesktopFullscreenStrategy.PlayerWindowOnly,
+            DesktopFullscreenStrategy.fromConfigValue("player-window-only"),
+        )
+        assertEquals(null, DesktopFullscreenStrategy.fromConfigValue("unknown"))
+        assertEquals(null, DesktopFullscreenStrategy.fromConfigValue("   "))
+    }
+
+    @Test
+    fun convertsLogicalFullscreenBoundsToNativePixelsForWin32() {
+        val logicalBounds = Rectangle(0, 0, 2560, 1440)
+
+        val nativeBounds = DesktopWindowChrome.toNativePixelBoundsForSetWindowPos(
+            logicalBounds = logicalBounds,
+            scaleX = 1.5,
+            scaleY = 1.5,
+        )
+
+        assertEquals(Rectangle(0, 0, 3840, 2160), nativeBounds)
+    }
+
+    @Test
+    fun convertsNegativeLogicalMonitorBoundsToNativePixelsForWin32() {
+        val logicalBounds = Rectangle(-1280, -720, 1280, 720)
+
+        val nativeBounds = DesktopWindowChrome.toNativePixelBoundsForSetWindowPos(
+            logicalBounds = logicalBounds,
+            scaleX = 1.25,
+            scaleY = 1.25,
+        )
+
+        assertEquals(Rectangle(-1600, -900, 1600, 900), nativeBounds)
+    }
+
+    @Test
     fun escapeAndBackspaceBelongToPlayerShortcuts() {
         assertEquals(
             com.nuvio.app.features.player.PlayerKeyboardShortcut.CloseOrBack,
@@ -140,22 +190,41 @@ class DesktopWindowModeTest {
     fun rendererConfigurationDefaultsToOpenGlAndAllowsExplicitOverrides() {
         val previousNuvioRenderApi = System.getProperty("nuvio.renderApi")
         val previousSkikoRenderApi = System.getProperty("skiko.renderApi")
+        val previousInteropBlending = System.getProperty("compose.interop.blending")
+        val previousSwingRenderOnGraphics = System.getProperty("compose.swing.render.on.graphics")
+        val previousLayersType = System.getProperty("compose.layers.type")
         try {
             System.clearProperty("nuvio.renderApi")
             System.clearProperty("skiko.renderApi")
+            System.clearProperty("compose.interop.blending")
+            System.clearProperty("compose.swing.render.on.graphics")
+            System.clearProperty("compose.layers.type")
             assertEquals("OPENGL", configureDesktopRenderer())
             assertEquals("OPENGL", System.getProperty("skiko.renderApi"))
+            assertEquals("true", System.getProperty("compose.interop.blending"))
 
             System.setProperty("nuvio.renderApi", "SOFTWARE")
             assertEquals("SOFTWARE", configureDesktopRenderer())
             assertEquals("SOFTWARE", System.getProperty("skiko.renderApi"))
 
+            System.clearProperty("nuvio.renderApi")
+            System.setProperty("skiko.renderApi", "OPENGL")
+            assertEquals("OPENGL", configureDesktopRenderer())
+            assertEquals("OPENGL", System.getProperty("skiko.renderApi"))
+
             System.setProperty("nuvio.renderApi", "DIRECT3D")
             assertEquals("DIRECT3D", configureDesktopRenderer())
             assertEquals("DIRECT3D", System.getProperty("skiko.renderApi"))
+            assertEquals("true", System.getProperty("compose.interop.blending"))
+            assertEquals("true", System.getProperty("compose.swing.render.on.graphics"))
+            assertEquals("COMPONENT", System.getProperty("compose.layers.type"))
+            assertTrue(DesktopPlayerBackendFactory.isDirect3DRendererActive())
         } finally {
             restoreProperty("nuvio.renderApi", previousNuvioRenderApi)
             restoreProperty("skiko.renderApi", previousSkikoRenderApi)
+            restoreProperty("compose.interop.blending", previousInteropBlending)
+            restoreProperty("compose.swing.render.on.graphics", previousSwingRenderOnGraphics)
+            restoreProperty("compose.layers.type", previousLayersType)
         }
     }
 }

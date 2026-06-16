@@ -8,9 +8,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.nuvio.app.features.player.PlatformPlayerSurface
 import com.nuvio.app.features.player.PlayerEngineController
 import com.nuvio.app.features.player.PlayerResizeMode
+import com.nuvio.app.features.player.desktop.DesktopPlayerBackendFactory
+import com.nuvio.app.features.player.desktop.DesktopPlayerSurfaceHost
 
 @Composable
 actual fun HeroTrailerPlayerSurface(
@@ -34,14 +35,14 @@ actual fun HeroTrailerPlayerSurface(
         controller?.setVolume(if (muted) 0f else 1f)
     }
 
-    PlatformPlayerSurface(
+    DesktopPlayerSurfaceHost(
         sourceUrl = sourceUrl,
         sourceAudioUrl = sourceAudioUrl,
-        useYoutubeChunkedPlayback = true,
+        sourceHeaders = emptyMap(),
+        sourceResponseHeaders = emptyMap(),
         modifier = modifier,
         playWhenReady = playWhenReady,
         resizeMode = PlayerResizeMode.Zoom,
-        useNativeController = false,
         onControllerReady = { nextController ->
             controller = nextController
             nextController.setVolume(if (muted) 0f else 1f)
@@ -61,5 +62,6 @@ actual fun HeroTrailerPlayerSurface(
                 latestOnError.value()
             }
         },
+        backendFactory = { DesktopPlayerBackendFactory.createStableMpvBackend("hero-trailer") },
     )
 }

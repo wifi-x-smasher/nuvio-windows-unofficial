@@ -51,6 +51,7 @@ internal class NativeMpvDesktopPlayerBackend private constructor(
     private var activeIpc: NativeMpvIpcConnection? = null
     private var volumeFraction: Float = 1f
     private var muted = false
+    private var currentResizeMode: PlayerResizeMode = PlayerResizeMode.Fit
 
     override val controller: PlayerEngineController = object : PlayerEngineController {
         override fun play() {
@@ -133,6 +134,7 @@ internal class NativeMpvDesktopPlayerBackend private constructor(
 
     override suspend fun load(request: DesktopPlayerRequest) {
         pendingRequest = request
+        currentResizeMode = request.resizeMode
         stateFlow.value = DesktopPlayerState(
             phase = DesktopPlayerPhase.Preparing,
             backendName = backendName,
@@ -142,14 +144,8 @@ internal class NativeMpvDesktopPlayerBackend private constructor(
     }
 
     override fun setResizeMode(resizeMode: PlayerResizeMode) {
-        val mode = when (resizeMode) {
-            PlayerResizeMode.Fit -> "no"
-            PlayerResizeMode.Fill -> "yes"
-            PlayerResizeMode.Zoom -> "yes"
-        }
-        sendAsync(listOf("set_property", "video-unscaled", "no"))
-        sendAsync(listOf("set_property", "panscan", if (resizeMode == PlayerResizeMode.Zoom) 1.0 else 0.0))
-        sendAsync(listOf("set_property", "keepaspect", mode))
+        currentResizeMode = resizeMode
+        sendResizeModeAsync(resizeMode)
     }
 
     override fun releaseSoft() {
@@ -203,6 +199,7 @@ internal class NativeMpvDesktopPlayerBackend private constructor(
             activeProcess = process
             val ipc = connectIpc(ipcPath)
             activeIpc = ipc
+            applyResizeMode(ipc.client, request.resizeMode)
             ipc.client.sendCommand(listOf("loadfile", request.sourceUrl, "replace"))
             request.sourceAudioUrl?.takeIf { it.isNotBlank() }?.let { audioUrl ->
                 ipc.client.sendCommand(listOf("audio-add", audioUrl, "select"))
@@ -241,6 +238,7 @@ internal class NativeMpvDesktopPlayerBackend private constructor(
             add("--osd-level=0")
             add("--input-default-bindings=no")
             add("--input-vo-keyboard=no")
+            addAll(request.resizeMode.toMpvLaunchOptions())
             request.sourceHeaders["User-Agent"]?.takeIf { it.isNotBlank() }?.let { add("--user-agent=$it") }
             request.sourceHeaders["Referer"]?.takeIf { it.isNotBlank() }?.let { add("--referrer=$it") }
             request.sourceHeaders.toMpvHeaderFields()?.let { add("--http-header-fields=$it") }
@@ -279,6 +277,21 @@ internal class NativeMpvDesktopPlayerBackend private constructor(
             runCatching { ipc.client.sendCommand(command) }
                 .onFailure { DesktopRuntimeLog.warn("native-mpv command failed command=${command.firstOrNull()} message=${it.message}") }
         }
+    }
+
+    private fun sendResizeModeAsync(resizeMode: PlayerResizeMode = currentResizeMode) {
+        val ipc = activeIpc ?: return
+        scope.launch {
+            runCatching { applyResizeMode(ipc.client, resizeMode) }
+                .onFailure { DesktopRuntimeLog.warn("native-mpv resize mode failed mode=$resizeMode message=${it.message}") }
+        }
+    }
+
+    private fun applyResizeMode(client: NativeMpvIpcClient, resizeMode: PlayerResizeMode) {
+        client.sendCommand(listOf("set_property", "video-unscaled", "no"))
+        client.sendCommand(listOf("set_property", "panscan", resizeMode.panscanValue()))
+        client.sendCommand(listOf("set_property", "keepaspect", resizeMode.keepAspectValue()))
+        DesktopRuntimeLog.info("native-mpv resizeMode=$resizeMode applied keepaspect=${resizeMode.keepAspectValue()} panscan=${resizeMode.panscanValue()}")
     }
 
     private fun refreshPositionAsync() {
@@ -342,6 +355,27 @@ private fun Map<String, String>.toMpvHeaderFields(): String? {
         .joinToString(",") { (key, value) -> "${key.trim()}: ${value.trim()}" }
     return fields.takeIf { it.isNotBlank() }
 }
+
+private fun PlayerResizeMode.toMpvLaunchOptions(): List<String> =
+    listOf(
+        "--video-unscaled=no",
+        "--panscan=${panscanValue()}",
+        "--keepaspect=${keepAspectValue()}",
+    )
+
+private fun PlayerResizeMode.keepAspectValue(): String =
+    when (this) {
+        PlayerResizeMode.Fit -> "yes"
+        PlayerResizeMode.Fill -> "no"
+        PlayerResizeMode.Zoom -> "yes"
+    }
+
+private fun PlayerResizeMode.panscanValue(): Double =
+    when (this) {
+        PlayerResizeMode.Fit -> 0.0
+        PlayerResizeMode.Fill -> 0.0
+        PlayerResizeMode.Zoom -> 1.0
+    }
 
 private fun androidx.compose.ui.graphics.Color.toMpvAssColor(): String {
     fun component(value: Float): String =

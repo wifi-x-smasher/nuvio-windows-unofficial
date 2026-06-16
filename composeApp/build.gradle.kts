@@ -635,7 +635,6 @@ compose.desktop {
     application {
         mainClass = "com.nuvio.app.DesktopMainKt"
         desktopJavaHomeOverride?.let { javaHome = it }
-        jvmArgs("-Dskiko.renderApi=OPENGL")
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             appResourcesRootDir.set(layout.buildDirectory.dir("desktop-runtime-resources"))

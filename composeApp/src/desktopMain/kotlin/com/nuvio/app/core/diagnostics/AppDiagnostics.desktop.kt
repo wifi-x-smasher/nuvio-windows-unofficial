@@ -1,6 +1,7 @@
 package com.nuvio.app.core.diagnostics
 
 import com.nuvio.app.desktop.DesktopRuntimeLog
+import com.nuvio.app.desktop.DesktopDisplayDiagnostics
 import java.awt.Desktop
 import java.awt.GraphicsEnvironment
 import java.io.PrintWriter
@@ -8,6 +9,7 @@ import java.io.StringWriter
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 import java.time.Instant
+import java.util.Locale
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
@@ -43,7 +45,9 @@ actual object AppDiagnostics {
                 "skikoRenderApi" to System.getProperty("skiko.renderApi"),
                 "composeInteropBlending" to System.getProperty("compose.interop.blending"),
                 "composeLayersType" to System.getProperty("compose.layers.type"),
+                "rendererSource" to desktopRendererSourceSummary(),
                 "graphicsDevices" to desktopGraphicsDeviceSummary(),
+                "displaySnapshot" to desktopDisplaySnapshotSummary(),
             ),
         )
     }
@@ -145,9 +149,11 @@ private fun buildDiagnosticsBundle(appSummary: Map<String, String>): String = bu
     appendLine("JVM: ${System.getProperty("java.version")} (${System.getProperty("java.vendor")})")
     appendLine(
         "Renderer: skiko=${System.getProperty("skiko.renderApi")} " +
-            "composeLayers=${System.getProperty("compose.layers.type")}",
+            "composeLayers=${System.getProperty("compose.layers.type")} " +
+            "source=${desktopRendererSourceSummary()}",
     )
     appendLine("GPU/Display: ${desktopGraphicsDeviceSummary()}")
+    appendLine("Active Display: ${desktopDisplaySnapshotSummary()}")
     appendLine()
     appendLine("===== nuvio.log =====")
     appendLine(readBundleFile(AppDiagnostics.logFilePath()))
@@ -175,12 +181,35 @@ private fun desktopGraphicsDeviceSummary(): String =
                 val configuration = device.defaultConfiguration
                 val bounds = configuration.bounds
                 val transform = configuration.defaultTransform
-                "#$index:${device.safeIdString()}:${bounds.x},${bounds.y},${bounds.width}x${bounds.height}:scale=${"%.2f".format(transform.scaleX)}x${"%.2f".format(transform.scaleY)}"
+                "#$index:${device.safeIdString()}:${bounds.x},${bounds.y},${bounds.width}x${bounds.height}:scale=${formatScale(transform.scaleX)}x${formatScale(transform.scaleY)}"
             }
             .joinToString(separator = " | ")
             .take(900)
     }.getOrElse { error ->
         "unavailable:${error.message ?: error::class.simpleName.orEmpty()}"
+    }
+
+private fun desktopDisplaySnapshotSummary(): String {
+    val snapshot = DesktopDisplayDiagnostics.latest()
+        ?: DesktopDisplayDiagnostics.snapshot(window = null, fullscreen = false)
+    return "screens=${snapshot.screenCount} " +
+        "active=${snapshot.activeBounds} " +
+        "scale=${formatScale(snapshot.activeScaleX)}x${formatScale(snapshot.activeScaleY)} " +
+        "refresh=${snapshot.activeRefreshRateHz ?: "unknown"} " +
+        "window=${snapshot.windowBounds} " +
+        "fullscreen=${snapshot.fullscreen} " +
+        "renderer=${snapshot.renderer ?: "unknown"}"
+}
+
+private fun formatScale(value: Double): String =
+    String.format(Locale.US, "%.2f", value)
+
+private fun desktopRendererSourceSummary(): String =
+    when {
+        !System.getProperty("nuvio.renderApi").isNullOrBlank() -> "system-property:nuvio.renderApi"
+        !System.getenv("NUVIO_RENDER_API").isNullOrBlank() -> "env:NUVIO_RENDER_API"
+        !System.getProperty("skiko.renderApi").isNullOrBlank() -> "system-property:skiko.renderApi"
+        else -> "default"
     }
 
 private fun java.awt.GraphicsDevice.safeIdString(): String =

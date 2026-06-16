@@ -18,14 +18,43 @@ internal object DesktopPlayerBackendFactory {
         DesktopRuntimeLog.info("Selected Windows player backend request=${selection.value} source=${selection.source}")
         return when (selection.backend) {
             DesktopPlayerBackendKind.None -> unavailable(
+                backendName = "windows-player-disabled",
                 technicalMessage = "Windows player backend disabled by configuration.",
                 selection = selection,
             )
             DesktopPlayerBackendKind.NativeMpv -> createNativeMpvOrFallback(selection)
             DesktopPlayerBackendKind.Mpv,
             DesktopPlayerBackendKind.Auto
-            -> createMpvOrUnavailable(selection)
+            -> createStableMpvForRenderer(selection)
         }
+    }
+
+    fun createStableMpvBackend(reason: String): DesktopPlayerBackend {
+        val selection = DesktopPlayerBackendSelection(
+            backend = DesktopPlayerBackendKind.Mpv,
+            value = "mpv",
+            source = reason,
+        )
+        DesktopRuntimeLog.info("Selected Windows stable player backend request=${selection.value} source=${selection.source}")
+        return createStableMpvForRenderer(selection)
+    }
+
+    private fun createStableMpvForRenderer(selection: DesktopPlayerBackendSelection): DesktopPlayerBackend {
+        if (!isDirect3DRendererActive()) {
+            return createMpvOrUnavailable(selection)
+        }
+
+        DesktopRuntimeLog.warn(
+            "Stable MediaMP backend requested while Direct3D renderer is active; " +
+                "refusing automatic native MPV promotion.",
+        )
+        return unavailable(
+            backendName = "windows-mediamp-mpv",
+            technicalMessage = "Stable MediaMP requires the OpenGL renderer. " +
+                "Direct3D/native MPV is developer-only; restart with " +
+                "NUVIO_WINDOWS_PLAYER_BACKEND=native-mpv for native MPV testing.",
+            selection = selection,
+        )
     }
 
     private fun createNativeMpvOrFallback(selection: DesktopPlayerBackendSelection): DesktopPlayerBackend {
@@ -37,17 +66,33 @@ internal object DesktopPlayerBackendFactory {
                 )
             }
             .onFailure {
-                DesktopRuntimeLog.error(
-                    "Experimental native MPV backend unavailable; falling back to stable MediaMP. ${runtime.diagnostics}",
-                    it,
-                )
+                if (isDirect3DRendererActive()) {
+                    DesktopRuntimeLog.error(
+                        "Native MPV backend unavailable and Direct3D renderer cannot use MediaMP/OpenGL. ${runtime.diagnostics}",
+                        it,
+                    )
+                } else {
+                    DesktopRuntimeLog.error(
+                        "Experimental native MPV backend unavailable; falling back to stable MediaMP. ${runtime.diagnostics}",
+                        it,
+                    )
+                }
             }
             .getOrNull()
-            ?: createMpvOrUnavailable(selection.copy(backend = DesktopPlayerBackendKind.Mpv))
+            ?: if (isDirect3DRendererActive()) {
+                unavailable(
+                    backendName = "windows-native-mpv",
+                    technicalMessage = "Native MPV backend is unavailable. ${runtime.diagnostics}",
+                    selection = selection,
+                )
+            } else {
+                createMpvOrUnavailable(selection.copy(backend = DesktopPlayerBackendKind.Mpv))
+            }
     }
 
     private fun createMpvOrUnavailable(selection: DesktopPlayerBackendSelection): DesktopPlayerBackend =
         createMpvOrNull(selection) ?: unavailable(
+            backendName = "windows-mediamp-mpv",
             technicalMessage = "MPV backend is unavailable.",
             selection = selection,
         )
@@ -68,10 +113,10 @@ internal object DesktopPlayerBackendFactory {
     }
 
     private fun unavailable(
+        backendName: String,
         technicalMessage: String,
         selection: DesktopPlayerBackendSelection,
     ): DesktopPlayerBackend {
-        val backendName = "windows-mediamp-mpv"
         DesktopRuntimeLog.warn("Selected player backend=$backendName (source=${selection.source} request=${selection.value})")
         return UnavailableDesktopPlayerBackend(
             backendName = backendName,
@@ -82,6 +127,9 @@ internal object DesktopPlayerBackendFactory {
             ),
         )
     }
+
+    internal fun isDirect3DRendererActive(): Boolean =
+        System.getProperty("skiko.renderApi").equals("DIRECT3D", ignoreCase = true)
 
     private enum class DesktopPlayerBackendKind {
         Auto,
@@ -103,7 +151,9 @@ internal object DesktopPlayerBackendFactory {
                 if (!env.isNullOrBlank()) return fromValue(env, "env:$BackendEnv")
                 val configured = ExperimentalFeatureSettings.windowsInternalPlayerBackend.value
                 if (configured == WindowsInternalPlayerBackend.NATIVE_MPV) {
-                    return fromValue(configured.id, "settings:experimental_features")
+                    DesktopRuntimeLog.warn(
+                        "Native MPV backend is dev-only for now; ignoring persisted experimental setting and using stable MediaMP.",
+                    )
                 }
                 return DesktopPlayerBackendSelection(DesktopPlayerBackendKind.Auto, "auto", "default")
             }

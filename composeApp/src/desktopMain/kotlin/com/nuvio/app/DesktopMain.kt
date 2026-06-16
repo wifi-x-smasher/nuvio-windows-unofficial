@@ -40,6 +40,8 @@ import androidx.compose.ui.zIndex
 import com.nuvio.app.desktop.DesktopPlayerRegistry
 import com.nuvio.app.desktop.DesktopRuntimeLog
 import com.nuvio.app.desktop.DesktopExperimentalFeatureSettings
+import com.nuvio.app.desktop.DesktopDisplayDiagnostics
+import com.nuvio.app.desktop.DesktopFullscreenStrategy
 import com.nuvio.app.desktop.DesktopSystemTray
 import com.nuvio.app.desktop.DesktopWindowChrome
 import com.nuvio.app.desktop.DiscordRichPresence
@@ -74,6 +76,7 @@ fun main(args: Array<String>) {
     AppDiagnostics.install()
     DesktopRuntimeLog.initialize()
     DesktopRuntimeLog.info("desktop.renderer configured skiko.renderApi=$renderApi")
+    DesktopDisplayDiagnostics.log("startup-before-window", window = null, fullscreen = false, renderer = renderApi)
     DesktopRuntimeLog.installGlobalExceptionHandlers()
     if (DesktopDeepLinkBridge.forwardToPrimaryInstanceIfNeeded(args)) {
         return
@@ -157,6 +160,7 @@ fun main(args: Array<String>) {
             val awtWindow = window
             DisposableEffect(awtWindow) {
                 DesktopWindowChrome.applyNuvioChrome(awtWindow)
+                DesktopDisplayDiagnostics.log("startup-window-created", awtWindow, fullscreen = false)
 
                 DesktopSystemTray.install(awtWindow) {
                     DesktopPlayerRegistry.closeAll("trayQuit")
@@ -164,7 +168,10 @@ fun main(args: Array<String>) {
                     exitApplication()
                 }
 
-                val controller = DesktopFullscreenController(awtWindow) { fullscreen ->
+                val controller = DesktopFullscreenController(
+                    window = awtWindow,
+                    fullscreenStrategy = DesktopFullscreenStrategy.resolve(),
+                ) { fullscreen ->
                     isFullscreen = fullscreen
                 }
                 fullscreenController = controller
@@ -250,9 +257,8 @@ fun main(args: Array<String>) {
 internal fun configureDesktopRenderer(): String {
     val requested = System.getProperty("nuvio.renderApi")
         ?: System.getenv("NUVIO_RENDER_API")
-        ?: System.getProperty("skiko.renderApi")
     val safeValue = selectDesktopRenderer(requested)
-    if (safeValue == "OPENGL") {
+    if (safeValue == "OPENGL" || safeValue == "DIRECT3D") {
         System.setProperty("compose.interop.blending", "true")
         System.setProperty("compose.swing.render.on.graphics", "true")
         System.setProperty("compose.layers.type", "COMPONENT")
@@ -434,6 +440,7 @@ internal fun shouldDebounceToggle(
  */
 internal class DesktopFullscreenController(
     private val window: AwtWindow,
+    private val fullscreenStrategy: DesktopFullscreenStrategy = DesktopFullscreenStrategy.resolve(),
     private val onModeChanged: (Boolean) -> Unit,
 ) {
     @Volatile
@@ -446,8 +453,12 @@ internal class DesktopFullscreenController(
 
     fun applyInitial() {
         EventQueue.invokeLater {
+            DesktopRuntimeLog.info(
+                "desktop.fullscreen.strategy initial=${fullscreenStrategy.configValue}",
+            )
             setDesktopWindowResizable(window, true)
             DesktopWindowChrome.applyNormalBounds(window)
+            DesktopDisplayDiagnostics.log("normal-initial-applied", window, fullscreen = false)
             onModeChanged(false)
         }
     }
@@ -458,6 +469,11 @@ internal class DesktopFullscreenController(
         if (!transitioning.compareAndSet(false, true)) return
         lastToggleNanos = now
         val target = nextWindowMode(mode)
+        DesktopDisplayDiagnostics.log(
+            event = if (target == DesktopWindowMode.Fullscreen) "fullscreen-request" else "normal-request",
+            window = window,
+            fullscreen = mode == DesktopWindowMode.Fullscreen,
+        )
         EventQueue.invokeLater {
             try {
                 applyMode(target)
@@ -471,6 +487,7 @@ internal class DesktopFullscreenController(
         if (mode != DesktopWindowMode.Fullscreen) return
         if (!transitioning.compareAndSet(false, true)) return
         lastToggleNanos = System.nanoTime()
+        DesktopDisplayDiagnostics.log("normal-request-escape", window, fullscreen = true)
         EventQueue.invokeLater {
             try {
                 applyMode(DesktopWindowMode.Normal)
@@ -483,12 +500,17 @@ internal class DesktopFullscreenController(
     private fun applyMode(target: DesktopWindowMode) {
         if (target == DesktopWindowMode.Fullscreen) {
             setDesktopWindowResizable(window, false)
-            DesktopWindowChrome.applyFullscreenBounds(window)
+            DesktopWindowChrome.applyFullscreenBounds(window, fullscreenStrategy)
         } else {
             setDesktopWindowResizable(window, true)
             DesktopWindowChrome.applyNormalBounds(window)
         }
         mode = target
+        DesktopDisplayDiagnostics.log(
+            event = if (target == DesktopWindowMode.Fullscreen) "fullscreen-applied" else "normal-applied",
+            window = window,
+            fullscreen = target == DesktopWindowMode.Fullscreen,
+        )
         onModeChanged(target == DesktopWindowMode.Fullscreen)
     }
 }
@@ -544,6 +566,7 @@ private fun snapDesktopWindowToNormalBounds(window: AwtWindow) {
         DesktopWindowChrome.applyNormalBounds(window)
         clampDesktopWindowToVirtualDesktopNow(window)
         logDesktopWindowDragNow("end-after-snap", window)
+        DesktopDisplayDiagnostics.log("drag-snap-normal-applied", window, fullscreen = false)
     }
 }
 
