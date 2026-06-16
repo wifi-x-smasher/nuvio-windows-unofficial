@@ -38,7 +38,7 @@ internal object DesktopMpvRuntime {
             logUnavailable = { diagnostics ->
                 AppDiagnostics.breadcrumb(
                     event = "player.mpv.native_runtime_unavailable",
-                    details = mapOf("diagnostics" to diagnostics.take(500)),
+                    details = mapOf("diagnostics" to diagnostics.take(2_000)),
                 )
             },
         )

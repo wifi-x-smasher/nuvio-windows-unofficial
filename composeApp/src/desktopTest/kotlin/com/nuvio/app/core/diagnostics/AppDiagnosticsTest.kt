@@ -35,6 +35,7 @@ class AppDiagnosticsTest {
         val text = """
             provider=Torrentio status=success resultCount=28 elapsedMs=120 httpStatus=403
             addonId=addon:com.stremio.torrentio.addon:https://torrentio.strem.fun/eyJkZWJyaWQiOiJ0b3Jib3gifQ/manifest.json
+            providerAddonId=addon:aiostreams.viren070.com.8e9bb463-4f1:https://aiostreams.fortheweak.cloud/stremio/8e9bb463-4f18-45c2-b99d-9b11942e11ae/eyJpIjoicWdiN0NrWmhUTTZuOTFMSnh5OTIwUT09IiwiZSI6IlFSdkJnZ3lkcHlKUDZERjVYMHBpTU42V09mN0U3OGREbkNsSHk5U0tIcUU9IiwidCI6ImEifQ/manifest.json
             request=https://plugins.example.test/u/super-secret-user-token-1234567890abcdef/configure/stream/movie/tt123.json?token=secret-token
             direct=https://media.example.test/path/${"a".repeat(72)}/stream.mkv?apikey=private-key
             Authorization: Bearer bearer-secret-value
@@ -52,6 +53,8 @@ class AppDiagnosticsTest {
         assertTrue(redacted.contains("https://media.example.test/<redacted-url>"))
 
         assertFalse(redacted.contains("manifest.json"))
+        assertFalse(redacted.contains("8e9bb463-4f18-45c2-b99d-9b11942e11ae"))
+        assertFalse(redacted.contains("eyJpIjoicWdi"))
         assertFalse(redacted.contains("super-secret-user-token"))
         assertFalse(redacted.contains("apikey=private-key"))
         assertFalse(redacted.contains("bearer-secret-value"))

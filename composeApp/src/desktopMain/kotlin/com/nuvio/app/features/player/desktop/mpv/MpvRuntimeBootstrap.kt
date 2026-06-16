@@ -78,9 +78,15 @@ internal object MpvRuntimeBootstrap {
                         diagnostics = "already loaded dll=${mediampDll.safePath()} inventory=${runtime.requiredFileInventory()}",
                     )
                 } else {
+                    val errorSummary = throwable.nativeLoadSummary()
+                    val runtimeFiles = directory.nativeRuntimeInventory()
+                    DesktopRuntimeLog.error(
+                        "MPV runtime bootstrap System.load failed dll=${mediampDll.safePath()} error=$errorSummary files=$runtimeFiles",
+                        throwable,
+                    )
                     MpvRuntimeBootstrapResult(
                         success = false,
-                        diagnostics = "System.load failed dll=${mediampDll.safePath()} inventory=${runtime.requiredFileInventory()} runtime=${runtime.diagnostics}",
+                        diagnostics = "System.load failed dll=${mediampDll.safePath()} error=$errorSummary inventory=${runtime.requiredFileInventory()} files=$runtimeFiles runtime=${runtime.diagnostics}",
                         error = throwable,
                     )
                 }
@@ -102,3 +108,27 @@ internal object MpvRuntimeBootstrap {
         fun SetDllDirectoryW(pathName: WString): Boolean
     }
 }
+
+private fun Throwable.nativeLoadSummary(): String {
+    val message = message
+        ?.replace('\n', ' ')
+        ?.replace('\r', ' ')
+        ?.ifBlank { null }
+        ?: "<no-message>"
+    return "${javaClass.simpleName}:$message"
+}
+
+private fun File.nativeRuntimeInventory(): String =
+    runCatching {
+        listFiles()
+            ?.filter { file ->
+                file.isFile && (
+                    file.extension.equals("dll", ignoreCase = true) ||
+                        file.extension.equals("exe", ignoreCase = true) ||
+                        file.extension.equals("com", ignoreCase = true)
+                    )
+            }
+            ?.sortedBy { it.name.lowercase() }
+            ?.joinToString(prefix = "[", postfix = "]") { file -> "${file.name}:${file.length()}" }
+            ?: "[]"
+    }.getOrDefault("<inventory-unavailable>")

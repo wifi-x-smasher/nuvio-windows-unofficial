@@ -107,6 +107,9 @@ class DesktopMpvRuntimeTest {
             )
 
             assertFalse(result.success)
+            assertTrue(result.diagnostics.contains("System.load failed"))
+            assertTrue(result.diagnostics.contains("error="))
+            assertTrue(result.diagnostics.contains("files="))
             assertEquals(
                 mediampDll.absolutePath,
                 System.getProperty(MpvRuntimeBootstrap.MediampDllPathProperty),

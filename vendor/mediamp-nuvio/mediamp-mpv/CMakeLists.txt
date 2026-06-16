@@ -26,7 +26,9 @@ if(WIN32)
     if (MSVC)
         message(STATUS "MSVC detected")
         add_compile_options(/Zc:__cplusplus)
-        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+        # Build the JNI bridge with the static MSVC runtime so the Windows
+        # installer does not depend on a separately installed VC++ redistributable.
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif ()
 elseif(APPLE)
     # macOS (Darwin)

@@ -3230,7 +3230,7 @@ private fun PlayerLaunch.diagnosticsDetails(): Map<String, String?> =
         "episode" to episodeNumber?.toString(),
         "streamTitle" to streamTitle,
         "providerName" to providerName,
-        "providerAddonId" to providerAddonId,
+        "providerAddonId" to providerAddonId.safePlaybackDiagnosticId(),
         "sourceKind" to sourceUrl.diagnosticSourceKind(),
         "hasSourceAudio" to (!sourceAudioUrl.isNullOrBlank()).toString(),
         "requestHeaderCount" to sourceHeaders.size.toString(),
@@ -3243,7 +3243,7 @@ private fun StreamItem.diagnosticsDetails(): Map<String, String?> =
         "streamTitle" to streamLabel,
         "streamSubtitle" to streamSubtitle,
         "addonName" to addonName,
-        "addonId" to addonId,
+        "addonId" to addonId.safePlaybackDiagnosticId(),
         "sourceName" to sourceName,
         "directUrlKind" to playableDirectUrl.diagnosticSourceKind(),
         "hasInfoHash" to (!infoHash.isNullOrBlank()).toString(),
@@ -3275,16 +3275,33 @@ private fun String?.diagnosticSourceKind(): String =
         else -> "unknown"
     }
 
-private fun shouldUseExternalPlayback(
+private val playbackDiagnosticUrlPattern = Regex("""(?i)\bhttps?://[^\s"'<>),\]}]+""")
+private val playbackDiagnosticLongSegmentPattern = Regex("""(?<=/)[A-Za-z0-9._~%+-]{48,}(?=/|$)""")
+
+private fun String?.safePlaybackDiagnosticId(): String? =
+    this
+        ?.replace(playbackDiagnosticUrlPattern) { match -> match.value.redactedPlaybackDiagnosticUrl() }
+        ?.replace(playbackDiagnosticLongSegmentPattern, "<redacted-segment>")
+
+private fun String.redactedPlaybackDiagnosticUrl(): String {
+    val schemeSeparator = indexOf("://")
+    if (schemeSeparator <= 0) return "<redacted-url>"
+    val scheme = substring(0, schemeSeparator)
+    val remainder = substring(schemeSeparator + 3)
+    val host = remainder
+        .takeWhile { it != '/' && it != '?' && it != '#' }
+        .trim()
+        .takeIf(String::isNotBlank)
+        ?: return "$scheme://<redacted-host>/<redacted-url>"
+    return "$scheme://$host/<redacted-url>"
+}
+
+internal fun shouldUseExternalPlayback(
     externalPlayerEnabled: Boolean,
     forceExternal: Boolean = false,
     forceInternal: Boolean = false,
 ): Boolean =
-    !forceInternal && (
-        forceExternal ||
-            externalPlayerEnabled ||
-            !InternalPlayerPlatform.isAvailable()
-        )
+    !forceInternal && (forceExternal || externalPlayerEnabled)
 
 @Composable
 private fun TabletTopPillItem(
