@@ -3,6 +3,7 @@ package com.nuvio.app.features.details.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -41,6 +42,18 @@ import com.nuvio.app.features.trailer.TrailerPlaybackSource
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
+
+internal enum class TrailerPopupPlayerSurfaceBounds {
+    MatchParent,
+}
+
+internal fun trailerPopupPlayerSurfaceBounds(): TrailerPopupPlayerSurfaceBounds =
+    TrailerPopupPlayerSurfaceBounds.MatchParent
+
+private fun BoxScope.trailerPopupPlayerSurfaceModifier(): Modifier =
+    when (trailerPopupPlayerSurfaceBounds()) {
+        TrailerPopupPlayerSurfaceBounds.MatchParent -> Modifier.matchParentSize()
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -173,7 +186,7 @@ fun TrailerPlayerPopup(
                             sourceUrl = playbackSource.videoUrl,
                             sourceAudioUrl = playbackSource.audioUrl,
                             useYoutubeChunkedPlayback = true,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = trailerPopupPlayerSurfaceModifier(),
                             playWhenReady = true,
                             resizeMode = PlayerResizeMode.Fit,
                             useNativeController = true,
