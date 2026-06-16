@@ -158,10 +158,11 @@ object ProfileRepository {
         PosterCardStyleRepository.onProfileChanged()
         PlayerSettingsRepository.onProfileChanged()
         // NOTE: do NOT reload DebridSettingsRepository here. selectProfile runs during the startup
-        // profile gate, which can fire before the auth session has finished restoring. Reloading
-        // debrid at that point reads keys under the wrong (signed_out) account scope, marks Torbox/
-        // Real-Debrid as "not connected", and latches hasLoaded=true so the correct post-auth load is
-        // skipped. Debrid is loaded once after auth via ProfileSettingsSync.ensureRepositoriesLoaded.
+        // profile gate, which can fire before the auth session has finished restoring, so the account
+        // scope (desktop folds the authenticated userId into the storage key) is not yet known here.
+        // DebridSettingsRepository now keys its load latch to the storage scope signature, so the
+        // first read after auth resolves self-corrects from the "signed_out" scope to the real
+        // account/profile scope. Debrid is (re)loaded after auth via ProfileSettingsSync.
         StreamBadgeSettingsRepository.onProfileChanged()
         HomeCatalogSettingsRepository.onProfileChanged()
         HomeRepository.clear()

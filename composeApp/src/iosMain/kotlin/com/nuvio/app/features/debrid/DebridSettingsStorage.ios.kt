@@ -229,6 +229,8 @@ actual object DebridSettingsStorage {
         }
     }
 
+    actual fun currentScopeSignature(): String = ProfileScopedKey.of("debrid_scope_signature")
+
     private fun providerApiKeyKey(providerId: String): String {
         val normalized = DebridProviders.byId(providerId)?.id
             ?: providerId.trim().lowercase().replace(Regex("[^a-z0-9_]+"), "_")

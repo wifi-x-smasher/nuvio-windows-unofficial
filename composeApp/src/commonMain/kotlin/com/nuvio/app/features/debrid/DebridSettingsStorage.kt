@@ -38,4 +38,11 @@ internal expect object DebridSettingsStorage {
     fun exportToSyncPayload(): JsonObject
     fun replaceFromSyncPayload(payload: JsonObject)
     fun clearLocalState()
+
+    /**
+     * Signature identifying the account/profile scope the stored values currently belong to.
+     * The repository uses it to detect when the scope changes (e.g. after the auth session finishes
+     * restoring on desktop) so a stale "signed_out" load can self-correct instead of latching.
+     */
+    fun currentScopeSignature(): String
 }

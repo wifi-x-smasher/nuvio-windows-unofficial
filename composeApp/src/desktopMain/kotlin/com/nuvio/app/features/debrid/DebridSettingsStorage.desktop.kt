@@ -32,6 +32,7 @@ internal actual object DebridSettingsStorage {
     private const val streamPreferencesKey = "debrid_stream_preferences"
     private const val streamNameTemplateKey = "debrid_stream_name_template"
     private const val streamDescriptionTemplateKey = "debrid_stream_description_template"
+    private const val scopeSignatureKey = "debrid_scope_signature"
     private val preferences = DesktopPreferences("nuvio_debrid_settings")
 
     actual fun loadEnabled(): Boolean? = loadBoolean(enabledKey)
@@ -149,6 +150,8 @@ internal actual object DebridSettingsStorage {
             DesktopSecureStore.remove(scopedKey(it))
         }
     }
+
+    actual fun currentScopeSignature(): String = scopedKey(scopeSignatureKey)
 
     private fun syncKeys(): List<String> =
         listOf(

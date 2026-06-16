@@ -1,5 +1,6 @@
 package com.nuvio.app.features.debrid
 
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,7 +20,12 @@ object DebridSettingsRepository {
         explicitNulls = false
     }
 
-    private var hasLoaded = false
+    // Scope (account + profile) the in-memory values were loaded for. Loading is keyed to this
+    // instead of a plain boolean so a load performed under an unresolved scope (e.g. the desktop
+    // "signed_out" scope before the auth session finishes restoring) self-corrects once the real
+    // account/profile scope becomes available, instead of latching the wrong "not connected" state.
+    @Volatile
+    private var loadedScope: String? = null
     private var enabled = false
     private var cloudLibraryEnabled = true
     private var providerApiKeys = emptyMap<String, String>()
@@ -36,7 +42,7 @@ object DebridSettingsRepository {
     private var streamDescriptionTemplate = DebridStreamFormatterDefaults.DESCRIPTION_TEMPLATE
 
     fun ensureLoaded() {
-        if (hasLoaded) return
+        if (loadedScope == DebridSettingsStorage.currentScopeSignature()) return
         loadFromDisk()
     }
 
@@ -45,7 +51,7 @@ object DebridSettingsRepository {
     }
 
     fun clearLocalState() {
-        hasLoaded = true
+        loadedScope = DebridSettingsStorage.currentScopeSignature()
         enabled = false
         cloudLibraryEnabled = true
         providerApiKeys = emptyMap()
@@ -293,7 +299,7 @@ object DebridSettingsRepository {
     }
 
     private fun loadFromDisk() {
-        hasLoaded = true
+        loadedScope = DebridSettingsStorage.currentScopeSignature()
         providerApiKeys = DebridProviders.all()
             .mapNotNull { provider ->
                 DebridSettingsStorage.loadProviderApiKey(provider.id)
