@@ -88,13 +88,18 @@ internal object DesktopRuntimeLog {
     }
 
     private fun appendLine(line: String) {
-        Files.writeString(
-            logFile,
-            line + System.lineSeparator(),
-            StandardCharsets.UTF_8,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.APPEND,
-        )
+        runCatching {
+            Files.createDirectories(logFile.parent)
+            Files.writeString(
+                logFile,
+                line + System.lineSeparator(),
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND,
+            )
+        }.onFailure { throwable ->
+            System.err.println("Nuvio desktop runtime log write failed: ${throwable.javaClass.simpleName}: ${throwable.message}")
+        }
     }
 
     private fun stackTrace(throwable: Throwable): String {
