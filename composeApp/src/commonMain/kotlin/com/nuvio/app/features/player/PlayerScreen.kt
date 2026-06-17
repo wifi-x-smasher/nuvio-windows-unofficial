@@ -174,6 +174,7 @@ fun PlayerScreen(
     sourceAudioUrl: String? = null,
     sourceHeaders: Map<String, String> = emptyMap(),
     sourceResponseHeaders: Map<String, String> = emptyMap(),
+    streamType: String? = null,
     providerName: String,
     streamTitle: String,
     streamSubtitle: String?,
@@ -260,6 +261,7 @@ fun PlayerScreen(
         var activeSourceResponseHeaders by remember(sourceUrl, sourceResponseHeaders) {
             mutableStateOf(sanitizePlaybackResponseHeaders(sourceResponseHeaders))
         }
+        var activeStreamType by rememberSaveable { mutableStateOf(streamType) }
         var activeStreamTitle by rememberSaveable { mutableStateOf(streamTitle) }
         var activeStreamSubtitle by rememberSaveable { mutableStateOf(streamSubtitle) }
         var activeProviderName by rememberSaveable { mutableStateOf(providerName) }
@@ -1091,12 +1093,14 @@ fun PlayerScreen(
                     filename = stream.behaviorHints.filename,
                     videoSize = stream.behaviorHints.videoSize,
                     bingeGroup = stream.behaviorHints.bingeGroup,
+                    streamType = stream.streamType,
                 )
             }
             activeSourceUrl = url
             activeSourceAudioUrl = null
             activeSourceHeaders = sanitizePlaybackHeaders(stream.behaviorHints.proxyHeaders?.request)
             activeSourceResponseHeaders = sanitizePlaybackResponseHeaders(stream.behaviorHints.proxyHeaders?.response)
+            activeStreamType = stream.streamType
             activeStreamTitle = stream.streamLabel
             activeStreamSubtitle = stream.streamSubtitle
             activeProviderName = stream.addonName
@@ -1175,12 +1179,14 @@ fun PlayerScreen(
                     filename = stream.behaviorHints.filename,
                     videoSize = stream.behaviorHints.videoSize,
                     bingeGroup = stream.behaviorHints.bingeGroup,
+                    streamType = stream.streamType,
                 )
             }
             activeSourceUrl = url
             activeSourceAudioUrl = null
             activeSourceHeaders = sanitizePlaybackHeaders(stream.behaviorHints.proxyHeaders?.request)
             activeSourceResponseHeaders = sanitizePlaybackResponseHeaders(stream.behaviorHints.proxyHeaders?.response)
+            activeStreamType = stream.streamType
             activeStreamTitle = stream.streamLabel
             activeStreamSubtitle = stream.streamSubtitle
             activeProviderName = stream.addonName
@@ -1228,6 +1234,7 @@ fun PlayerScreen(
             activeSourceAudioUrl = null
             activeSourceHeaders = emptyMap()
             activeSourceResponseHeaders = emptyMap()
+            activeStreamType = null
             activeStreamTitle = downloadItem.streamTitle.ifBlank {
                 episode.title.ifBlank { title }
             }
@@ -2424,7 +2431,17 @@ fun PlayerScreen(
                                             val scrollDeltaY = event.changes.fold(0f) { acc, change ->
                                                 acc + change.scrollDelta.y
                                             }
-                                            if (scrollDeltaY != 0f) {
+                                            // Don't steal the wheel for volume when an overlay panel is
+                                            // open (its list should scroll) or when a child already
+                                            // consumed the scroll.
+                                            val blockScrollVolume = showSubtitleModal || showAudioModal ||
+                                                showVideoSettingsModal || showSubmitIntroModal ||
+                                                showSourcesPanel || showEpisodesPanel ||
+                                                episodeStreamsPanelState.showStreams
+                                            if (scrollDeltaY != 0f &&
+                                                !blockScrollVolume &&
+                                                event.changes.none { it.isConsumed }
+                                            ) {
                                                 onPlayerScrollVolume.value(scrollDeltaY)
                                                 event.changes.forEach { it.consume() }
                                             }
@@ -2467,6 +2484,7 @@ fun PlayerScreen(
                 sourceAudioUrl = activeSourceAudioUrl,
                 sourceHeaders = activeSourceHeaders,
                 sourceResponseHeaders = activeSourceResponseHeaders,
+                streamType = activeStreamType,
                 modifier = Modifier.fillMaxSize(),
                 playWhenReady = shouldPlay,
                 resizeMode = resizeMode,

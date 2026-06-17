@@ -108,10 +108,12 @@ internal class MpvDesktopPlayerBackend private constructor(
             val headers = request.sourceHeaders.toMutableMap()
             DesktopRuntimeLog.info(
                 "MPV load start session=${request.sessionKey} source=${request.sourceUrl.redactedMediaUrl()} " +
-                    "audio=${request.sourceAudioUrl?.redactedMediaUrl() ?: "none"} headersPresent=${headers.isNotEmpty()}",
+                    "audio=${request.sourceAudioUrl?.redactedMediaUrl() ?: "none"} " +
+                    "streamType=${request.streamType ?: "none"} headersPresent=${headers.isNotEmpty()}",
             )
             resetExternalSubtitleState("load")
             applyDesktopVideoOutputProfile("load")
+            applyDeclaredStreamType(request)
             player.setMediaData(UriMediaData(request.sourceUrl, headers))
             setResizeMode(request.resizeMode)
             if (request.playWhenReady) {
@@ -269,6 +271,30 @@ internal class MpvDesktopPlayerBackend private constructor(
             )
         }.onFailure {
             DesktopRuntimeLog.warn("MPV video profile failed reason=$reason message=${it.message}")
+        }
+    }
+
+    private fun applyDeclaredStreamType(request: DesktopPlayerRequest) {
+        if (nativeClosed) return
+        val normalizedType = request.streamType?.trim()?.lowercase()
+        val forcedDemuxer = when (normalizedType) {
+            "hls", "m3u8" -> "hls"
+            else -> ""
+        }
+        runCatching {
+            player.impl.setMpvRuntimeOption("demuxer-lavf-format", forcedDemuxer)
+        }.onSuccess { applied ->
+            if (forcedDemuxer.isNotBlank()) {
+                DesktopRuntimeLog.info(
+                    "MPV declared stream type session=${request.sessionKey} " +
+                        "streamType=$normalizedType forcedDemuxer=$forcedDemuxer applied=$applied",
+                )
+            }
+        }.onFailure {
+            DesktopRuntimeLog.warn(
+                "MPV declared stream type failed session=${request.sessionKey} " +
+                    "streamType=${normalizedType ?: "none"} message=${it.message}",
+            )
         }
     }
 

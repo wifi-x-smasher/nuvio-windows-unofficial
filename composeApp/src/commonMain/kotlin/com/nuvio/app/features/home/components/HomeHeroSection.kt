@@ -30,8 +30,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -337,11 +339,14 @@ private fun HeroContentBlock(
     onItemClick: ((MetaPreview) -> Unit)?,
 ) {
     val desktopScale = nuvioDesktopUiScale
+    // Fall back to the title text when the logo is missing OR fails to load, so a broken logo URL
+    // doesn't leave a blank hero. Reset the error flag whenever the logo source changes.
+    var logoLoadError by remember(item.logo) { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (layout.isTablet) Alignment.Start else Alignment.CenterHorizontally,
     ) {
-        if (item.logo != null) {
+        if (item.logo != null && !logoLoadError) {
             AsyncImage(
                 model = item.logo,
                 contentDescription = item.name,
@@ -353,6 +358,7 @@ private fun HeroContentBlock(
                     },
                 alignment = if (layout.isTablet) Alignment.CenterStart else Alignment.Center,
                 contentScale = ContentScale.Fit,
+                onError = { logoLoadError = true },
             )
         } else {
             Text(

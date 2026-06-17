@@ -54,6 +54,14 @@ val forbiddenMediampMpvImports = listOf(
     "VCRUNTIME140.dll",
     "VCRUNTIME140_1.dll",
 )
+// The mpv/ffmpeg DLLs come from the official windows-msvc build and dynamically link the Visual C++
+// runtime. We bundle these so the player still loads on machines without the VC++ redistributable
+// installed (the mediampv.dll JNI bridge itself is statically linked and verified separately).
+val bundledVcRuntimeFiles = listOf(
+    "msvcp140.dll",
+    "vcruntime140.dll",
+    "vcruntime140_1.dll",
+)
 
 fun sha256Hex(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -130,6 +138,55 @@ fun findDumpbinExecutable(): File? {
         }
         ?.filter(File::isFile)
         ?.maxByOrNull { it.parentFile.parentFile.parentFile.name }
+}
+
+/**
+ * Locates a directory that contains all [bundledVcRuntimeFiles]. Prefers the x64 VC++ redist that
+ * ships with the installed Visual Studio C++ toolset (so the bundled runtime matches the toolset
+ * that built the native DLLs), then falls back to the system directory.
+ */
+fun findVcRuntimeDir(): File? {
+    fun File.hasAllVcRuntimeFiles(): Boolean =
+        isDirectory && bundledVcRuntimeFiles.all { name -> resolve(name).isFile }
+
+    val vswhere = File(
+        System.getenv("ProgramFiles(x86)") ?: "C:\\Program Files (x86)",
+        "Microsoft Visual Studio/Installer/vswhere.exe",
+    )
+    if (vswhere.isFile) {
+        val (exitCode, installPathOutput) = runProcessAndCapture(
+            vswhere.absolutePath,
+            "-latest",
+            "-products",
+            "*",
+            "-requires",
+            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+            "-property",
+            "installationPath",
+        )
+        if (exitCode == 0) {
+            val installPath = installPathOutput.lineSequence()
+                .map(String::trim)
+                .firstOrNull(String::isNotEmpty)
+                ?.let(::File)
+            val redistRoot = installPath?.resolve("VC/Redist/MSVC")
+            val crtDir = redistRoot?.listFiles()
+                ?.asSequence()
+                ?.filter(File::isDirectory)
+                ?.sortedByDescending { it.name }
+                ?.flatMap { versionDir ->
+                    versionDir.resolve("x64").listFiles()
+                        ?.asSequence()
+                        ?.filter { it.isDirectory && it.name.contains("CRT", ignoreCase = true) }
+                        ?: emptySequence()
+                }
+                ?.firstOrNull { it.hasAllVcRuntimeFiles() }
+            if (crtDir != null) return crtDir
+        }
+    }
+
+    val system32 = File(System.getenv("SystemRoot") ?: "C:\\Windows", "System32")
+    return system32.takeIf { it.hasAllVcRuntimeFiles() }
 }
 
 abstract class GenerateRuntimeConfigsTask : DefaultTask() {
@@ -671,10 +728,40 @@ val prepareMediampMpvRuntimeResources by tasks.registering(Copy::class) {
     into(bundledMpvNativeResourcesDir)
 }
 
+val prepareVcRuntimeResources by tasks.registering {
+    group = "distribution"
+    description = "Bundles the Visual C++ runtime DLLs so the MSVC-built mpv/ffmpeg runtime loads on " +
+        "machines without the VC++ redistributable installed."
+    onlyIf { System.getProperty("os.name").contains("Windows", ignoreCase = true) }
+    // Runs after the mediamp copy so both populate the same native resources directory.
+    mustRunAfter(prepareMediampMpvRuntimeResources)
+    val outputDir = bundledMpvNativeResourcesDir
+    doLast {
+        val targetDir = outputDir.get().asFile
+        targetDir.mkdirs()
+        val sourceDir = findVcRuntimeDir()
+            ?: error(
+                "Could not locate the Visual C++ runtime DLLs (${bundledVcRuntimeFiles.joinToString()}). " +
+                    "Install the Visual Studio C++ workload (provides the VC redist) or ensure these DLLs " +
+                    "are present in System32 on the build machine.",
+            )
+        bundledVcRuntimeFiles.forEach { name ->
+            val source = sourceDir.resolve(name)
+            check(source.isFile) {
+                "Missing VC++ runtime DLL $name under ${sourceDir.absolutePath}"
+            }
+            source.copyTo(targetDir.resolve(name), overwrite = true)
+        }
+        logger.lifecycle(
+            "Bundled VC++ runtime DLLs from ${sourceDir.absolutePath}: ${bundledVcRuntimeFiles.joinToString()}",
+        )
+    }
+}
+
 val verifyMediampMpvRuntimeResources by tasks.registering {
     group = "verification"
     description = "Verifies that the packaged Windows MPV runtime contains the required native files and a self-contained JNI bridge."
-    dependsOn(prepareMediampMpvRuntimeResources)
+    dependsOn(prepareMediampMpvRuntimeResources, prepareVcRuntimeResources)
     onlyIf {
         System.getProperty("os.name").contains("Windows", ignoreCase = true)
     }
@@ -687,6 +774,14 @@ val verifyMediampMpvRuntimeResources by tasks.registering {
         }
         check(missing.isEmpty()) {
             "Missing packaged MPV native runtime files in ${nativeDir.absolutePath}: ${missing.joinToString()}"
+        }
+
+        val missingVcRuntime = bundledVcRuntimeFiles.filterNot { name ->
+            nativeDir.resolve(name).isFile
+        }
+        check(missingVcRuntime.isEmpty()) {
+            "Missing bundled Visual C++ runtime DLLs in ${nativeDir.absolutePath}: ${missingVcRuntime.joinToString()}. " +
+                "These are required so the player loads on machines without the VC++ redistributable."
         }
 
         val bridgeDll = nativeDir.resolve("mediampv.dll")
@@ -727,6 +822,7 @@ val prepareAllDesktopRuntimeResources by tasks.registering {
         prepareDesktopRuntimeResources,
         prepareMpvRuntimeResources,
         prepareMediampMpvRuntimeResources,
+        prepareVcRuntimeResources,
         verifyMediampMpvRuntimeResources,
     )
 }

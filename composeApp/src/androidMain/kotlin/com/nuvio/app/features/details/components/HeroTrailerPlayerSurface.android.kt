@@ -37,6 +37,7 @@ actual fun HeroTrailerPlayerSurface(
     PlatformPlayerSurface(
         sourceUrl = sourceUrl,
         sourceAudioUrl = sourceAudioUrl,
+        streamType = null,
         useYoutubeChunkedPlayback = true,
         modifier = modifier,
         playWhenReady = playWhenReady,

@@ -185,6 +185,7 @@ fun TrailerPlayerPopup(
                         PlatformPlayerSurface(
                             sourceUrl = playbackSource.videoUrl,
                             sourceAudioUrl = playbackSource.audioUrl,
+                            streamType = null,
                             useYoutubeChunkedPlayback = true,
                             modifier = trailerPopupPlayerSurfaceModifier(),
                             playWhenReady = true,

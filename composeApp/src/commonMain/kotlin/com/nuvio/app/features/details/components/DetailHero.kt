@@ -32,7 +32,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -198,7 +200,8 @@ fun DetailHero(
                         .padding(bottom = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    if (meta.logo != null) {
+                    var logoLoadError by remember(meta.logo) { mutableStateOf(false) }
+                    if (meta.logo != null && !logoLoadError) {
                         AsyncImage(
                             model = meta.logo,
                             contentDescription = stringResource(Res.string.detail_logo_content_description, meta.name),
@@ -208,6 +211,7 @@ fun DetailHero(
                                 .height(if (isTablet) 72.dp else 80.dp),
                             alignment = Alignment.Center,
                             contentScale = ContentScale.Fit,
+                            onError = { logoLoadError = true },
                         )
                     } else {
                         Text(

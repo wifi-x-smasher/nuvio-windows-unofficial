@@ -126,10 +126,11 @@ object StreamsRepository {
         val debridSettings = DebridSettingsRepository.snapshot()
         val streamBadgeRules = StreamBadgeSettingsRepository.snapshot()
         fun presentStreamGroup(group: AddonStreamGroup): AddonStreamGroup {
+            val dedupedGroup = group.copy(streams = group.streams.distinctByStreamIdentity())
             val badgeGroup = StreamBadgePresentation.apply(
-                groups = listOf(group),
+                groups = listOf(dedupedGroup),
                 rules = streamBadgeRules,
-            ).firstOrNull() ?: group
+            ).firstOrNull() ?: dedupedGroup
             return DebridStreamPresentation.apply(
                 groups = listOf(badgeGroup),
                 settings = debridSettings,
@@ -996,6 +997,7 @@ internal fun PluginRuntimeResult.toStreamItem(
         description = subtitleParts.joinToString(" • ").ifBlank { null },
         url = url,
         infoHash = infoHash,
+        streamType = normalizeStreamType(type),
         sourceName = scraper.name,
         addonName = addonName,
         addonId = addonId,

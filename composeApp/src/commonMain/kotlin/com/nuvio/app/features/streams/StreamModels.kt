@@ -16,6 +16,7 @@ data class StreamItem(
     val sourceName: String? = null,
     val addonName: String,
     val addonId: String,
+    val streamType: String? = null,
     val behaviorHints: StreamBehaviorHints = StreamBehaviorHints(),
     val clientResolve: StreamClientResolve? = null,
     val debridCacheStatus: StreamDebridCacheStatus? = null,
@@ -33,11 +34,15 @@ data class StreamItem(
 
     val playableDirectUrl: String?
         get() = listOfNotNull(url, externalUrl)
-            .firstOrNull { !it.isMagnetLink() }
+            .firstOrNull { !it.isMagnetLink() && !it.isTorrentSchemeUrl() }
 
     val torrentMagnetUri: String?
         get() = listOfNotNull(url, externalUrl)
             .firstOrNull { it.isMagnetLink() }
+
+    val torrentSchemeUri: String?
+        get() = listOfNotNull(url, externalUrl)
+            .firstOrNull { it.isTorrentSchemeUrl() }
 
     val isDirectDebridStream: Boolean
         get() = clientResolve?.isDirectDebridCandidate == true
@@ -49,7 +54,9 @@ data class StreamItem(
         get() = !isDirectDebridStream && (
             !infoHash.isNullOrBlank() ||
             url.isMagnetLink() ||
-            externalUrl.isMagnetLink()
+            externalUrl.isMagnetLink() ||
+            url.isTorrentSchemeUrl() ||
+            externalUrl.isTorrentSchemeUrl()
         )
 
     val isCachedDebridTorrentStream: Boolean
@@ -57,6 +64,24 @@ data class StreamItem(
 
     val needsLocalDebridResolve: Boolean
         get() = isTorrentStream && playableDirectUrl == null
+
+    val p2pInfoHash: String?
+        get() = infoHash.normalizedInfoHash()
+            ?: clientResolve?.infoHash.normalizedInfoHash()
+            ?: torrentMagnetUri.extractBtihInfoHash()
+            ?: torrentSchemeUri.extractTorrentSchemeInfoHash()
+
+    val p2pFileIdx: Int?
+        get() = fileIdx ?: torrentSchemeUri.extractTorrentSchemeFileIdx()
+
+    val p2pTrackers: List<String>
+        get() = sources
+            .asSequence()
+            .filter { it.startsWith("tracker:") }
+            .map { it.removePrefix("tracker:").trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .toList()
 
     val isAddonDebridCandidate: Boolean
         get() = isInstalledAddonStream && (needsLocalDebridResolve || isDirectDebridStream)
@@ -74,11 +99,85 @@ data class StreamBadge(
     val borderColor: String = "",
 )
 
+fun normalizeStreamType(raw: String?): String? =
+    raw?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+
 private fun String?.isMagnetLink(): Boolean =
     this?.trimStart()?.startsWith("magnet:", ignoreCase = true) == true
 
+private fun String?.isTorrentSchemeUrl(): Boolean =
+    this?.trimStart()?.startsWith("torrent://", ignoreCase = true) == true
+
+private fun String?.extractTorrentSchemeInfoHash(): String? {
+    val raw = this?.trimStart()?.takeIf { it.isTorrentSchemeUrl() } ?: return null
+    return raw.removeRange(0, "torrent://".length)
+        .substringBefore('/')
+        .substringBefore('?')
+        .trim()
+        .takeIf { it.isValidInfoHash() }
+}
+
+private fun String?.extractTorrentSchemeFileIdx(): Int? {
+    val raw = this?.trimStart()?.takeIf { it.isTorrentSchemeUrl() } ?: return null
+    val path = raw.removeRange(0, "torrent://".length).substringBefore('?')
+    if ('/' !in path) return null
+    return path.substringAfter('/')
+        .trim()
+        .takeIf { segment -> segment.isNotEmpty() && segment.all { it.isDigit() } }
+        ?.toIntOrNull()
+}
+
+private fun String.isValidInfoHash(): Boolean =
+    (length == 40 && all { it in '0'..'9' || it.lowercaseChar() in 'a'..'f' }) ||
+        (length == 32 && all { it in '2'..'7' || it.lowercaseChar() in 'a'..'z' })
+
+private fun String?.normalizedInfoHash(): String? =
+    this
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
+private fun String?.extractBtihInfoHash(): String? {
+    val raw = this?.trim()?.takeIf { it.startsWith("magnet:", ignoreCase = true) } ?: return null
+    val marker = "btih:"
+    val markerIndex = raw.indexOf(marker, ignoreCase = true)
+    if (markerIndex < 0) return null
+    val start = markerIndex + marker.length
+    val end = raw.indexOf('&', start).takeIf { it >= 0 } ?: raw.length
+    return raw.substring(start, end)
+        .trim()
+        .takeIf { it.isNotEmpty() }
+}
+
 fun StreamItem.isSelectableForPlayback(debridEnabled: Boolean): Boolean =
     playableDirectUrl != null || (debridEnabled && isAddonDebridCandidate)
+
+/**
+ * Stable identity used to drop duplicate streams within a single addon's result set, e.g. the same
+ * torrent or external URL reported more than once (which otherwise shows up as repeated entries with
+ * identical descriptions). Mirrors the upstream NuvioTV dedup ordering: prefer the torrent hash, then
+ * the direct/external URL, then a name+title fallback scoped to the addon.
+ */
+internal fun StreamItem.streamDedupKey(): String {
+    infoHash?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }?.let { hash ->
+        return "hash:$hash:${fileIdx ?: ""}"
+    }
+    clientResolve?.infoHash?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }?.let { hash ->
+        return "hash:$hash:${clientResolve.fileIdx ?: ""}"
+    }
+    url?.trim()?.takeIf { it.isNotEmpty() }?.let { return "url:$it" }
+    externalUrl?.trim()?.takeIf { it.isNotEmpty() }?.let { return "ext:$it" }
+    return "meta:$addonName:${name.orEmpty()}:${title.orEmpty()}"
+}
+
+/** Removes duplicate streams (by [streamDedupKey]) while preserving the first occurrence and order. */
+internal fun List<StreamItem>.distinctByStreamIdentity(): List<StreamItem> {
+    if (size < 2) return this
+    val byKey = LinkedHashMap<String, StreamItem>(size)
+    for (stream in this) {
+        byKey.putIfAbsent(stream.streamDedupKey(), stream)
+    }
+    return if (byKey.size == size) this else byKey.values.toList()
+}
 
 data class StreamBehaviorHints(
     val bingeGroup: String? = null,

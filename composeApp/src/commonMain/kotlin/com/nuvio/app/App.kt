@@ -1705,6 +1705,7 @@ private fun MainAppContent(
                                     sourceUrl = cached.url,
                                     sourceHeaders = sanitizePlaybackHeaders(cached.requestHeaders),
                                     sourceResponseHeaders = sanitizePlaybackResponseHeaders(cached.responseHeaders),
+                                    streamType = cached.streamType,
                                     logo = launch.logo,
                                     poster = launch.poster,
                                     background = launch.background,
@@ -1846,6 +1847,7 @@ private fun MainAppContent(
                                 filename = stream.behaviorHints.filename,
                                 videoSize = stream.behaviorHints.videoSize,
                                 bingeGroup = stream.behaviorHints.bingeGroup,
+                                streamType = stream.streamType,
                             )
                             AppDiagnostics.breadcrumb(
                                 event = "stream.cache.save",
@@ -1861,6 +1863,7 @@ private fun MainAppContent(
                                 sourceUrl = sourceUrl,
                                 sourceHeaders = sanitizePlaybackHeaders(stream.behaviorHints.proxyHeaders?.request),
                                 sourceResponseHeaders = sanitizePlaybackResponseHeaders(stream.behaviorHints.proxyHeaders?.response),
+                                streamType = stream.streamType,
                                 logo = launch.logo,
                                 poster = launch.poster,
                                 background = launch.background,
@@ -2007,6 +2010,7 @@ private fun MainAppContent(
                                 filename = stream.behaviorHints.filename,
                                 videoSize = stream.behaviorHints.videoSize,
                                 bingeGroup = stream.behaviorHints.bingeGroup,
+                                streamType = stream.streamType,
                             )
                             AppDiagnostics.breadcrumb(
                                 event = "stream.cache.save",
@@ -2022,6 +2026,7 @@ private fun MainAppContent(
                             sourceUrl = sourceUrl,
                             sourceHeaders = sanitizePlaybackHeaders(stream.behaviorHints.proxyHeaders?.request),
                             sourceResponseHeaders = sanitizePlaybackResponseHeaders(stream.behaviorHints.proxyHeaders?.response),
+                            streamType = stream.streamType,
                             logo = launch.logo,
                             poster = launch.poster,
                             background = launch.background,
@@ -2173,6 +2178,7 @@ private fun MainAppContent(
                         sourceAudioUrl = launch.sourceAudioUrl,
                         sourceHeaders = launch.sourceHeaders,
                         sourceResponseHeaders = launch.sourceResponseHeaders,
+                        streamType = launch.streamType,
                         logo = launch.logo,
                         poster = launch.poster,
                         background = launch.background,
@@ -3248,6 +3254,7 @@ private fun PlayerLaunch.diagnosticsDetails(): Map<String, String?> =
         "season" to seasonNumber?.toString(),
         "episode" to episodeNumber?.toString(),
         "streamTitle" to streamTitle,
+        "streamType" to streamType,
         "providerName" to providerName,
         "providerAddonId" to providerAddonId.safePlaybackDiagnosticId(),
         "sourceKind" to sourceUrl.diagnosticSourceKind(),
@@ -3264,6 +3271,7 @@ private fun StreamItem.diagnosticsDetails(): Map<String, String?> =
         "addonName" to addonName,
         "addonId" to addonId.safePlaybackDiagnosticId(),
         "sourceName" to sourceName,
+        "streamType" to streamType,
         "directUrlKind" to playableDirectUrl.diagnosticSourceKind(),
         "hasInfoHash" to (!infoHash.isNullOrBlank()).toString(),
         "hasClientResolve" to (clientResolve != null).toString(),

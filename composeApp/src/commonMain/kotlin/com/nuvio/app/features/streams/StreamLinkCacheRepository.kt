@@ -15,6 +15,7 @@ data class CachedStreamLink(
     val filename: String? = null,
     val videoSize: Long? = null,
     val bingeGroup: String? = null,
+    val streamType: String? = null,
 )
 
 internal expect fun epochMs(): Long
@@ -48,6 +49,7 @@ object StreamLinkCacheRepository {
         filename: String? = null,
         videoSize: Long? = null,
         bingeGroup: String? = null,
+        streamType: String? = null,
     ) {
         val entry = CachedStreamLink(
             url = url,
@@ -60,6 +62,7 @@ object StreamLinkCacheRepository {
             filename = filename,
             videoSize = videoSize,
             bingeGroup = bingeGroup,
+            streamType = streamType,
         )
         val payload = json.encodeToString(CachedStreamLink.serializer(), entry)
         StreamLinkCacheStorage.saveEntry(hashedKey(contentKey), payload)

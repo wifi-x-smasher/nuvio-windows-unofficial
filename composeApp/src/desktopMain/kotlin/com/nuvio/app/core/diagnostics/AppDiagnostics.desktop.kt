@@ -1,8 +1,10 @@
 package com.nuvio.app.core.diagnostics
 
 import com.nuvio.app.desktop.DesktopRuntimeLog
+import com.nuvio.app.features.player.desktop.mpv.MpvRuntimeBootstrap
 import java.awt.Desktop
 import java.awt.GraphicsEnvironment
+import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.nio.charset.StandardCharsets
@@ -148,6 +150,7 @@ private fun buildDiagnosticsBundle(appSummary: Map<String, String>): String = bu
             "composeLayers=${System.getProperty("compose.layers.type")}",
     )
     appendLine("GPU/Display: ${desktopGraphicsDeviceSummary()}")
+    appendLine("Player runtime: ${desktopPlayerRuntimeSummary()}")
     appendLine()
     appendLine("===== nuvio.log =====")
     appendLine(readBundleFile(AppDiagnostics.logFilePath()))
@@ -166,6 +169,43 @@ private fun readBundleFile(pathString: String?): String {
 
 private fun redactBundle(text: String): String =
     AppDiagnosticsRedactor.redact(text)
+
+// Files the internal player needs at runtime, including the bundled Visual C++ runtime DLLs. A
+// post-build/runtime sanity check: if any of these read false in an exported bundle, that build is
+// missing part of the self-contained player runtime (GitHub Issue #24).
+private val playerRuntimeNativeFiles = listOf(
+    "mediampv.dll",
+    "libmpv-2.dll",
+    "msvcp140.dll",
+    "vcruntime140.dll",
+    "vcruntime140_1.dll",
+)
+
+private fun desktopPlayerRuntimeSummary(): String =
+    runCatching {
+        val nativeDir = resolvePlayerNativeDir()
+            ?: return@runCatching "native runtime directory not resolved"
+        val inventory = playerRuntimeNativeFiles.joinToString(", ") { name ->
+            "$name=${nativeDir.resolve(name).isFile}"
+        }
+        "dir=${nativeDir.absolutePath.replace('\\', '/')} [$inventory]"
+    }.getOrElse { error ->
+        "unavailable:${error.message ?: error::class.simpleName.orEmpty()}"
+    }
+
+private fun resolvePlayerNativeDir(): File? {
+    System.getProperty(MpvRuntimeBootstrap.MediampDllPathProperty)
+        ?.takeIf { it.isNotBlank() }
+        ?.let { File(it).parentFile }
+        ?.takeIf { it.isDirectory }
+        ?.let { return it }
+    System.getProperty("compose.application.resources.dir")
+        ?.takeIf { it.isNotBlank() }
+        ?.let { File(it).resolve("native") }
+        ?.takeIf { it.isDirectory }
+        ?.let { return it }
+    return null
+}
 
 private fun desktopGraphicsDeviceSummary(): String =
     runCatching {

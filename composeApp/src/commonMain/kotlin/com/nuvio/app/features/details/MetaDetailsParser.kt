@@ -3,6 +3,7 @@ package com.nuvio.app.features.details
 import com.nuvio.app.features.streams.StreamBehaviorHints
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamProxyHeaders
+import com.nuvio.app.features.streams.normalizeStreamType
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -286,6 +287,7 @@ internal object MetaDetailsParser {
                 infoHash = infoHash,
                 fileIdx = obj.int("fileIdx"),
                 externalUrl = externalUrl,
+                streamType = normalizeStreamType(obj.string("type")),
                 addonName = addonName,
                 addonId = "embedded",
                 behaviorHints = StreamBehaviorHints(

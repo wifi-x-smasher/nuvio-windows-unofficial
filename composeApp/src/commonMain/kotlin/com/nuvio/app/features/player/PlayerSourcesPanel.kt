@@ -53,7 +53,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import com.nuvio.app.core.i18n.localizedByteUnit
 import com.nuvio.app.core.ui.NuvioHorizontalScrollControls
 import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
@@ -61,6 +63,8 @@ import com.nuvio.app.core.ui.nuvioHorizontalWheelScroll
 import com.nuvio.app.core.ui.nuvioTvDirectionalFocusTraversal
 import com.nuvio.app.core.ui.nuvioTvSelectKeys
 import com.nuvio.app.features.debrid.DebridSettingsRepository
+import com.nuvio.app.features.streams.StreamBadgeChip
+import com.nuvio.app.features.streams.StreamBadgeChipSize
 import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
 import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsUiState
@@ -270,6 +274,7 @@ fun PlayerSourcesPanel(
                                             isCurrent = isCurrent,
                                             enabled = stream.isSelectableForPlayback(debridSettings.canResolvePlayableLinks),
                                             showFileSizeBadges = streamBadgeSettings.showFileSizeBadges,
+                                            showAddonLogo = streamBadgeSettings.showAddonLogo,
                                             onClick = { onStreamSelected(stream) },
                                         )
                                     }
@@ -289,6 +294,7 @@ private fun SourceStreamRow(
     isCurrent: Boolean,
     enabled: Boolean,
     showFileSizeBadges: Boolean,
+    showAddonLogo: Boolean,
     onClick: () -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -327,6 +333,14 @@ private fun SourceStreamRow(
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (showAddonLogo && !stream.addonLogo.isNullOrBlank()) {
+            AsyncImage(
+                model = stream.addonLogo,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(28.dp),
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -373,23 +387,39 @@ private fun SourceStreamRow(
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (showFileSizeBadges) {
-                    PlayerStreamFileSizeBadge(stream = stream)
+            val badgeImages = stream.badges.filter { it.imageURL.isNotBlank() }
+            if (badgeImages.isNotEmpty() || (showFileSizeBadges && stream.behaviorHints.videoSize != null)) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    badgeImages.forEach { badge ->
+                        StreamBadgeChip(
+                            imageURL = badge.imageURL,
+                            name = badge.name,
+                            tagColor = badge.tagColor,
+                            tagStyle = badge.tagStyle,
+                            borderColor = badge.borderColor,
+                            size = StreamBadgeChipSize.STREAM,
+                        )
+                    }
+                    if (showFileSizeBadges) {
+                        PlayerStreamFileSizeBadge(stream = stream)
+                    }
                 }
-                Text(
-                    text = stream.addonName,
-                    color = colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp,
-                    fontStyle = FontStyle.Italic,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stream.addonName,
+                color = colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+                fontStyle = FontStyle.Italic,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

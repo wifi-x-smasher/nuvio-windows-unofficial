@@ -23,6 +23,7 @@ internal fun DesktopPlayerSurfaceHost(
     sourceAudioUrl: String?,
     sourceHeaders: Map<String, String>,
     sourceResponseHeaders: Map<String, String>,
+    streamType: String?,
     modifier: Modifier,
     playWhenReady: Boolean,
     resizeMode: PlayerResizeMode,
@@ -30,8 +31,14 @@ internal fun DesktopPlayerSurfaceHost(
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
     onError: (String?) -> Unit,
 ) {
-    val sessionKey = remember(sourceUrl, sourceAudioUrl, sourceHeaders, sourceResponseHeaders) {
-        listOf(sourceUrl, sourceAudioUrl.orEmpty(), sourceHeaders.hashCode().toString(), sourceResponseHeaders.hashCode().toString())
+    val sessionKey = remember(sourceUrl, sourceAudioUrl, sourceHeaders, sourceResponseHeaders, streamType) {
+        listOf(
+            sourceUrl,
+            sourceAudioUrl.orEmpty(),
+            sourceHeaders.hashCode().toString(),
+            sourceResponseHeaders.hashCode().toString(),
+            streamType.orEmpty(),
+        )
             .joinToString("|")
             .sha256Prefix()
     }
@@ -72,6 +79,7 @@ internal fun DesktopPlayerSurfaceHost(
             sourceAudioUrl = sourceAudioUrl,
             sourceHeaders = sourceHeaders,
             sourceResponseHeaders = sourceResponseHeaders,
+            streamType = streamType,
             playWhenReady = playWhenReady,
             resizeMode = resizeMode,
         )

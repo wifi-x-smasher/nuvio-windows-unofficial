@@ -8,6 +8,7 @@ internal data class DesktopPlayerRequest(
     val sourceAudioUrl: String?,
     val sourceHeaders: Map<String, String>,
     val sourceResponseHeaders: Map<String, String>,
+    val streamType: String?,
     val playWhenReady: Boolean,
     val resizeMode: PlayerResizeMode,
 )

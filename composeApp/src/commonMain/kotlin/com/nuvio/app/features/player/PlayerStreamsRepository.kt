@@ -19,6 +19,7 @@ import com.nuvio.app.features.plugins.PluginRuntimeResult
 import com.nuvio.app.features.plugins.PluginScraper
 import com.nuvio.app.features.streams.AddonStreamWarmupRepository
 import com.nuvio.app.features.streams.AddonStreamGroup
+import com.nuvio.app.features.streams.distinctByStreamIdentity
 import com.nuvio.app.features.streams.StreamAutoPlaySelector
 import com.nuvio.app.features.streams.StreamBadgePresentation
 import com.nuvio.app.features.streams.StreamBadgeSettingsRepository
@@ -26,6 +27,7 @@ import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamParser
 import com.nuvio.app.features.streams.StreamsUiState
 import com.nuvio.app.features.streams.epochMs
+import com.nuvio.app.features.streams.normalizeStreamType
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -270,10 +272,11 @@ object PlayerStreamsRepository {
                 }
 
             fun presentStreamGroup(group: AddonStreamGroup): AddonStreamGroup {
+                val dedupedGroup = group.copy(streams = group.streams.distinctByStreamIdentity())
                 val badgeGroup = StreamBadgePresentation.apply(
-                    groups = listOf(group),
+                    groups = listOf(dedupedGroup),
                     rules = streamBadgeRules,
-                ).firstOrNull() ?: group
+                ).firstOrNull() ?: dedupedGroup
                 return DebridStreamPresentation.apply(
                     groups = listOf(badgeGroup),
                     settings = debridSettings,
@@ -568,6 +571,7 @@ private fun PluginRuntimeResult.toStreamItem(scraper: PluginScraper): StreamItem
         description = subtitleParts.joinToString(" • ").ifBlank { null },
         url = url,
         infoHash = infoHash,
+        streamType = normalizeStreamType(type),
         sourceName = scraper.name,
         addonName = scraper.name,
         addonId = "plugin:${scraper.id}",
