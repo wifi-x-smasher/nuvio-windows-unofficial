@@ -79,14 +79,15 @@ internal object MpvRuntimeBootstrap {
                     )
                 } else {
                     val errorSummary = throwable.nativeLoadSummary()
+                    val errorHint = throwable.nativeLoadHint()
                     val runtimeFiles = directory.nativeRuntimeInventory()
                     DesktopRuntimeLog.error(
-                        "MPV runtime bootstrap System.load failed dll=${mediampDll.safePath()} error=$errorSummary files=$runtimeFiles",
+                        "MPV runtime bootstrap System.load failed dll=${mediampDll.safePath()} error=$errorSummary hint=$errorHint files=$runtimeFiles",
                         throwable,
                     )
                     MpvRuntimeBootstrapResult(
                         success = false,
-                        diagnostics = "System.load failed dll=${mediampDll.safePath()} error=$errorSummary inventory=${runtime.requiredFileInventory()} files=$runtimeFiles runtime=${runtime.diagnostics}",
+                        diagnostics = "System.load failed dll=${mediampDll.safePath()} error=$errorSummary hint=$errorHint inventory=${runtime.requiredFileInventory()} files=$runtimeFiles runtime=${runtime.diagnostics}",
                         error = throwable,
                     )
                 }
@@ -116,6 +117,21 @@ private fun Throwable.nativeLoadSummary(): String {
         ?.ifBlank { null }
         ?: "<no-message>"
     return "${javaClass.simpleName}:$message"
+}
+
+private fun Throwable.nativeLoadHint(): String {
+    val normalizedMessage = message.orEmpty().lowercase()
+    return when {
+        "specified procedure could not be found" in normalizedMessage ->
+            "dependency-procedure-mismatch: a native dependency was loaded but does not expose the expected symbol; check bundled DLL ordering, shadowed PATH DLLs, and VC runtime linkage"
+        "specified module could not be found" in normalizedMessage ||
+            "can't find dependent libraries" in normalizedMessage ->
+            "missing-dependent-dll: one of mediampv.dll's native dependencies could not be loaded"
+        "already loaded" in normalizedMessage ->
+            "already-loaded: mediampv.dll was loaded earlier in this JVM"
+        else ->
+            "native-load-failed: inspect bundled native runtime inventory and Windows loader dependencies"
+    }
 }
 
 private fun File.nativeRuntimeInventory(): String =

@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.21)
 
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 project("mediampv" LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -26,9 +32,6 @@ if(WIN32)
     if (MSVC)
         message(STATUS "MSVC detected")
         add_compile_options(/Zc:__cplusplus)
-        # Build the JNI bridge with the static MSVC runtime so the Windows
-        # installer does not depend on a separately installed VC++ redistributable.
-        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif ()
 elseif(APPLE)
     # macOS (Darwin)
@@ -89,6 +92,11 @@ add_library(${PROJECT_NAME} SHARED
     "${SRC_PREFIX}/jni.cpp"
 )
 target_include_directories(${PROJECT_NAME} PRIVATE "${SRC_PREFIX}/include")
+if(MSVC)
+    # Build the JNI bridge with the static MSVC runtime so the Windows installer
+    # does not depend on a separately installed VC++ redistributable.
+    set_property(TARGET ${PROJECT_NAME} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 ## link project
 if (ANDROID)

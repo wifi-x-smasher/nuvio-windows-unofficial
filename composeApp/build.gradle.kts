@@ -49,6 +49,11 @@ val requiredMediampMpvRuntimeFiles = listOf(
     "mediampv.dll",
     "libmpv-2.dll",
 )
+val forbiddenMediampMpvImports = listOf(
+    "MSVCP140.dll",
+    "VCRUNTIME140.dll",
+    "VCRUNTIME140_1.dll",
+)
 
 fun sha256Hex(file: File): String {
     val digest = MessageDigest.getInstance("SHA-256")
@@ -61,6 +66,70 @@ fun sha256Hex(file: File): String {
         }
     }
     return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+}
+
+fun findExecutableOnPath(name: String): File? =
+    System.getenv("PATH")
+        ?.split(File.pathSeparatorChar)
+        ?.asSequence()
+        ?.map(String::trim)
+        ?.filter(String::isNotEmpty)
+        ?.map { File(it, name) }
+        ?.firstOrNull { it.isFile }
+
+fun runProcessAndCapture(vararg command: String): Pair<Int, String> {
+    val process = ProcessBuilder(*command)
+        .redirectErrorStream(true)
+        .start()
+    val output = process.inputStream.bufferedReader().use { it.readText() }
+    return process.waitFor() to output
+}
+
+fun findDumpbinExecutable(): File? {
+    System.getenv("DUMPBIN_EXE")
+        ?.takeIf(String::isNotBlank)
+        ?.let(::File)
+        ?.takeIf(File::isFile)
+        ?.let { return it }
+
+    findExecutableOnPath("dumpbin.exe")?.let { return it }
+
+    val vswhere = File(
+        System.getenv("ProgramFiles(x86)") ?: "C:\\Program Files (x86)",
+        "Microsoft Visual Studio/Installer/vswhere.exe",
+    )
+    if (!vswhere.isFile) return null
+
+    val (exitCode, installPathOutput) = runProcessAndCapture(
+        vswhere.absolutePath,
+        "-latest",
+        "-products",
+        "*",
+        "-requires",
+        "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+        "-property",
+        "installationPath",
+    )
+    if (exitCode != 0) return null
+
+    val installPath = installPathOutput.lineSequence()
+        .map(String::trim)
+        .firstOrNull(String::isNotEmpty)
+        ?.let(::File)
+        ?: return null
+
+    val toolsDir = installPath.resolve("VC/Tools/MSVC")
+    return toolsDir.listFiles()
+        ?.asSequence()
+        ?.filter(File::isDirectory)
+        ?.flatMap { versionDir ->
+            sequenceOf(
+                versionDir.resolve("bin/Hostx64/x64/dumpbin.exe"),
+                versionDir.resolve("bin/Hostx86/x64/dumpbin.exe"),
+            )
+        }
+        ?.filter(File::isFile)
+        ?.maxByOrNull { it.parentFile.parentFile.parentFile.name }
 }
 
 abstract class GenerateRuntimeConfigsTask : DefaultTask() {
@@ -569,6 +638,8 @@ val buildMediampMpvRuntime by tasks.registering(Exec::class) {
     val portableCmakeBin = rootProject.file("../.tmp/tools/cmake-4.3.3-windows-x86_64/bin")
         .takeIf { it.isDirectory }
         ?.absolutePath
+    environment.remove("Path")
+    environment.remove("path")
     environment("JAVA_HOME", taskJavaHome)
     environment("ANDROID_HOME", localAndroidSdk)
     environment("ANDROID_SDK_ROOT", localAndroidSdk)
@@ -602,7 +673,7 @@ val prepareMediampMpvRuntimeResources by tasks.registering(Copy::class) {
 
 val verifyMediampMpvRuntimeResources by tasks.registering {
     group = "verification"
-    description = "Verifies that the packaged Windows MPV runtime contains the required native files."
+    description = "Verifies that the packaged Windows MPV runtime contains the required native files and a self-contained JNI bridge."
     dependsOn(prepareMediampMpvRuntimeResources)
     onlyIf {
         System.getProperty("os.name").contains("Windows", ignoreCase = true)
@@ -617,6 +688,35 @@ val verifyMediampMpvRuntimeResources by tasks.registering {
         check(missing.isEmpty()) {
             "Missing packaged MPV native runtime files in ${nativeDir.absolutePath}: ${missing.joinToString()}"
         }
+
+        val bridgeDll = nativeDir.resolve("mediampv.dll")
+        val dumpbin = findDumpbinExecutable()
+            ?: error(
+                "Cannot verify ${bridgeDll.name} native imports because dumpbin.exe was not found. " +
+                    "Install Visual Studio Build Tools with the C++ workload, or set DUMPBIN_EXE to dumpbin.exe.",
+            )
+
+        val (exitCode, dumpbinOutput) = runProcessAndCapture(
+            dumpbin.absolutePath,
+            "/dependents",
+            bridgeDll.absolutePath,
+        )
+        check(exitCode == 0) {
+            "dumpbin failed while verifying ${bridgeDll.absolutePath}:\n$dumpbinOutput"
+        }
+
+        val forbiddenImports = forbiddenMediampMpvImports.filter { importName ->
+            dumpbinOutput.contains(importName, ignoreCase = true)
+        }
+        check(forbiddenImports.isEmpty()) {
+            "Packaged mediampv.dll still depends on dynamic MSVC runtime DLLs " +
+                "(${forbiddenImports.joinToString()}). The Windows installer must be self-contained; " +
+                "check CMake CMP0091/MSVC_RUNTIME_LIBRARY configuration."
+        }
+
+        logger.lifecycle(
+            "Verified ${bridgeDll.absolutePath} exists and does not import dynamic MSVC runtime DLLs.",
+        )
     }
 }
 
