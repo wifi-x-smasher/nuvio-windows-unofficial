@@ -14,6 +14,8 @@
 
 </div>
 
+> **Status: maintenance paused.** `v0.2.8` is the latest build. I'm stepping back from active maintenance for a while to get some space and time, so there may not be further updates for a bit. The repo stays open if you want to use it or build it yourself. If you want something actively updated in the meantime, the official Nuvio desktop app (once it is past alpha) and Stremio are both good options. Thanks to everyone who used it, tested it, and took the time to report issues.
+
 ## About
 
 Nuvio Windows Unofficial is a community-maintained Windows desktop port of Nuvio. It is built from the open-source Nuvio mobile codebase and shaped for a larger-screen desktop experience inspired by NuvioTV.
@@ -24,13 +26,13 @@ The app works as a client-side interface for Nuvio accounts, profiles, add-ons, 
 
 ## Features
 
-- TV-inspired Windows layout with keyboard, mouse, and fullscreen support.
+- TV-inspired Windows layout with mouse, full keyboard and remote-style navigation (arrow keys, Tab between sections, visible focus), and fullscreen support.
 - Nuvio account login, profile sync, add-ons, catalogs, collections, and watch progress.
-- Stream badges and stream-card formatting aligned with current Nuvio mobile behavior.
-- Connected services sync for the same signed-in Nuvio account.
-- Trakt OAuth setup from inside the Windows app.
-- Internal desktop playback with MPV-based rendering and an external-player option.
-- In-app update checks through GitHub Releases.
+- Stream badges and add-on logos, with stream-card formatting aligned to current Nuvio mobile behavior.
+- Internal desktop playback with a self-contained MPV runtime (no separate codec or runtime install needed) plus an external-player option.
+- Downloads with a managed queue: pause, resume, retry, speed and ETA, and completion notifications.
+- Connected services sync for the same signed-in Nuvio account, and Trakt OAuth setup from inside the Windows app.
+- One-click diagnostics bundle for easier bug reports, and in-app update checks through GitHub Releases.
 
 ## Screenshots
 
