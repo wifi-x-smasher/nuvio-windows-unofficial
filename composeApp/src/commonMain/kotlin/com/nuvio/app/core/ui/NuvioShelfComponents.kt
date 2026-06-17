@@ -1,10 +1,12 @@
 package com.nuvio.app.core.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -145,6 +148,7 @@ fun NuvioPosterCard(
     )
     val shouldShowTitleBelow = showTitleBelow && !posterCardStyle.hideLabelsEnabled
     val focusScale = if (shape == NuvioPosterShape.Landscape) 1.025f else 1.04f
+    val interactionSource = remember { MutableInteractionSource() }
 
     Column(
         modifier = modifier.width(cardWidth),
@@ -154,14 +158,20 @@ fun NuvioPosterCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(shape.aspectRatio)
-                .clip(cardShape)
-                .background(MaterialTheme.colorScheme.surface)
-                .posterCardClickable(onClick = onClick, onLongClick = onLongClick)
                 .nuvioDesktopFocusEffect(
                     enabled = onClick != null || onLongClick != null,
                     shape = cardShape,
                     focusedScale = focusScale,
                     focusedShadowElevation = 22.dp,
+                    attachFocusable = false,
+                    interactionSource = interactionSource,
+                )
+                .clip(cardShape)
+                .background(MaterialTheme.colorScheme.surface)
+                .posterCardClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    interactionSource = interactionSource,
                 ),
             contentAlignment = Alignment.Center,
         ) {
@@ -320,20 +330,27 @@ private fun NuvioShelfArrowButton(
     val desktopScale = nuvioDesktopUiScale
     val colorScheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(999.dp)
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .height(38.dp.scaledByDesktop(desktopScale))
             .width(38.dp.scaledByDesktop(desktopScale))
-            .background(
-                color = colorScheme.surface.copy(alpha = 0.82f),
-                shape = shape,
-            )
-            .clickable(onClick = onClick)
             .nuvioDesktopFocusEffect(
                 enabled = true,
                 shape = shape,
                 focusedScale = 1.04f,
                 focusedShadowElevation = 10.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
+            .background(
+                color = colorScheme.surface.copy(alpha = 0.82f),
+                shape = shape,
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -367,18 +384,31 @@ private fun NuvioViewAllPill(
     }.scaledByDesktop(desktopScale)
     val iconSpacing = (if (size == NuvioViewAllPillSize.Compact) 2.dp else 4.dp).scaledByDesktop(desktopScale)
 
+    val interactionSource = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
-            .background(
-                color = if (isAmoled) androidx.compose.ui.graphics.Color(0xFF0D0D0D) else colorScheme.surface,
-                shape = shape,
-            )
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .nuvioDesktopFocusEffect(
                 enabled = onClick != null,
                 shape = shape,
                 focusedScale = 1.02f,
                 focusedShadowElevation = 10.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
+            .background(
+                color = if (isAmoled) androidx.compose.ui.graphics.Color(0xFF0D0D0D) else colorScheme.surface,
+                shape = shape,
+            )
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = LocalIndication.current,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                },
             )
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         horizontalArrangement = Arrangement.spacedBy(iconSpacing),
@@ -457,12 +487,15 @@ private fun NuvioPosterShape.cardWidth(basePosterWidthDp: Int): Dp =
 internal fun Modifier.posterCardClickable(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
+    interactionSource: MutableInteractionSource? = null,
 ): Modifier =
     if (onClick != null || onLongClick != null) {
         this
             .nuvioSecondaryClickAsLongPress(onSecondaryClick = onLongClick)
             .nuvioTvSelectKeys(onSelect = onClick)
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
                 onClick = { onClick?.invoke() },
                 onLongClick = onLongClick,
             )

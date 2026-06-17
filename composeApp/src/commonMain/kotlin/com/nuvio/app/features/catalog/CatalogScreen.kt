@@ -1,6 +1,7 @@
 package com.nuvio.app.features.catalog
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -30,8 +32,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -49,6 +54,8 @@ import com.nuvio.app.core.format.formatReleaseDateForDisplay
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.NuvioPosterWatchedOverlay
 import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
+import com.nuvio.app.core.ui.nuvioTvDirectionalFocusTraversal
+import com.nuvio.app.isDesktop
 import com.nuvio.app.core.ui.rememberPosterCardStyleUiState
 import com.nuvio.app.core.ui.posterCardClickable
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
@@ -109,6 +116,21 @@ fun CatalogScreen(
     )
     var headerHeightPx by remember { mutableIntStateOf(0) }
     var observedOfflineState by remember { mutableStateOf(false) }
+    val catalogGridFocusRequester = remember { FocusRequester() }
+    // Focus the grid once items are present so arrow keys work on entry without a mouse click.
+    val hasCatalogItems = uiState.items.isNotEmpty()
+    LaunchedEffect(hasCatalogItems) {
+        if (isDesktop && hasCatalogItems) {
+            repeat(8) {
+                val landed = runCatching {
+                    catalogGridFocusRequester.requestFocus()
+                    true
+                }.getOrDefault(false)
+                if (landed) return@LaunchedEffect
+                withFrameNanos { }
+            }
+        }
+    }
 
     LaunchedEffect(manifestUrl, type, catalogId, genre, supportsPagination, homeCatalogSettingsUiState.hideUnreleasedContent) {
         CatalogRepository.load(
@@ -208,7 +230,11 @@ fun CatalogScreen(
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 state = gridState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusRequester(catalogGridFocusRequester)
+                    .focusGroup()
+                    .nuvioTvDirectionalFocusTraversal(),
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     top = with(androidx.compose.ui.platform.LocalDensity.current) { headerHeightPx.toDp() } + 12.dp,
@@ -330,6 +356,7 @@ private fun CatalogPosterTile(
     onLongClick: (() -> Unit)? = null,
 ) {
     val cardShape = RoundedCornerShape(cornerRadiusDp.dp)
+    val interactionSource = remember { MutableInteractionSource() }
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -337,14 +364,20 @@ private fun CatalogPosterTile(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(item.posterShape.catalogAspectRatio())
-                .clip(cardShape)
-                .background(MaterialTheme.colorScheme.surface)
-                .posterCardClickable(onClick = onClick, onLongClick = onLongClick)
                 .nuvioDesktopFocusEffect(
                     enabled = onClick != null || onLongClick != null,
                     shape = cardShape,
                     focusedScale = if (item.posterShape == PosterShape.Landscape) 1.025f else 1.04f,
                     focusedShadowElevation = 22.dp,
+                    attachFocusable = false,
+                    interactionSource = interactionSource,
+                )
+                .clip(cardShape)
+                .background(MaterialTheme.colorScheme.surface)
+                .posterCardClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    interactionSource = interactionSource,
                 ),
         ) {
             if (item.poster != null) {

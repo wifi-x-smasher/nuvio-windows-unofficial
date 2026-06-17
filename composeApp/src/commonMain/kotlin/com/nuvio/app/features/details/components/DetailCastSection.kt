@@ -4,7 +4,9 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.background
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -130,16 +132,29 @@ private fun CastItem(
     }
 
     val focusShape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
+    val interactionSource = remember { MutableInteractionSource() }
 
     Column(
         modifier = modifier
             .width(sizing.itemWidth)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .nuvioDesktopFocusEffect(
                 enabled = onClick != null,
                 shape = focusShape,
                 focusedScale = 1.018f,
                 focusedShadowElevation = 10.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = LocalIndication.current,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                },
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),

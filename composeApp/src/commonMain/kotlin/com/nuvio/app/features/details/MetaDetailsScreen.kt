@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -45,8 +47,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -68,6 +73,8 @@ import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.NuvioVerticalScrollbar
 import com.nuvio.app.core.ui.TraktListPickerDialog
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
+import com.nuvio.app.core.ui.nuvioTvDirectionalFocusTraversal
+import com.nuvio.app.isDesktop
 import com.nuvio.app.features.details.components.DetailActionButtons
 import com.nuvio.app.features.details.components.DetailSecondaryAction
 import com.nuvio.app.features.details.components.CommentDetailSheet
@@ -689,6 +696,21 @@ fun MetaDetailsScreen(
                     )
                 }
                 val scrollState = rememberScrollState()
+                val detailContentFocusRequester = remember { FocusRequester() }
+                // Give the details content keyboard focus on entry so arrow keys work without a
+                // mouse click first. Retries across a few frames until the node is attached.
+                LaunchedEffect(meta.id) {
+                    if (isDesktop) {
+                        repeat(8) {
+                            val landed = runCatching {
+                                detailContentFocusRequester.requestFocus()
+                                true
+                            }.getOrDefault(false)
+                            if (landed) return@LaunchedEffect
+                            withFrameNanos { }
+                        }
+                    }
+                }
                 val density = LocalDensity.current
                 val safeAreaTopPx = with(density) {
                     WindowInsets.statusBars
@@ -746,6 +768,9 @@ fun MetaDetailsScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .zIndex(1f)
+                                .nuvioTvDirectionalFocusTraversal()
+                                .focusRequester(detailContentFocusRequester)
+                                .focusable()
                                 .verticalScroll(scrollState),
                         ) {
                             DetailHero(
@@ -775,7 +800,8 @@ fun MetaDetailsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = contentHorizontalPadding)
-                                    .widthIn(max = if (isTablet) contentMaxWidth else Dp.Unspecified),
+                                    .widthIn(max = if (isTablet) contentMaxWidth else Dp.Unspecified)
+                                    .focusGroup(),
                                 verticalArrangement = Arrangement.spacedBy(20.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {

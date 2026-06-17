@@ -149,7 +149,11 @@ private fun CollectionFolderCard(
                     interactionSource = interactionSource,
                     enabled = onClick != null,
                 )
-                .posterCardClickable(onClick = onClick, onLongClick = null)
+                .posterCardClickable(
+                    onClick = onClick,
+                    onLongClick = null,
+                    interactionSource = interactionSource,
+                )
                 .onFocusChanged { focusState ->
                     isFocused = focusState.isFocused || focusState.hasFocus
                 }
@@ -158,6 +162,8 @@ private fun CollectionFolderCard(
                     shape = shapeCorner,
                     focusedScale = if (shape == PosterShape.Landscape) 1.025f else 1.04f,
                     focusedShadowElevation = 22.dp,
+                    attachFocusable = false,
+                    interactionSource = interactionSource,
                 ),
             shape = shapeCorner,
             colors = CardDefaults.cardColors(

@@ -73,6 +73,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -818,6 +819,14 @@ private fun FilterChip(
                 scaleX = scale
                 scaleY = scale
             }
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = chipShape,
+                focusedScale = 1.035f,
+                focusedShadowElevation = 8.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
             .clip(chipShape)
             .background(containerColor)
             .nuvioTvSelectKeys(onSelect = onClick)
@@ -825,12 +834,6 @@ private fun FilterChip(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
-            )
-            .nuvioDesktopFocusEffect(
-                enabled = true,
-                shape = chipShape,
-                focusedScale = 1.035f,
-                focusedShadowElevation = 8.dp,
             )
             .padding(horizontal = 14.dp * desktopScale, vertical = 8.dp * desktopScale),
     ) {
@@ -1109,10 +1112,19 @@ private fun StreamCard(
     } else {
         Color.White.copy(alpha = if (enabled) 0.05f else 0.03f)
     }
+    val interactionSource = remember { MutableInteractionSource() }
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = if (isDesktop) 82.dp * desktopScale else 68.dp)
+            .nuvioDesktopFocusEffect(
+                enabled = clickableEnabled,
+                shape = cardShape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 10.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
             .shadow(
                 elevation = if (isDesktop) 4.dp else 2.dp,
                 shape = cardShape,
@@ -1130,15 +1142,11 @@ private fun StreamCard(
                 onSelect = onClick,
             )
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
                 enabled = clickableEnabled,
                 onClick = onClick,
                 onLongClick = onLongClick,
-            )
-            .nuvioDesktopFocusEffect(
-                enabled = clickableEnabled,
-                shape = cardShape,
-                focusedScale = 1.01f,
-                focusedShadowElevation = 10.dp,
             )
             .padding(if (isDesktop) 16.dp * desktopScale else 14.dp),
         verticalAlignment = Alignment.Top,

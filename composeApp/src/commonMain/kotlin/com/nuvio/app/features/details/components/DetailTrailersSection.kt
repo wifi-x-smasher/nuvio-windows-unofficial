@@ -1,7 +1,9 @@
 package com.nuvio.app.features.details.components
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -191,16 +193,23 @@ private fun TrailerCard(
         modifier = Modifier.width(cardWidth),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        val interactionSource = remember { MutableInteractionSource() }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(shape)
-                .clickable(onClick = onClick)
                 .nuvioDesktopFocusEffect(
                     enabled = true,
                     shape = shape,
                     focusedScale = 1.018f,
                     focusedShadowElevation = 10.dp,
+                    attachFocusable = false,
+                    interactionSource = interactionSource,
+                )
+                .clip(shape)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = LocalIndication.current,
+                    onClick = onClick,
                 ),
         ) {
             AsyncImage(

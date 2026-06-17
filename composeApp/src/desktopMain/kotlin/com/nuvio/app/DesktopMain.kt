@@ -47,6 +47,7 @@ import com.nuvio.app.core.diagnostics.AppDiagnostics
 import com.nuvio.app.core.deeplink.DesktopDeepLinkBridge
 import com.nuvio.app.features.commandpalette.CommandPaletteController
 import com.nuvio.app.features.experimental.ExperimentalFeatureSettings
+import com.nuvio.app.features.player.PlatformPlayerFullscreen
 import com.nuvio.app.features.player.PlayerKeyboardShortcut
 import com.nuvio.app.features.player.PlayerKeyboardShortcutBridge
 import java.awt.Color
@@ -169,9 +170,11 @@ fun main(args: Array<String>) {
 
                 val controller = DesktopFullscreenController(awtWindow) { fullscreen ->
                     isFullscreen = fullscreen
+                    PlatformPlayerFullscreen.updateFullscreen(fullscreen)
                 }
                 fullscreenController = controller
                 controller.applyInitial()
+                PlatformPlayerFullscreen.registerHandler { controller.toggle() }
 
                 val recoveryListener = object : WindowAdapter() {
                     private fun recover(event: WindowEvent) {
@@ -198,6 +201,7 @@ fun main(args: Array<String>) {
 
                 onDispose {
                     fullscreenController = null
+                    PlatformPlayerFullscreen.registerHandler(null)
                     awtWindow.removeWindowListener(recoveryListener)
                     awtWindow.removeWindowFocusListener(recoveryListener)
                     awtWindow.removeComponentListener(dragBoundsGuard)

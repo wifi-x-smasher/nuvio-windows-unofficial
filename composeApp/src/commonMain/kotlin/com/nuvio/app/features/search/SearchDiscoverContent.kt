@@ -3,6 +3,7 @@ package com.nuvio.app.features.search
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -240,6 +242,7 @@ private fun DiscoverPosterTile(
     onLongClick: (() -> Unit)? = null,
 ) {
     val cardShape = RoundedCornerShape(cornerRadiusDp.dp)
+    val interactionSource = remember { MutableInteractionSource() }
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -248,14 +251,20 @@ private fun DiscoverPosterTile(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(item.posterShape.discoverAspectRatio())
-                .clip(cardShape)
-                .background(MaterialTheme.colorScheme.surface)
-                .posterCardClickable(onClick = onClick, onLongClick = onLongClick)
                 .nuvioDesktopFocusEffect(
                     enabled = onClick != null || onLongClick != null,
                     shape = cardShape,
                     focusedScale = if (item.posterShape == PosterShape.Landscape) 1.025f else 1.04f,
                     focusedShadowElevation = 22.dp,
+                    attachFocusable = false,
+                    interactionSource = interactionSource,
+                )
+                .clip(cardShape)
+                .background(MaterialTheme.colorScheme.surface)
+                .posterCardClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    interactionSource = interactionSource,
                 ),
         ) {
             if (item.poster != null) {

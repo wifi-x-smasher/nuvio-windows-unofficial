@@ -96,6 +96,11 @@ import com.nuvio.app.core.sync.AppForegroundMonitor
 import com.nuvio.app.core.sync.ProfileSettingsSync
 import com.nuvio.app.core.sync.SyncManager
 import com.nuvio.app.core.ui.NuvioNavigationBar
+import com.nuvio.app.core.ui.RequestInitialSectionFocus
+import com.nuvio.app.core.ui.nuvioFocusSection
+import com.nuvio.app.core.ui.nuvioSectionTabNavigation
+import com.nuvio.app.core.ui.nuvioTvDirectionalFocusTraversal
+import com.nuvio.app.core.ui.rememberNuvioSectionNavigator
 import com.nuvio.app.features.commandpalette.CommandPalette
 import com.nuvio.app.core.ui.NuvioContinueWatchingActionSheet
 import com.nuvio.app.core.ui.NuvioPosterActionSheet
@@ -2758,10 +2763,12 @@ private fun DesktopRootSidebarScaffold(
     content: @Composable (Modifier) -> Unit,
 ) {
     val sidebarWidth = if (expanded) metrics.expandedSidebarWidth else metrics.collapsedSidebarWidth
+    val sectionNavigator = rememberNuvioSectionNavigator()
     Row(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(MaterialTheme.colorScheme.background)
+            .nuvioSectionTabNavigation(sectionNavigator),
     ) {
         DesktopRootSidebar(
             selectedTab = selectedTab,
@@ -2771,17 +2778,28 @@ private fun DesktopRootSidebarScaffold(
             expanded = expanded,
             modifier = Modifier
                 .width(sidebarWidth)
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                .nuvioFocusSection(sectionNavigator, order = RootSidebarSectionOrder)
+                .nuvioTvDirectionalFocusTraversal(),
         )
         Box(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                .nuvioFocusSection(sectionNavigator, order = RootContentSectionOrder)
+                .nuvioTvDirectionalFocusTraversal(),
         ) {
             content(Modifier.fillMaxSize())
         }
     }
+    // Give the content area focus on launch and after selecting a tab so arrow keys work without
+    // a mouse click. Arrowing within the sidebar does not change selectedTab, so this does not
+    // fight keyboard users browsing the sidebar; it only fires on an actual tab selection.
+    sectionNavigator.RequestInitialSectionFocus(order = RootContentSectionOrder, key = selectedTab)
 }
+
+private const val RootSidebarSectionOrder = 0
+private const val RootContentSectionOrder = 1
 
 @Composable
 private fun DesktopRootSidebar(
@@ -2967,15 +2985,16 @@ private fun DesktopSidebarItem(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp.scaledByDesktop(desktopScale))
-            .clip(shape)
             .onFocusChanged { focused = it.isFocused || it.hasFocus }
-            .clickable(onClick = onClick)
             .nuvioDesktopFocusEffect(
                 enabled = true,
                 shape = shape,
                 focusedScale = 1.012f,
                 focusedShadowElevation = 8.dp,
-            ),
+                attachFocusable = false,
+            )
+            .clip(shape)
+            .clickable(onClick = onClick),
         color = containerColor,
         contentColor = contentColor,
         shape = shape,

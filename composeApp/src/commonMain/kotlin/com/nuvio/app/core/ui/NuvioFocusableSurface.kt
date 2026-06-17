@@ -63,6 +63,14 @@ internal fun NuvioFocusableSurface(
                 scaleX = pointerScale
                 scaleY = pointerScale
             }
+            .nuvioDesktopFocusEffect(
+                enabled = enabled,
+                shape = shape,
+                focusedScale = focusedScale,
+                focusedShadowElevation = 10.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
             .clip(shape)
             .background(containerColor, shape)
             .hoverable(interactionSource = interactionSource, enabled = enabled)
@@ -71,12 +79,6 @@ internal fun NuvioFocusableSurface(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
-            )
-            .nuvioDesktopFocusEffect(
-                enabled = enabled,
-                shape = shape,
-                focusedScale = focusedScale,
-                focusedShadowElevation = 10.dp,
             )
             .padding(contentPadding),
         contentAlignment = contentAlignment,

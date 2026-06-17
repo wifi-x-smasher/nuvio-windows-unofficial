@@ -4,7 +4,9 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.nuvio.app.core.ui.AppIconResource
 import com.nuvio.app.core.ui.appIconPainter
 import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
+import com.nuvio.app.core.ui.nuvioSecondaryClickAsLongPress
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_play
 import org.jetbrains.compose.resources.stringResource
@@ -90,6 +93,7 @@ fun DetailActionButtons(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val playInteractionSource = remember { MutableInteractionSource() }
             Surface(
                 modifier = Modifier
                     .weight(1f)
@@ -99,6 +103,8 @@ fun DetailActionButtons(
                         shape = playShape,
                         focusedScale = 1.025f,
                         focusedShadowElevation = 14.dp,
+                        attachFocusable = false,
+                        interactionSource = playInteractionSource,
                     ),
                 shape = playShape,
                 color = MaterialTheme.colorScheme.onBackground,
@@ -107,7 +113,10 @@ fun DetailActionButtons(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .nuvioSecondaryClickAsLongPress(onSecondaryClick = onPlayLongClick)
                         .combinedClickable(
+                            interactionSource = playInteractionSource,
+                            indication = LocalIndication.current,
                             onClick = onPlayClick,
                             onLongClick = onPlayLongClick,
                             role = Role.Button,
@@ -175,6 +184,7 @@ fun DetailActionButtons(
 
             if (hasSecondaryActions) {
                 val menuShape = CircleShape
+                val menuInteractionSource = remember { MutableInteractionSource() }
                 Surface(
                     modifier = Modifier
                         .size(iconButtonSize)
@@ -183,6 +193,8 @@ fun DetailActionButtons(
                             shape = menuShape,
                             focusedScale = 1.04f,
                             focusedShadowElevation = 12.dp,
+                            attachFocusable = false,
+                            interactionSource = menuInteractionSource,
                         ),
                     shape = menuShape,
                     color = if (actionsExpanded) {
@@ -199,7 +211,11 @@ fun DetailActionButtons(
                     Box(
                         modifier = Modifier
                             .size(iconButtonSize)
-                            .clickable(role = Role.Button) {
+                            .clickable(
+                                interactionSource = menuInteractionSource,
+                                indication = LocalIndication.current,
+                                role = Role.Button,
+                            ) {
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 actionsExpanded = !actionsExpanded
                             },
@@ -234,6 +250,7 @@ private fun DetailIconAction(
     onLongClick: (() -> Unit)? = null,
 ) {
     val shape = CircleShape
+    val interactionSource = remember { MutableInteractionSource() }
     Surface(
         modifier = modifier
             .graphicsLayer {
@@ -246,6 +263,8 @@ private fun DetailIconAction(
                 shape = shape,
                 focusedScale = 1.04f,
                 focusedShadowElevation = 12.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
             ),
         shape = shape,
         color = if (active) {
@@ -264,7 +283,10 @@ private fun DetailIconAction(
         Box(
             modifier = Modifier
                 .size(size)
+                .nuvioSecondaryClickAsLongPress(onSecondaryClick = onLongClick)
                 .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = LocalIndication.current,
                     onClick = onClick,
                     onLongClick = onLongClick,
                     role = Role.Button,

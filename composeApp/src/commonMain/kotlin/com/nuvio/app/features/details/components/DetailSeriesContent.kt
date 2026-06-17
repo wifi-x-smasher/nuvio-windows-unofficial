@@ -10,11 +10,13 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -345,8 +347,17 @@ private fun SeasonViewModeToggle(
 ) {
     val isPosters = mode == SeasonViewMode.Posters
     val shape = RoundedCornerShape(8.dp)
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
+            .nuvioDesktopFocusEffect(
+                enabled = true,
+                shape = shape,
+                focusedScale = 1.018f,
+                focusedShadowElevation = 8.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
             .clip(shape)
             .background(
                 if (isPosters) {
@@ -360,12 +371,10 @@ private fun SeasonViewModeToggle(
                 color = Color.White.copy(alpha = if (isPosters) 0.2f else 0.3f),
                 shape = shape,
             )
-            .clickable(onClick = onClick)
-            .nuvioDesktopFocusEffect(
-                enabled = true,
-                shape = shape,
-                focusedScale = 1.018f,
-                focusedShadowElevation = 8.dp,
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
             )
             .padding(horizontal = 10.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center,
@@ -430,8 +439,17 @@ private fun SeasonTextChipScrollRow(
                 val isSelected = season == currentSeason
                 val shape = RoundedCornerShape(sizing.seasonChipRadius)
                 val onSeasonLongClick = onLongPress?.let { handler -> { handler(season) } }
+                val interactionSource = remember { MutableInteractionSource() }
                 Box(
                     modifier = Modifier
+                        .nuvioDesktopFocusEffect(
+                            enabled = true,
+                            shape = shape,
+                            focusedScale = 1.018f,
+                            focusedShadowElevation = 8.dp,
+                            attachFocusable = false,
+                            interactionSource = interactionSource,
+                        )
                         .clip(shape)
                         .background(
                             if (isSelected) {
@@ -443,14 +461,10 @@ private fun SeasonTextChipScrollRow(
                         .nuvioSecondaryClickAsLongPress(onSecondaryClick = onSeasonLongClick)
                         .nuvioTvSelectKeys(onSelect = { onSelect(season) })
                         .combinedClickable(
+                            interactionSource = interactionSource,
+                            indication = LocalIndication.current,
                             onClick = { onSelect(season) },
                             onLongClick = onSeasonLongClick,
-                        )
-                        .nuvioDesktopFocusEffect(
-                            enabled = true,
-                            shape = shape,
-                            focusedScale = 1.018f,
-                            focusedShadowElevation = 8.dp,
                         )
                         .padding(
                             horizontal = sizing.seasonChipHorizontalPadding,
@@ -545,20 +559,25 @@ private fun SeasonPosterButton(
     onLongClick: (() -> Unit)?,
 ) {
     val shape = RoundedCornerShape(sizing.seasonPosterRadius)
+    val interactionSource = remember { MutableInteractionSource() }
     Column(
         modifier = Modifier
             .width(sizing.seasonPosterWidth)
-            .nuvioSecondaryClickAsLongPress(onSecondaryClick = onLongClick)
-            .nuvioTvSelectKeys(onSelect = onClick)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-            )
             .nuvioDesktopFocusEffect(
                 enabled = true,
                 shape = shape,
                 focusedScale = 1.018f,
                 focusedShadowElevation = 10.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
+            .nuvioSecondaryClickAsLongPress(onSecondaryClick = onLongClick)
+            .nuvioTvSelectKeys(onSelect = onClick)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+                onLongClick = onLongClick,
             ),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -723,10 +742,19 @@ private fun EpisodeHorizontalCard(
     val ratingLabel = remember(imdbRating) { imdbRating?.takeIf { it > 0.0 }?.let(::formatEpisodeRating) }
     val formattedDate = remember(video.released) { video.released?.let { formatReleaseDateForDisplay(it) } }
     val runtimeLabel = remember(video.runtime) { video.runtime?.takeIf { it > 0 }?.let(::formatEpisodeRuntime) }
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .width(metrics.cardWidth)
             .height(metrics.cardHeight)
+            .nuvioDesktopFocusEffect(
+                enabled = onClick != null || onLongPress != null,
+                shape = cardShape,
+                focusedScale = 1.012f,
+                focusedShadowElevation = 10.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
             .clip(cardShape)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
             .border(
@@ -743,15 +771,11 @@ private fun EpisodeHorizontalCard(
                 onSelect = onClick,
             )
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
                 enabled = onClick != null || onLongPress != null,
                 onClick = { onClick?.invoke() },
                 onLongClick = onLongPress,
-            )
-            .nuvioDesktopFocusEffect(
-                enabled = onClick != null || onLongPress != null,
-                shape = cardShape,
-                focusedScale = 1.012f,
-                focusedShadowElevation = 10.dp,
             ),
     ) {
         val imageUrl = video.thumbnail ?: fallbackImage
@@ -1092,10 +1116,19 @@ private fun EpisodeListCard(
     val cardShape = RoundedCornerShape(sizing.cardRadius)
     val ratingLabel = remember(imdbRating) { imdbRating?.takeIf { it > 0.0 }?.let(::formatEpisodeRating) }
     val formattedDate = remember(video.released) { video.released?.let { formatReleaseDateForDisplay(it) } }
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(sizing.cardHeight)
+            .nuvioDesktopFocusEffect(
+                enabled = onClick != null || onLongPress != null,
+                shape = cardShape,
+                focusedScale = 1.01f,
+                focusedShadowElevation = 10.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
             .clip(cardShape)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
             .border(
@@ -1103,7 +1136,13 @@ private fun EpisodeListCard(
                 color = Color.White.copy(alpha = 0.1f),
                 shape = cardShape,
             )
+            .nuvioSecondaryClickAsLongPress(
+                enabled = onClick != null || onLongPress != null,
+                onSecondaryClick = onLongPress,
+            )
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
                 enabled = onClick != null || onLongPress != null,
                 onClick = { onClick?.invoke() },
                 onLongClick = onLongPress,

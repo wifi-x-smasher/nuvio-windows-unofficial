@@ -1,7 +1,9 @@
 package com.nuvio.app.features.details.components
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -15,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -111,18 +114,29 @@ private fun ProductionChip(
     onClick: (() -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(12.dp)
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
-            .clip(shape)
-            .background(color = ProductionChipBackground)
-            .then(
-                if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-            )
             .nuvioDesktopFocusEffect(
                 enabled = onClick != null,
                 shape = shape,
                 focusedScale = 1.018f,
                 focusedShadowElevation = 8.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
+            .clip(shape)
+            .background(color = ProductionChipBackground)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = LocalIndication.current,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                },
             )
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .height(chipHeight),

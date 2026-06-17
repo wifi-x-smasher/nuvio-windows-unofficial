@@ -1,7 +1,9 @@
 package com.nuvio.app.features.search
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -474,20 +476,27 @@ private fun SearchRecentRow(
     modifier: Modifier = Modifier,
 ) {
     val rowShape = RoundedCornerShape(16.dp)
+    val interactionSource = remember { MutableInteractionSource() }
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onSearchPress)
-            .padding(vertical = 2.dp)
-            .background(
-                color = MaterialTheme.colorScheme.background,
-                shape = rowShape,
-            )
             .nuvioDesktopFocusEffect(
                 enabled = true,
                 shape = rowShape,
                 focusedScale = 1.01f,
                 focusedShadowElevation = 8.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onSearchPress,
+            )
+            .padding(vertical = 2.dp)
+            .background(
+                color = MaterialTheme.colorScheme.background,
+                shape = rowShape,
             )
             .padding(start = 2.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

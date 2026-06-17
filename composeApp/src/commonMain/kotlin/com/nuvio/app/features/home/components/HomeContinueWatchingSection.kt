@@ -1,9 +1,11 @@
 package com.nuvio.app.features.home.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -44,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.nuvio.app.core.ui.nuvioDesktopFocusEffect
 import com.nuvio.app.core.ui.nuvioDesktopUiScale
+import com.nuvio.app.core.ui.nuvioSecondaryClickAsLongPress
 import com.nuvio.app.core.ui.NuvioProgressBar
 import com.nuvio.app.core.ui.NuvioShelfSection
 import com.nuvio.app.core.ui.posterCardClickable
@@ -403,18 +406,31 @@ private fun ContinueWatchingWideCard(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
 ) {
+    val wideCardShape = RoundedCornerShape(layout.cardRadius)
+    val interactionSource = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
             .width(layout.wideCardWidth)
             .height(layout.wideCardHeight)
-            .clip(RoundedCornerShape(layout.cardRadius))
+            .nuvioDesktopFocusEffect(
+                enabled = onClick != null || onLongClick != null,
+                shape = wideCardShape,
+                focusedScale = 1.02f,
+                focusedShadowElevation = 18.dp,
+                attachFocusable = false,
+                interactionSource = interactionSource,
+            )
+            .clip(wideCardShape)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
             .border(
                 width = 1.5.dp,
                 color = Color.White.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(layout.cardRadius),
+                shape = wideCardShape,
             )
+            .nuvioSecondaryClickAsLongPress(onSecondaryClick = onLongClick)
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
                 enabled = onClick != null || onLongClick != null,
                 onClick = { onClick?.invoke() },
                 onLongClick = onLongClick,
@@ -535,10 +551,19 @@ private fun ContinueWatchingPosterCard(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         val cardShape = RoundedCornerShape(layout.cardRadius)
+        val interactionSource = remember { MutableInteractionSource() }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(layout.posterCardHeight)
+                .nuvioDesktopFocusEffect(
+                    enabled = onClick != null || onLongClick != null,
+                    shape = cardShape,
+                    focusedScale = 1.025f,
+                    focusedShadowElevation = 18.dp,
+                    attachFocusable = false,
+                    interactionSource = interactionSource,
+                )
                 .clip(cardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(
@@ -546,12 +571,10 @@ private fun ContinueWatchingPosterCard(
                     color = Color.White.copy(alpha = 0.15f),
                     shape = cardShape,
                 )
-                .posterCardClickable(onClick = onClick, onLongClick = onLongClick)
-                .nuvioDesktopFocusEffect(
-                    enabled = onClick != null || onLongClick != null,
-                    shape = cardShape,
-                    focusedScale = 1.025f,
-                    focusedShadowElevation = 18.dp,
+                .posterCardClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    interactionSource = interactionSource,
                 ),
         ) {
             val imageUrl = item.continueWatchingPosterArtworkUrl(useEpisodeThumbnails)

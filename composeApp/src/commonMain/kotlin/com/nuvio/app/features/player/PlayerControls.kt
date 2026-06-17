@@ -28,6 +28,8 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Replay10
@@ -55,6 +57,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.nuvio.app.isDesktop
 import com.nuvio.app.core.ui.AppIconResource
 import com.nuvio.app.core.ui.NuvioBackButton
 import com.nuvio.app.core.ui.appIconPainter
@@ -329,6 +332,19 @@ private fun PlayerHeader(
                         iconSize = metrics.headerIconSize,
                         onClick = onLockToggle,
                     )
+                    if (isDesktop && PlatformPlayerFullscreen.toggleHandler != null) {
+                        PlayerHeaderIconButton(
+                            icon = if (PlatformPlayerFullscreen.isFullscreen) {
+                                Icons.Rounded.FullscreenExit
+                            } else {
+                                Icons.Rounded.Fullscreen
+                            },
+                            contentDescription = "Toggle fullscreen",
+                            buttonSize = metrics.headerIconSize + 16.dp,
+                            iconSize = metrics.headerIconSize,
+                            onClick = { PlatformPlayerFullscreen.toggle() },
+                        )
+                    }
                     if (onVideoSettingsClick != null) {
                         PlayerHeaderIconButton(
                             icon = Icons.Rounded.Build,
