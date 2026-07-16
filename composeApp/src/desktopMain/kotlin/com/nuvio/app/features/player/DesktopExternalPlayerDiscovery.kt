@@ -134,10 +134,7 @@ internal object DesktopExternalPlayerCommandBuilder {
             headers.findHeader("User-Agent")?.let { add("--http-user-agent=$it") }
             headers.findHeader("Referer", "Referrer")?.let { add("--http-referrer=$it") }
             headers.forEach { (key, value) ->
-                if (!key.equals("User-Agent", ignoreCase = true) &&
-                    !key.equals("Referer", ignoreCase = true) &&
-                    !key.equals("Referrer", ignoreCase = true)
-                ) {
+                if (!key.isDedicatedHeader()) {
                     add("--http-header=$key: $value")
                 }
             }
@@ -156,14 +153,11 @@ internal object DesktopExternalPlayerCommandBuilder {
             subtitleFile?.let { add("--sub-file=$it") }
             headers.findHeader("User-Agent")?.let { add("--user-agent=$it") }
             headers.findHeader("Referer", "Referrer")?.let { add("--referrer=$it") }
-            headers.forEach { (key, value) ->
-                if (!key.equals("User-Agent", ignoreCase = true) &&
-                    !key.equals("Referer", ignoreCase = true) &&
-                    !key.equals("Referrer", ignoreCase = true)
-                ) {
-                    add("--http-header-fields=$key: $value")
-                }
-            }
+            headers
+                .filterKeys { key -> !key.isDedicatedHeader() }
+                .map { (key, value) -> escapeMpvHeaderField("$key: $value") }
+                .takeIf { it.isNotEmpty() }
+                ?.let { add("--http-header-fields=${it.joinToString(separator = ",")}") }
             add(request.sourceUrl)
         }
 
@@ -187,4 +181,19 @@ internal object DesktopExternalPlayerCommandBuilder {
         entries.firstOrNull { (key, _) ->
             names.any { name -> key.equals(name, ignoreCase = true) }
         }?.value
+
+    /** Headers passed through a player's own flag rather than the generic header list. */
+    private fun String.isDedicatedHeader(): Boolean =
+        equals("User-Agent", ignoreCase = true) ||
+            equals("Referer", ignoreCase = true) ||
+            equals("Referrer", ignoreCase = true)
+
+    /**
+     * mpv reads `http-header-fields` as a single comma-separated list, so commas and
+     * backslashes inside a header value must be escaped or the value splits into bogus fields.
+     */
+    private fun escapeMpvHeaderField(field: String): String =
+        field
+            .replace("\\", "\\\\")
+            .replace(",", "\\,")
 }

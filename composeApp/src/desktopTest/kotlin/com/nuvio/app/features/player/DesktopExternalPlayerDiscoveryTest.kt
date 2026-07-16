@@ -127,4 +127,62 @@ class DesktopExternalPlayerDiscoveryTest {
         assertTrue(command.contains("--http-header-fields=Authorization: Bearer token"))
         assertEquals("https://example.test/video.m3u8", command.last())
     }
+
+    @Test
+    fun mpvCommandJoinsExtraHeadersIntoOneField() {
+        val request = ExternalPlayerPlaybackRequest(
+            sourceUrl = "https://example.test/video.m3u8",
+            title = "Episode",
+            sourceHeaders = linkedMapOf(
+                "Authorization" to "Bearer token",
+                "X-Session" to "abc123",
+            ),
+        )
+
+        val command = DesktopExternalPlayerCommandBuilder.build(mpvPlayer(), request).orEmpty()
+
+        assertEquals(
+            listOf("--http-header-fields=Authorization: Bearer token,X-Session: abc123"),
+            command.filter { it.startsWith("--http-header-fields=") },
+        )
+    }
+
+    @Test
+    fun mpvCommandEscapesCommasAndBackslashesInHeaderValues() {
+        val request = ExternalPlayerPlaybackRequest(
+            sourceUrl = "https://example.test/video.m3u8",
+            title = "Episode",
+            sourceHeaders = mapOf("Cookie" to "a=1, b=2\\3"),
+        )
+
+        val command = DesktopExternalPlayerCommandBuilder.build(mpvPlayer(), request).orEmpty()
+
+        assertTrue(command.contains("--http-header-fields=Cookie: a=1\\, b=2\\\\3"))
+    }
+
+    @Test
+    fun mpvCommandOmitsHeaderFieldsWhenOnlyDedicatedHeadersArePresent() {
+        val request = ExternalPlayerPlaybackRequest(
+            sourceUrl = "https://example.test/video.m3u8",
+            title = "Episode",
+            sourceHeaders = mapOf(
+                "User-Agent" to "Nuvio",
+                "Referer" to "https://example.test",
+            ),
+        )
+
+        val command = DesktopExternalPlayerCommandBuilder.build(mpvPlayer(), request).orEmpty()
+
+        assertFalse(command.any { it.startsWith("--http-header-fields=") })
+        assertTrue(command.contains("--user-agent=Nuvio"))
+        assertTrue(command.contains("--referrer=https://example.test"))
+    }
+
+    private fun mpvPlayer(): DesktopExternalPlayer =
+        DesktopExternalPlayer(
+            id = "mpv",
+            name = "mpv",
+            kind = DesktopExternalPlayerKind.Mpv,
+            executable = Path.of("C:\\Program Files", "mpv", "mpv.exe"),
+        )
 }
